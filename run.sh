@@ -1,5 +1,13 @@
 #!/bin/bash
 
+# Set DOCKER_API_VERSION based on architecture
+ARCH=$(uname -m)
+if [ "$ARCH" = "arm64" ] || [ "$ARCH" = "aarch64" ]; then
+    export DOCKER_API_VERSION=1.43
+else
+    export DOCKER_API_VERSION=1.44
+fi
+
 # Default values
 HOST="${HOST:- 127.0.0.1}"
 PORT="${PORT:-8000}"

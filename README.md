@@ -127,16 +127,19 @@ args = ["/path/to/filesystem-server.js"]
 
 ```
 FlowGuard is a proxy server for Model Context Protocol (MCP) servers.
+It provides routing, aggregation, and management of multiple MCP backend servers.
 
 Usage:
-  flowguard [flags]
+  flowguard-go [flags]
 
 Flags:
   -c, --config string   Path to config file (default "config.toml")
-      --config-stdin    Read configuration from stdin (JSON format)
-  -h, --help            help for flowguard
+      --config-stdin    Read MCP server configuration from stdin (JSON format). When enabled, overrides --config
+      --env string      Path to .env file to load environment variables
+  -h, --help            help for flowguard-go
   -l, --listen string   HTTP server listen address (default "127.0.0.1:3000")
-  -m, --mode string     Server mode: routed or unified (default "routed")
+      --routed          Run in routed mode (each backend at /mcp/<server>)
+      --unified         Run in unified mode (all backends at /mcp)
 ```
 
 ## Docker
@@ -147,23 +150,32 @@ Flags:
 docker build -t flowguard-go .
 ```
 
-### Run with config file
+### Run Container
 
 ```bash
-docker run -v $(pwd)/config.toml:/app/config.toml \
+docker run --rm -v $(pwd)/.env:/app/.env \
   -v /var/run/docker.sock:/var/run/docker.sock \
-  -p 3000:3000 \
+  -p 8000:8000 \
   flowguard-go
 ```
 
-### Run with stdin config
+The container uses `run.sh` as the entrypoint, which automatically:
+- Loads environment variables from `.env`
+- Starts FlowGuard in routed mode on port 8000
+- Reads configuration from stdin (via heredoc in run.sh)
+
+### Override with config file
+
+To use a custom config file instead:
 
 ```bash
-cat config.json | docker run -i \
+docker run --rm -v $(pwd)/config.toml:/app/config.toml \
+  -v $(pwd)/.env:/app/.env \
   -v /var/run/docker.sock:/var/run/docker.sock \
-  -p 3000:3000 \
-  flowguard-go --config-stdin
+  -p 8000:8000 \
+  flowguard-go /app/flowguard-go --config /app/config.toml --env /app/.env
 ```
+
 
 ## API Endpoints
 
