@@ -160,21 +160,35 @@ docker run --rm -v $(pwd)/.env:/app/.env \
 ```
 
 The container uses `run.sh` as the entrypoint, which automatically:
+- Detects architecture and sets DOCKER_API_VERSION (1.43 for arm64, 1.44 for amd64)
 - Loads environment variables from `.env`
 - Starts FlowGuard in routed mode on port 8000
 - Reads configuration from stdin (via heredoc in run.sh)
 
-### Override with config file
+### Override with custom configuration
 
-To use a custom config file instead:
+To use a custom config file, set environment variables that `run.sh` reads:
 
 ```bash
 docker run --rm -v $(pwd)/config.toml:/app/config.toml \
   -v $(pwd)/.env:/app/.env \
   -v /var/run/docker.sock:/var/run/docker.sock \
+  -e CONFIG=/app/config.toml \
+  -e ENV_FILE=/app/.env \
+  -e PORT=8000 \
+  -e HOST=127.0.0.1 \
   -p 8000:8000 \
-  flowguard-go /app/flowguard-go --config /app/config.toml --env /app/.env
+  flowguard-go
 ```
+
+Available environment variables for `run.sh`:
+- `CONFIG` - Path to config file (overrides stdin config)
+- `ENV_FILE` - Path to .env file (default: `.env`)
+- `PORT` - Server port (default: `8000`)
+- `HOST` - Server host (default: `127.0.0.1`)
+- `MODE` - Server mode flag (default: `--routed`, can be `--unified`)
+
+**Note:** Set `DOCKER_API_VERSION=1.43` for arm64 (Mac) or `1.44` for amd64 (Linux).
 
 
 ## API Endpoints
