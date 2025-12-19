@@ -1,5 +1,5 @@
 # Build stage
-FROM golang:1.21-alpine AS builder
+FROM golang:1.23-alpine AS builder
 
 WORKDIR /app
 
@@ -11,22 +11,25 @@ RUN go mod download
 COPY . .
 
 # Build the binary
-RUN CGO_ENABLED=0 GOOS=linux go build -o flowguard .
+RUN CGO_ENABLED=0 GOOS=linux go build -o flowguard-go .
 
 # Runtime stage
 FROM alpine:latest
 
-# Install Docker CLI for launching backend MCP servers
-RUN apk add --no-cache docker-cli
+# Install Docker CLI and bash for launching backend MCP servers
+RUN apk add --no-cache docker-cli bash
 
 WORKDIR /app
 
 # Copy binary from builder
-COPY --from=builder /app/flowguard .
+COPY --from=builder /app/flowguard-go .
+
+# Copy run.sh script
+COPY run.sh .
+RUN chmod +x run.sh
 
 # Expose default HTTP port
-EXPOSE 3000
+EXPOSE 8000
 
-# Default command
-ENTRYPOINT ["/app/flowguard"]
-CMD ["--config", "/app/config.toml"]
+# Use run.sh as entrypoint
+ENTRYPOINT ["/app/run.sh"]
