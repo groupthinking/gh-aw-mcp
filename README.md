@@ -63,10 +63,19 @@ A simplified Go port of FlowGuard - a proxy server for Model Context Protocol (M
 
 7. **Run Codex (in another terminal)**
    ```bash
-   AGENT_ID=demo-agent codex --config agent-configs/codex.config.toml
+   cp ~/.codex/config.toml ~/.codex/config.toml.bak && cp agent-configs/codex.config.toml ~/.codex/config.toml
+   AGENT_ID=demo-agent codex
    ```
+   
+   You can use '/mcp' in codex to list the available tools. 
 
-That's it! FlowGuard is now proxying MCP requests to your configured backend servers.
+   That's it! FlowGuard is now proxying MCP requests to your configured backend servers.
+
+   When you're done you can restore your old codex config file:
+
+   ```bash
+   cp ~/.codex/config.toml.bak ~/.codex/config.toml
+   ```
 
 ### Manual Build & Run
 
