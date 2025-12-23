@@ -14,7 +14,7 @@ permissions:
 
 tracker-id: go-fan-daily
 
-engine: claude
+engine: copilot
 
 network:
   allowed:
