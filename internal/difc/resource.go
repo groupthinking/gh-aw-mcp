@@ -28,8 +28,8 @@ func EmptyResource() *Resource {
 // LabeledResource represents a resource with DIFC labels
 // This can be a simple label pair or a complex nested structure for fine-grained filtering
 type LabeledResource struct {
-	Description string        // Human-readable description of the resource
-	Secrecy     SecrecyLabel  // Secrecy requirements for this resource
+	Description string         // Human-readable description of the resource
+	Secrecy     SecrecyLabel   // Secrecy requirements for this resource
 	Integrity   IntegrityLabel // Integrity requirements for this resource
 
 	// Structure is an optional nested map for fine-grained labeling of response fields
@@ -70,7 +70,7 @@ type FieldLabels struct {
 type LabeledData interface {
 	// Overall returns the aggregate labels for all data
 	Overall() *LabeledResource
-	
+
 	// ToResult converts the labeled data to an MCP result
 	// This may filter out inaccessible items
 	ToResult() (interface{}, error)
