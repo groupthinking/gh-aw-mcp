@@ -115,12 +115,12 @@ func (l *SecrecyLabel) CanFlowTo(target *SecrecyLabel) bool {
 	if target == nil || target.Label == nil {
 		return l.Label.IsEmpty()
 	}
-	
+
 	l.Label.mu.RLock()
 	defer l.Label.mu.RUnlock()
 	target.Label.mu.RLock()
 	defer target.Label.mu.RUnlock()
-	
+
 	// Check if all tags in l are in target
 	for tag := range l.Label.tags {
 		if _, ok := target.Label.tags[tag]; !ok {
@@ -141,12 +141,12 @@ func (l *SecrecyLabel) CheckFlow(target *SecrecyLabel) (bool, []Tag) {
 		}
 		return false, l.Label.GetTags()
 	}
-	
+
 	l.Label.mu.RLock()
 	defer l.Label.mu.RUnlock()
 	target.Label.mu.RLock()
 	defer target.Label.mu.RUnlock()
-	
+
 	var extraTags []Tag
 	// Check if all tags in l are in target
 	for tag := range l.Label.tags {
@@ -154,7 +154,7 @@ func (l *SecrecyLabel) CheckFlow(target *SecrecyLabel) (bool, []Tag) {
 			extraTags = append(extraTags, tag)
 		}
 	}
-	
+
 	return len(extraTags) == 0, extraTags
 }
 
@@ -196,12 +196,12 @@ func (l *IntegrityLabel) CanFlowTo(target *IntegrityLabel) bool {
 	if target == nil || target.Label == nil {
 		return true
 	}
-	
+
 	l.Label.mu.RLock()
 	defer l.Label.mu.RUnlock()
 	target.Label.mu.RLock()
 	defer target.Label.mu.RUnlock()
-	
+
 	// Check if all tags in target are in l
 	for tag := range target.Label.tags {
 		if _, ok := l.Label.tags[tag]; !ok {
@@ -222,12 +222,12 @@ func (l *IntegrityLabel) CheckFlow(target *IntegrityLabel) (bool, []Tag) {
 	if target == nil || target.Label == nil {
 		return true, nil
 	}
-	
+
 	l.Label.mu.RLock()
 	defer l.Label.mu.RUnlock()
 	target.Label.mu.RLock()
 	defer target.Label.mu.RUnlock()
-	
+
 	var missingTags []Tag
 	// Check if all tags in target are in l
 	for tag := range target.Label.tags {
@@ -235,7 +235,7 @@ func (l *IntegrityLabel) CheckFlow(target *IntegrityLabel) (bool, []Tag) {
 			missingTags = append(missingTags, tag)
 		}
 	}
-	
+
 	return len(missingTags) == 0, missingTags
 }
 
@@ -258,12 +258,12 @@ const (
 // ViolationError provides detailed information about a DIFC violation
 type ViolationError struct {
 	Type         ViolationType
-	Resource     string   // Resource description
-	IsWrite      bool     // true for write, false for read
-	MissingTags  []Tag    // Tags the agent needs but doesn't have
-	ExtraTags    []Tag    // Tags the agent has but shouldn't
-	AgentTags    []Tag    // All agent tags (for context)
-	ResourceTags []Tag    // All resource tags (for context)
+	Resource     string // Resource description
+	IsWrite      bool   // true for write, false for read
+	MissingTags  []Tag  // Tags the agent needs but doesn't have
+	ExtraTags    []Tag  // Tags the agent has but shouldn't
+	AgentTags    []Tag  // All agent tags (for context)
+	ResourceTags []Tag  // All resource tags (for context)
 }
 
 func (e *ViolationError) Error() string {

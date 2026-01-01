@@ -106,7 +106,7 @@ func (a *AgentLabels) GetIntegrityTags() []Tag {
 type AgentRegistry struct {
 	agents map[string]*AgentLabels
 	mu     sync.RWMutex
-	
+
 	// Default labels for new agents
 	defaultSecrecy   []Tag
 	defaultIntegrity []Tag
