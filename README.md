@@ -1,6 +1,6 @@
-# FlowGuard (Go Port)
+# MCP Gateway
 
-A simplified Go port of FlowGuard - a proxy server for Model Context Protocol (MCP) servers.
+A Go port of FlowGuard - a gateway for Model Context Protocol (MCP) servers.
 
 ## Features
 
@@ -252,18 +252,65 @@ Supported JSON-RPC 2.0 methods:
 - `tools/call` - Call a tool with parameters
 - Any other MCP method (forwarded as-is)
 
-## Architecture Simplifications
+## Architecture
 
-This Go port focuses on core MCP proxy functionality:
+This Go port focuses on core MCP proxy functionality with optional security features:
+
+### Core Features (Enabled)
 
 - ✅ TOML and JSON stdin configuration
 - ✅ Stdio transport for backend servers
 - ✅ Docker container launching
 - ✅ Routed and unified modes
 - ✅ Basic request/response proxying
-- ❌ DIFC enforcement (removed)
-- ❌ Sub-agents (removed)
-- ❌ Guards (removed)
+
+### DIFC Integration (Not Yet Enabled)
+
+FlowGuard includes a complete implementation of **Decentralized Information Flow Control (DIFC)** for information security, but it is **not yet enabled by default**. The DIFC system provides:
+
+- **Label-based Security**: Track information flow with secrecy and integrity labels
+- **Reference Monitor**: Centralized policy enforcement for all MCP operations
+- **Guard Framework**: Domain-specific resource labeling (e.g., GitHub repos, files)
+- **Agent Tracking**: Per-agent taint tracking across requests
+- **Fine-grained Control**: Collection filtering for partial access to resources
+
+#### DIFC Components (Implemented)
+
+```
+internal/difc/
+├── labels.go        # Secrecy/integrity labels with flow semantics
+├── resource.go      # Resource labeling (coarse & fine-grained)
+├── evaluator.go     # DIFC policy evaluation & enforcement
+├── agent.go         # Per-agent label tracking (taint tracking)
+└── capabilities.go  # Global tag registry
+
+internal/guard/
+├── guard.go         # Guard interface definition
+├── noop.go          # NoopGuard (default, allows all operations)
+├── registry.go      # Guard registration & lookup
+└── context.go       # Agent ID extraction utilities
+```
+
+#### How DIFC Works (When Enabled)
+
+1. **Resource Labeling**: Guards label resources based on domain knowledge (e.g., "repo:owner/name", "visibility:private")
+2. **Agent Tracking**: Each agent has secrecy/integrity labels that accumulate through reads (taint tracking)
+3. **Policy Enforcement**: Reference Monitor checks if operations violate label flow semantics:
+   - **Read**: Resource secrecy must flow to agent secrecy (resource ⊆ agent)
+   - **Write**: Agent integrity must flow to resource integrity (agent ⊆ resource)
+4. **Fine-grained Filtering**: Collections (e.g., search results) automatically filtered to allowed items
+
+#### Enabling DIFC (Future)
+
+To enable DIFC enforcement, you'll need to:
+
+1. **Implement domain-specific guards** (e.g., GitHub, filesystem)
+2. **Configure agent labels** in `config.toml`
+3. **Register guards** in server initialization
+
+See [`docs/DIFC_INTEGRATION_PROPOSAL.md`](docs/DIFC_INTEGRATION_PROPOSAL.md) for full design details.
+
+**Current Status**: All DIFC infrastructure is implemented and tested, but only the `NoopGuard` is active (which returns empty labels, effectively disabling enforcement). Custom guards for specific backends (GitHub, filesystem, etc.) are not yet implemented.
 
 ## Development
 

@@ -8,6 +8,8 @@ import (
 	"sync"
 
 	"github.com/githubnext/gh-aw-mcpg/internal/config"
+	"github.com/githubnext/gh-aw-mcpg/internal/difc"
+	"github.com/githubnext/gh-aw-mcpg/internal/guard"
 	"github.com/githubnext/gh-aw-mcpg/internal/launcher"
 	"github.com/githubnext/gh-aw-mcpg/internal/sys"
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
@@ -44,6 +46,12 @@ type UnifiedServer struct {
 	sessionMu sync.RWMutex
 	tools     map[string]*ToolInfo // prefixed tool name -> tool info
 	toolsMu   sync.RWMutex
+
+	// DIFC components
+	guardRegistry *guard.Registry
+	agentRegistry *difc.AgentRegistry
+	capabilities  *difc.Capabilities
+	evaluator     *difc.Evaluator
 }
 
 // NewUnified creates a new unified MCP server
@@ -56,6 +64,12 @@ func NewUnified(ctx context.Context, cfg *config.Config) (*UnifiedServer, error)
 		ctx:       ctx,
 		sessions:  make(map[string]*Session),
 		tools:     make(map[string]*ToolInfo),
+
+		// Initialize DIFC components
+		guardRegistry: guard.NewRegistry(),
+		agentRegistry: difc.NewAgentRegistry(),
+		capabilities:  difc.NewCapabilities(),
+		evaluator:     difc.NewEvaluator(),
 	}
 
 	// Create MCP server
@@ -65,6 +79,11 @@ func NewUnified(ctx context.Context, cfg *config.Config) (*UnifiedServer, error)
 	}, nil)
 
 	us.server = server
+
+	// Register guards for all backends
+	for _, serverID := range l.ServerIDs() {
+		us.registerGuard(serverID)
+	}
 
 	// Register aggregated tools from all backends
 	if err := us.registerAllTools(); err != nil {
@@ -295,19 +314,108 @@ func (us *UnifiedServer) registerSysTools() error {
 	return nil
 }
 
-// callBackendTool calls a tool on a backend server
+// registerGuard registers a guard for a specific backend server
+func (us *UnifiedServer) registerGuard(serverID string) {
+	// For now, use noop guards for all servers
+	// In the future, this will load guards based on configuration
+	// or use guard.CreateGuard() with a guard name from config
+	g := guard.NewNoopGuard()
+	us.guardRegistry.Register(serverID, g)
+	log.Printf("[DIFC] Registered guard '%s' for server '%s'", g.Name(), serverID)
+}
+
+// guardBackendCaller implements guard.BackendCaller for guards to query backend metadata
+type guardBackendCaller struct {
+	server   *UnifiedServer
+	serverID string
+	ctx      context.Context
+}
+
+func (g *guardBackendCaller) CallTool(ctx context.Context, toolName string, args interface{}) (interface{}, error) {
+	// Make a read-only call to the backend for metadata
+	// This bypasses DIFC checks since it's internal to the guard
+	log.Printf("[DIFC] Guard calling backend %s tool %s for metadata", g.serverID, toolName)
+
+	conn, err := launcher.GetOrLaunch(g.server.launcher, g.serverID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to connect: %w", err)
+	}
+
+	response, err := conn.SendRequest("tools/call", map[string]interface{}{
+		"name":      toolName,
+		"arguments": args,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	// Parse the result
+	var result interface{}
+	if err := json.Unmarshal(response.Result, &result); err != nil {
+		return nil, fmt.Errorf("failed to parse result: %w", err)
+	}
+
+	return result, nil
+}
+
+// callBackendTool calls a tool on a backend server with DIFC enforcement
 func (us *UnifiedServer) callBackendTool(ctx context.Context, serverID, toolName string, args interface{}) (*sdk.CallToolResult, interface{}, error) {
 	// Note: Session validation happens at the tool registration level via closures
 	// The closure captures the request and validates before calling this method
-	log.Printf("Calling tool on %s: %s", serverID, toolName)
+	log.Printf("Calling tool on %s: %s with DIFC enforcement", serverID, toolName)
 
-	// Get connection to backend
+	// **Phase 0: Extract agent ID and get/create agent labels**
+	agentID := guard.GetAgentIDFromContext(ctx)
+	agentLabels := us.agentRegistry.GetOrCreate(agentID)
+	log.Printf("[DIFC] Agent %s | Secrecy: %v | Integrity: %v",
+		agentID, agentLabels.GetSecrecyTags(), agentLabels.GetIntegrityTags())
+
+	// Get guard for this backend
+	g := us.guardRegistry.Get(serverID)
+
+	// Create backend caller for the guard
+	backendCaller := &guardBackendCaller{
+		server:   us,
+		serverID: serverID,
+		ctx:      ctx,
+	}
+
+	// **Phase 1: Guard labels the resource**
+	resource, operation, err := g.LabelResource(ctx, toolName, args, backendCaller, us.capabilities)
+	if err != nil {
+		log.Printf("[DIFC] Guard labeling failed: %v", err)
+		return &sdk.CallToolResult{IsError: true}, nil, fmt.Errorf("guard labeling failed: %w", err)
+	}
+
+	log.Printf("[DIFC] Resource: %s | Operation: %s | Secrecy: %v | Integrity: %v",
+		resource.Description, operation, resource.Secrecy.Label.GetTags(), resource.Integrity.Label.GetTags())
+
+	// **Phase 2: Reference Monitor performs coarse-grained access check**
+	isWrite := (operation == difc.OperationWrite || operation == difc.OperationReadWrite)
+	result := us.evaluator.Evaluate(agentLabels.Secrecy, agentLabels.Integrity, resource, operation)
+
+	if !result.IsAllowed() {
+		// Access denied - log and return detailed error
+		log.Printf("[DIFC] Access DENIED for agent %s to %s: %s", agentID, resource.Description, result.Reason)
+		detailedErr := difc.FormatViolationError(result, agentLabels.Secrecy, agentLabels.Integrity, resource)
+		return &sdk.CallToolResult{
+			Content: []sdk.Content{
+				&sdk.TextContent{
+					Text: detailedErr.Error(),
+				},
+			},
+			IsError: true,
+		}, nil, detailedErr
+	}
+
+	log.Printf("[DIFC] Access ALLOWED for agent %s to %s", agentID, resource.Description)
+
+	// **Phase 3: Execute the backend call**
 	conn, err := launcher.GetOrLaunch(us.launcher, serverID)
 	if err != nil {
 		return &sdk.CallToolResult{IsError: true}, nil, fmt.Errorf("failed to connect: %w", err)
 	}
 
-	// Call the tool
 	response, err := conn.SendRequest("tools/call", map[string]interface{}{
 		"name":      toolName,
 		"arguments": args,
@@ -316,13 +424,67 @@ func (us *UnifiedServer) callBackendTool(ctx context.Context, serverID, toolName
 		return &sdk.CallToolResult{IsError: true}, nil, err
 	}
 
-	// Parse the result
-	var result interface{}
-	if err := json.Unmarshal(response.Result, &result); err != nil {
+	// Parse the backend result
+	var backendResult interface{}
+	if err := json.Unmarshal(response.Result, &backendResult); err != nil {
 		return &sdk.CallToolResult{IsError: true}, nil, fmt.Errorf("failed to parse result: %w", err)
 	}
 
-	return nil, result, nil
+	// **Phase 4: Guard labels the response data (for fine-grained filtering)**
+	labeledData, err := g.LabelResponse(ctx, toolName, backendResult, backendCaller, us.capabilities)
+	if err != nil {
+		log.Printf("[DIFC] Response labeling failed: %v", err)
+		return &sdk.CallToolResult{IsError: true}, nil, fmt.Errorf("response labeling failed: %w", err)
+	}
+
+	// **Phase 5: Reference Monitor performs fine-grained filtering (if applicable)**
+	var finalResult interface{}
+	if labeledData != nil {
+		// Guard provided fine-grained labels - check if it's a collection
+		if collection, ok := labeledData.(*difc.CollectionLabeledData); ok {
+			// Filter collection based on agent labels
+			filtered := us.evaluator.FilterCollection(agentLabels.Secrecy, agentLabels.Integrity, collection, operation)
+
+			log.Printf("[DIFC] Filtered collection: %d/%d items accessible",
+				filtered.GetAccessibleCount(), filtered.TotalCount)
+
+			if filtered.GetFilteredCount() > 0 {
+				log.Printf("[DIFC] Filtered out %d items due to DIFC policy", filtered.GetFilteredCount())
+			}
+
+			// Convert filtered data to result
+			finalResult, err = filtered.ToResult()
+			if err != nil {
+				return &sdk.CallToolResult{IsError: true}, nil, fmt.Errorf("failed to convert filtered data: %w", err)
+			}
+		} else {
+			// Simple labeled data - already passed coarse-grained check
+			finalResult, err = labeledData.ToResult()
+			if err != nil {
+				return &sdk.CallToolResult{IsError: true}, nil, fmt.Errorf("failed to convert labeled data: %w", err)
+			}
+		}
+
+		// **Phase 6: Accumulate labels from this operation (for reads)**
+		if !isWrite {
+			overall := labeledData.Overall()
+			agentLabels.AccumulateFromRead(overall)
+			log.Printf("[DIFC] Agent %s accumulated labels | Secrecy: %v | Integrity: %v",
+				agentID, agentLabels.GetSecrecyTags(), agentLabels.GetIntegrityTags())
+		}
+	} else {
+		// No fine-grained labeling - use original backend result
+		finalResult = backendResult
+
+		// **Phase 6: Accumulate labels from resource (for reads)**
+		if !isWrite {
+			agentLabels.AccumulateFromRead(resource)
+			log.Printf("[DIFC] Agent %s accumulated labels | Secrecy: %v | Integrity: %v",
+				agentID, agentLabels.GetSecrecyTags(), agentLabels.GetIntegrityTags())
+		}
+	}
+
+	return nil, finalResult, nil
 }
 
 // Run starts the unified MCP server on the specified transport
