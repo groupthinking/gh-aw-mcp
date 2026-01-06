@@ -207,7 +207,8 @@ func TestGetSessionID_FromContext(t *testing.T) {
 
 func TestRequireSession(t *testing.T) {
 	cfg := &config.Config{
-		Servers: map[string]*config.ServerConfig{},
+		Servers:    map[string]*config.ServerConfig{},
+		EnableDIFC: true, // Enable DIFC for this test
 	}
 
 	ctx := context.Background()
@@ -240,8 +241,8 @@ func TestRequireSession(t *testing.T) {
 
 func TestRequireSession_DifcDisabled(t *testing.T) {
 	cfg := &config.Config{
-		Servers:     map[string]*config.ServerConfig{},
-		DisableDIFC: true,
+		Servers:    map[string]*config.ServerConfig{},
+		EnableDIFC: false, // DIFC disabled (default)
 	}
 
 	ctx := context.Background()
@@ -276,8 +277,8 @@ func TestRequireSession_DifcDisabled(t *testing.T) {
 
 func TestRequireSession_DifcDisabled_Concurrent(t *testing.T) {
 	cfg := &config.Config{
-		Servers:     map[string]*config.ServerConfig{},
-		DisableDIFC: true,
+		Servers:    map[string]*config.ServerConfig{},
+		EnableDIFC: false, // DIFC disabled (default)
 	}
 
 	ctx := context.Background()
