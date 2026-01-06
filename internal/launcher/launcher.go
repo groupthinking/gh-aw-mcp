@@ -73,9 +73,9 @@ func GetOrLaunch(l *Launcher, serverID string) (*mcp.Connection, error) {
 					if len(val) > 10 {
 						displayVal = val[:10] + "..."
 					}
-					log.Printf("[LAUNCHER] ✓ Env passthrough: %s=%s (from FlowGuard process)", nextArg, displayVal)
+					log.Printf("[LAUNCHER] ✓ Env passthrough: %s=%s (from MCPG process)", nextArg, displayVal)
 				} else {
-					log.Printf("[LAUNCHER] ✗ WARNING: Env passthrough for %s requested but NOT FOUND in FlowGuard process", nextArg)
+					log.Printf("[LAUNCHER] ✗ WARNING: Env passthrough for %s requested but NOT FOUND in MCPG process", nextArg)
 				}
 			}
 			i++ // Skip the next arg since we just processed it

@@ -15,7 +15,7 @@ import (
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
-// Session represents a FlowGuard session
+// Session represents a MCPG session
 type Session struct {
 	Token     string
 	SessionID string
@@ -25,7 +25,7 @@ type Session struct {
 type ContextKey string
 
 // SessionIDContextKey is used to store MCP session ID in context
-const SessionIDContextKey ContextKey = "flowguard-session-id"
+const SessionIDContextKey ContextKey = "mcpg-session-id"
 
 // ToolInfo stores metadata about a registered tool
 type ToolInfo struct {
@@ -74,7 +74,7 @@ func NewUnified(ctx context.Context, cfg *config.Config) (*UnifiedServer, error)
 
 	// Create MCP server
 	server := sdk.NewServer(&sdk.Implementation{
-		Name:    "flowguard-unified",
+		Name:    "mcpg-unified",
 		Version: "1.0.0",
 	}, nil)
 
@@ -238,7 +238,7 @@ func (us *UnifiedServer) registerSysTools() error {
 	us.toolsMu.Lock()
 	us.tools["sys___init"] = &ToolInfo{
 		Name:        "sys___init",
-		Description: "Initialize the FlowGuard system and get available MCP servers",
+		Description: "Initialize the MCPG system and get available MCP servers",
 		InputSchema: map[string]interface{}{
 			"type": "object",
 			"properties": map[string]interface{}{
@@ -256,7 +256,7 @@ func (us *UnifiedServer) registerSysTools() error {
 	// Register with SDK
 	sdk.AddTool(us.server, &sdk.Tool{
 		Name:        "sys___init",
-		Description: "Initialize the FlowGuard system and get available MCP servers",
+		Description: "Initialize the MCPG system and get available MCP servers",
 		InputSchema: map[string]interface{}{
 			"type": "object",
 			"properties": map[string]interface{}{

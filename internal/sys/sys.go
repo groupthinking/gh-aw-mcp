@@ -5,7 +5,7 @@ import (
 	"fmt"
 )
 
-// SysServer implements the FlowGuard system tools
+// SysServer implements the MCPG system tools
 type SysServer struct {
 	serverIDs []string
 }
@@ -41,7 +41,7 @@ func (s *SysServer) listTools() (interface{}, error) {
 		"tools": []map[string]interface{}{
 			{
 				"name":        "sys_init",
-				"description": "Initialize the FlowGuard system and get available MCP servers",
+				"description": "Initialize the MCPG system and get available MCP servers",
 				"inputSchema": map[string]interface{}{
 					"type":       "object",
 					"properties": map[string]interface{}{},
@@ -75,7 +75,7 @@ func (s *SysServer) sysInit() (interface{}, error) {
 		"content": []map[string]interface{}{
 			{
 				"type": "text",
-				"text": fmt.Sprintf("FlowGuard initialized. Available servers: %v", s.serverIDs),
+				"text": fmt.Sprintf("MCPG initialized. Available servers: %v", s.serverIDs),
 			},
 		},
 	}, nil
