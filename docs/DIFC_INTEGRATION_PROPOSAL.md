@@ -1,8 +1,8 @@
-# DIFC Integration Proposal for FlowGuard-Go
+# DIFC Integration Proposal for MCPG
 
 ## Overview
 
-This document proposes an approach to integrate Decentralized Information Flow Control (DIFC) checks and labeling into the Go implementation of FlowGuard, following the patterns established in the Rust implementation.
+This document proposes an approach to integrate Decentralized Information Flow Control (DIFC) checks and labeling into the Go implementation of MCPG, following the patterns established in the Rust implementation.
 
 ## Core Concepts
 
@@ -23,7 +23,7 @@ This document proposes an approach to integrate Decentralized Information Flow C
 ### 1. Package Structure
 
 ```
-flowguard-go/
+mcpg/
 ├── internal/
 │   ├── difc/              # DIFC label system
 │   │   ├── labels.go      # Label types and operations

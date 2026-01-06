@@ -10,7 +10,7 @@ import (
 	"github.com/BurntSushi/toml"
 )
 
-// Config represents the FlowGuard configuration
+// Config represents the MCPG configuration
 type Config struct {
 	Servers map[string]*ServerConfig `toml:"servers"`
 }
