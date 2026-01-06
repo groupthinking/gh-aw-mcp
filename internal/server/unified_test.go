@@ -276,3 +276,56 @@ func TestRequireSession_DifcDisabled(t *testing.T) {
 		t.Errorf("Expected session ID '%s', got '%s'", sessionID, session.SessionID)
 	}
 }
+
+func TestRequireSession_DifcDisabled_Concurrent(t *testing.T) {
+	cfg := &config.Config{
+		Servers:     map[string]*config.ServerConfig{},
+		DisableDIFC: true,
+	}
+
+	ctx := context.Background()
+	us, err := NewUnified(ctx, cfg)
+	if err != nil {
+		t.Fatalf("NewUnified() failed: %v", err)
+	}
+	defer us.Close()
+
+	// Test concurrent session creation to verify no race condition
+	sessionID := "concurrent-session"
+	ctxWithSession := context.WithValue(ctx, SessionIDContextKey, sessionID)
+
+	// Run 10 goroutines trying to create the same session simultaneously
+	const numGoroutines = 10
+	errChan := make(chan error, numGoroutines)
+
+	for i := 0; i < numGoroutines; i++ {
+		go func() {
+			errChan <- us.requireSession(ctxWithSession)
+		}()
+	}
+
+	// Collect results
+	for i := 0; i < numGoroutines; i++ {
+		if err := <-errChan; err != nil {
+			t.Errorf("requireSession() failed in concurrent access: %v", err)
+		}
+	}
+
+	// Verify exactly one session was created
+	us.sessionMu.RLock()
+	session, exists := us.sessions[sessionID]
+	sessionCount := len(us.sessions)
+	us.sessionMu.RUnlock()
+
+	if !exists {
+		t.Error("Session should have been created")
+	}
+
+	if sessionCount != 1 {
+		t.Errorf("Expected exactly 1 session, got %d", sessionCount)
+	}
+
+	if session.SessionID != sessionID {
+		t.Errorf("Expected session ID '%s', got '%s'", sessionID, session.SessionID)
+	}
+}
