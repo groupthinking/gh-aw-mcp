@@ -1,0 +1,59 @@
+{
+  "entries": {
+    "actions/checkout@v4": {
+      "repo": "actions/checkout",
+      "version": "v4",
+      "sha": "34e114876b0b11c390a56381ad16ebd13914f8d5"
+    },
+    "actions/checkout@v5": {
+      "repo": "actions/checkout",
+      "version": "v5",
+      "sha": "93cb6efe18208431cddfb8368fd83d5badbf9bfd"
+    },
+    "actions/github-script@v8": {
+      "repo": "actions/github-script",
+      "version": "v8",
+      "sha": "ed597411d8f924073f98dfc5c65a23a2325f34cd"
+    },
+    "actions/setup-go@v6": {
+      "repo": "actions/setup-go",
+      "version": "v6",
+      "sha": "4dc6199c7b1a012772edbd06daecab0f50c9053c"
+    },
+    "actions/upload-artifact@v5": {
+      "repo": "actions/upload-artifact",
+      "version": "v5",
+      "sha": "330a01c490aca151604b8cf639adc76d48f6c5d4"
+    },
+    "anchore/sbom-action@v0.20.10": {
+      "repo": "anchore/sbom-action",
+      "version": "v0.20.10",
+      "sha": "fbfd9c6c189226748411491745178e0c2017392d"
+    },
+    "docker/build-push-action@v6": {
+      "repo": "docker/build-push-action",
+      "version": "v6",
+      "sha": "263435318d21b8e681c14492fe198d362a7d2c83"
+    },
+    "docker/login-action@v3": {
+      "repo": "docker/login-action",
+      "version": "v3",
+      "sha": "5e57cd118135c172c3672efd75eb46360885c0ef"
+    },
+    "docker/setup-buildx-action@v3": {
+      "repo": "docker/setup-buildx-action",
+      "version": "v3",
+      "sha": "8d2750c68a42422c14e847fe6c8ac0403b4cbd6f"
+    },
+    "docker/setup-qemu-action@v3": {
+      "repo": "docker/setup-qemu-action",
+      "version": "v3",
+      "sha": "c7c53464625b32c7a7e944ae62b3e17d2b600130"
+    },
+    "githubnext/gh-aw/actions/setup@v0.35.1": {
+      "repo": "githubnext/gh-aw/actions/setup",
+      "version": "v0.35.1",
+      "sha": "d76e21bcc92a3146d915794285b0b32f51d00072"
+    }
+  }
+}

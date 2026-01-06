@@ -142,19 +142,19 @@ jobs:
         run: |
           DOCKER_INFO="
 
-## 🐳 Docker Image
+          ## 🐳 Docker Image
 
-The Docker image for this release is available at:
+          The Docker image for this release is available at:
 
-\`\`\`bash
-docker pull ghcr.io/${{ github.repository }}:${VERSION}
-# or
-docker pull ghcr.io/${{ github.repository }}:latest
-\`\`\`
+          \`\`\`bash
+          docker pull ghcr.io/${{ github.repository }}:${VERSION}
+          # or
+          docker pull ghcr.io/${{ github.repository }}:latest
+          \`\`\`
 
-Supported platforms: \`linux/amd64\`, \`linux/arm64\`
-"
-          
+          Supported platforms: \`linux/amd64\`, \`linux/arm64\`
+          "
+                    
           # Get current release body
           CURRENT_BODY=$(gh release view "$RELEASE_TAG" --json body --jq .body)
           

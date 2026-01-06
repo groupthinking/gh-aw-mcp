@@ -19,27 +19,29 @@
 #   gh aw compile
 # For more information: https://github.com/githubnext/gh-aw/blob/main/.github/aw/github-agentic-workflows.md
 #
-# Analyzes and enhances Go logging practices across the codebase for improved debugging and observability
+# Build, test, and release MCP Gateway binary and Docker image, then generate and prepend release highlights
 
-name: "Go Logger Enhancement"
+name: "Release"
 "on":
-  schedule:
-  - cron: "0 12 * * *"
-    # Friendly format: daily (scattered)
-  workflow_dispatch:
+  push:
+    tags:
+    - v*.*.*
 
 permissions:
+  actions: read
   contents: read
   issues: read
   pull-requests: read
 
 concurrency:
-  group: "gh-aw-${{ github.workflow }}"
+  group: "gh-aw-${{ github.workflow }}-${{ github.ref }}"
 
-run-name: "Go Logger Enhancement"
+run-name: "Release"
 
 jobs:
   activation:
+    needs: pre_activation
+    if: needs.pre_activation.outputs.activated == 'true'
     runs-on: ubuntu-slim
     permissions:
       contents: read
@@ -54,7 +56,7 @@ jobs:
       - name: Check workflow file timestamps
         uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
         env:
-          GH_AW_WORKFLOW_FILE: "go-logger.lock.yml"
+          GH_AW_WORKFLOW_FILE: "release.lock.yml"
         with:
           script: |
             const { setupGlobals } = require('/tmp/gh-aw/actions/setup_globals.cjs');
@@ -63,14 +65,17 @@ jobs:
             await main();
 
   agent:
-    needs: activation
+    needs:
+      - activation
+      - docker
+      - generate-sbom
+      - release
     runs-on: ubuntu-latest
     permissions:
+      actions: read
       contents: read
       issues: read
       pull-requests: read
-    concurrency:
-      group: "gh-aw-copilot-${{ github.workflow }}"
     env:
       GH_AW_MCP_LOG_DIR: /tmp/gh-aw/mcp-logs/safeoutputs
       GH_AW_SAFE_OUTPUTS: /tmp/gh-aw/safeoutputs/outputs.jsonl
@@ -92,23 +97,12 @@ jobs:
           persist-credentials: false
       - name: Create gh-aw temp directory
         run: bash /tmp/gh-aw/actions/create_gh_aw_tmp_dir.sh
-      - name: Set up Go
-        uses: actions/setup-go@4dc6199c7b1a012772edbd06daecab0f50c9053c # v6
-        with:
-          cache: true
-          go-version-file: go.mod
+      - env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_ID: ${{ needs.release.outputs.release_id }}
+        name: Setup environment and fetch release data
+        run: "set -e\nmkdir -p /tmp/gh-aw-mcpg/release-data\n\n# Use the release ID from the release job\necho \"Release ID from release job: $RELEASE_ID\"\n\n# Get the release tag from the push event\nif [[ ! \"$GITHUB_REF\" == refs/tags/* ]]; then\n  echo \"Error: Push event triggered but GITHUB_REF is not a tag: $GITHUB_REF\"\n  exit 1\nfi\nRELEASE_TAG=\"${GITHUB_REF#refs/tags/}\"\necho \"Processing release: $RELEASE_TAG\"\n\necho \"RELEASE_TAG=$RELEASE_TAG\" >> \"$GITHUB_ENV\"\n\n# Get the current release information\ngh release view \"$RELEASE_TAG\" --json name,tagName,createdAt,publishedAt,url,body > /tmp/gh-aw-mcpg/release-data/current_release.json\necho \"✓ Fetched current release information\"\n\n# Get the previous release to determine the range\nPREV_RELEASE_TAG=$(gh release list --limit 2 --json tagName --jq '.[1].tagName // empty')\n\nif [ -z \"$PREV_RELEASE_TAG\" ]; then\n  echo \"No previous release found. This appears to be the first release.\"\n  echo \"PREV_RELEASE_TAG=\" >> \"$GITHUB_ENV\"\n  touch /tmp/gh-aw-mcpg/release-data/pull_requests.json\n  echo \"[]\" > /tmp/gh-aw-mcpg/release-data/pull_requests.json\nelse\n  echo \"Previous release: $PREV_RELEASE_TAG\"\n  echo \"PREV_RELEASE_TAG=$PREV_RELEASE_TAG\" >> \"$GITHUB_ENV\"\n  \n  # Get commits between releases\n  echo \"Fetching commits between $PREV_RELEASE_TAG and $RELEASE_TAG...\"\n  git fetch --unshallow 2>/dev/null || git fetch --depth=1000\n  \n  # Get all merged PRs between the two releases\n  echo \"Fetching pull requests merged between releases...\"\n  PREV_PUBLISHED_AT=$(gh release view \"$PREV_RELEASE_TAG\" --json publishedAt --jq .publishedAt)\n  CURR_PUBLISHED_AT=$(gh release view \"$RELEASE_TAG\" --json publishedAt --jq .publishedAt)\n  gh pr list \\\n    --state merged \\\n    --limit 1000 \\\n    --json number,title,author,labels,mergedAt,url,body \\\n    --jq \"[.[] | select(.mergedAt >= \\\"$PREV_PUBLISHED_AT\\\" and .mergedAt <= \\\"$CURR_PUBLISHED_AT\\\")]\" \\\n    > /tmp/gh-aw-mcpg/release-data/pull_requests.json\n  \n  PR_COUNT=$(jq length \"/tmp/gh-aw-mcpg/release-data/pull_requests.json\")\n  echo \"✓ Fetched $PR_COUNT pull requests\"\nfi\n\n# Get the README.md content for context about the project\nif [ -f \"README.md\" ]; then\n  cp README.md /tmp/gh-aw-mcpg/release-data/README.md\n  echo \"✓ Copied README.md for reference\"\nfi\n\n# List documentation files for linking\nfind docs -type f -name \"*.md\" 2>/dev/null > /tmp/gh-aw-mcpg/release-data/docs_files.txt || echo \"No docs directory found\"\n\necho \"✓ Setup complete. Data available in /tmp/gh-aw-mcpg/release-data/\""
 
-      # Cache memory file share configuration from frontmatter processed below
-      - name: Create cache-memory directory
-        run: bash /tmp/gh-aw/actions/create_cache_memory_dir.sh
-      - name: Restore cache memory file share data
-        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
-        with:
-          key: memory-${{ github.workflow }}-${{ github.run_id }}
-          path: /tmp/gh-aw/cache-memory
-          restore-keys: |
-            memory-${{ github.workflow }}-
-            memory-
       - name: Configure Git credentials
         env:
           REPO_NAME: ${{ github.repository }}
@@ -173,42 +167,41 @@ jobs:
           mkdir -p /tmp/gh-aw/safeoutputs
           mkdir -p /tmp/gh-aw/mcp-logs/safeoutputs
           cat > /tmp/gh-aw/safeoutputs/config.json << 'EOF'
-          {"create_pull_request":{},"missing_tool":{},"noop":{"max":1}}
+          {"missing_tool":{},"noop":{"max":1},"update_release":{"max":1}}
           EOF
           cat > /tmp/gh-aw/safeoutputs/tools.json << 'EOF'
           [
             {
-              "description": "Create a new GitHub pull request to propose code changes. Use this after making file edits to submit them for review and merging. The PR will be created from the current branch with your committed changes. For code review comments on an existing PR, use create_pull_request_review_comment instead. CONSTRAINTS: Maximum 1 pull request(s) can be created. Title will be prefixed with \"[log] \". Labels [enhancement automation] will be automatically added.",
+              "description": "Update a GitHub release description by replacing, appending to, or prepending to the existing content. Use this to add release notes, changelogs, or additional information to an existing release. CONSTRAINTS: Maximum 1 release(s) can be updated.",
               "inputSchema": {
                 "additionalProperties": false,
                 "properties": {
                   "body": {
-                    "description": "Detailed PR description in Markdown. Include what changes were made, why, testing notes, and any breaking changes. Do NOT repeat the title as a heading.",
+                    "description": "Release body content in Markdown. For 'replace', this becomes the entire release body. For 'append'/'prepend', this is added with a separator.",
                     "type": "string"
                   },
-                  "branch": {
-                    "description": "Source branch name containing the changes. If omitted, uses the current working branch.",
+                  "operation": {
+                    "description": "How to update the release body: 'replace' (completely overwrite), 'append' (add to end with separator), or 'prepend' (add to start with separator).",
+                    "enum": [
+                      "replace",
+                      "append",
+                      "prepend"
+                    ],
                     "type": "string"
                   },
-                  "labels": {
-                    "description": "Labels to categorize the PR (e.g., 'enhancement', 'bugfix'). Labels must exist in the repository.",
-                    "items": {
-                      "type": "string"
-                    },
-                    "type": "array"
-                  },
-                  "title": {
-                    "description": "Concise PR title describing the changes. Follow repository conventions (e.g., conventional commits). The title appears as the main heading.",
+                  "tag": {
+                    "description": "Release tag name (e.g., 'v1.0.0'). REQUIRED - must be provided explicitly as the tag cannot always be inferred from event context.",
                     "type": "string"
                   }
                 },
                 "required": [
-                  "title",
+                  "tag",
+                  "operation",
                   "body"
                 ],
                 "type": "object"
               },
-              "name": "create_pull_request"
+              "name": "update_release"
             },
             {
               "description": "Report that a tool or capability needed to complete the task is not available. Use this when you cannot accomplish what was requested because the required functionality is missing or access is restricted.",
@@ -257,35 +250,6 @@ jobs:
           EOF
           cat > /tmp/gh-aw/safeoutputs/validation.json << 'EOF'
           {
-            "create_pull_request": {
-              "defaultMax": 1,
-              "fields": {
-                "body": {
-                  "required": true,
-                  "type": "string",
-                  "sanitize": true,
-                  "maxLength": 65000
-                },
-                "branch": {
-                  "required": true,
-                  "type": "string",
-                  "sanitize": true,
-                  "maxLength": 256
-                },
-                "labels": {
-                  "type": "array",
-                  "itemType": "string",
-                  "itemSanitize": true,
-                  "itemMaxLength": 128
-                },
-                "title": {
-                  "required": true,
-                  "type": "string",
-                  "sanitize": true,
-                  "maxLength": 128
-                }
-              }
-            },
             "missing_tool": {
               "defaultMax": 20,
               "fields": {
@@ -316,6 +280,31 @@ jobs:
                   "type": "string",
                   "sanitize": true,
                   "maxLength": 65000
+                }
+              }
+            },
+            "update_release": {
+              "defaultMax": 1,
+              "fields": {
+                "body": {
+                  "required": true,
+                  "type": "string",
+                  "sanitize": true,
+                  "maxLength": 65000
+                },
+                "operation": {
+                  "required": true,
+                  "type": "string",
+                  "enum": [
+                    "replace",
+                    "append",
+                    "prepend"
+                  ]
+                },
+                "tag": {
+                  "type": "string",
+                  "sanitize": true,
+                  "maxLength": 256
                 }
               }
             }
@@ -397,7 +386,7 @@ jobs:
               version: "",
               agent_version: "0.0.374",
               cli_version: "v0.35.1",
-              workflow_name: "Go Logger Enhancement",
+              workflow_name: "Release",
               experimental: false,
               supports_tools_allowlist: true,
               supports_http_transport: true,
@@ -411,7 +400,7 @@ jobs:
               event_name: context.eventName,
               staged: false,
               network_mode: "defaults",
-              allowed_domains: [],
+              allowed_domains: ["defaults","node","ghcr.io"],
               firewall_enabled: true,
               awf_version: "v0.8.1",
               steps: {
@@ -438,264 +427,193 @@ jobs:
         env:
           GH_AW_PROMPT: /tmp/gh-aw/aw-prompts/prompt.txt
           GH_AW_SAFE_OUTPUTS: ${{ env.GH_AW_SAFE_OUTPUTS }}
+          GH_AW_GITHUB_REPOSITORY: ${{ github.repository }}
+          GH_AW_GITHUB_SERVER_URL: ${{ github.server_url }}
+          GH_AW_NEEDS_RELEASE_OUTPUTS_RELEASE_ID: ${{ needs.release.outputs.release_id }}
         run: |
           bash /tmp/gh-aw/actions/create_prompt_first.sh
           cat << 'PROMPT_EOF' > "$GH_AW_PROMPT"
-          # Go Logger Enhancement
+          # Release Highlights Generator
           
-          You are an AI agent that improves Go code by adding debug logging statements to help with troubleshooting and development.
+          Generate an engaging release highlights summary for **__GH_AW_GITHUB_REPOSITORY__** (MCP Gateway) release `${RELEASE_TAG}`.
           
-          ## Efficiency First: Check Cache
+          **Release ID**: __GH_AW_NEEDS_RELEASE_OUTPUTS_RELEASE_ID__
           
-          Before analyzing files:
+          ## Data Available
           
-          1. Check `/tmp/gh-aw/cache-memory/go-logger/` for previous logging sessions
-          2. Read `processed-files.json` to see which files were already enhanced
-          3. Read `last-run.json` for the last commit SHA processed
-          4. If current commit SHA matches and no new .go files exist, exit early with success
-          5. Update cache after processing:
-             - Save list of processed files to `processed-files.json`
-             - Save current commit SHA to `last-run.json`
-             - Save summary of changes made
+          All data is pre-fetched in `/tmp/gh-aw-mcpg/release-data/`:
+          - `current_release.json` - Release metadata (tag, name, dates, existing body)
+          - `pull_requests.json` - PRs merged between `${PREV_RELEASE_TAG}` and `${RELEASE_TAG}` (empty array if first release)
+          - `README.md` - Project overview for context (if exists)
+          - `docs_files.txt` - Available documentation files for linking
           
-          This prevents re-analyzing already-processed files and reduces token usage significantly.
+          ## Project Context
           
-          ## Mission
+          **MCP Gateway** is a Go-based proxy server for Model Context Protocol (MCP) servers. Key features:
+          - Routes requests to multiple MCP backend servers (routed and unified modes)
+          - Launches MCP servers as Docker containers
+          - Handles JSON-RPC 2.0 over stdio communication
+          - Provides security through guards and DIFC labeling
           
-          Add meaningful debug logging calls to Go files in the `internal/` directory following the project's logging guidelines from AGENTS.md.
+          ## Output Requirements
           
-          ## Important Constraints
+          Create a **"🌟 Release Highlights"** section that:
+          - Is concise and scannable (users grasp key changes in 30 seconds)
+          - Uses professional, enthusiastic tone (not overly casual)
+          - Categorizes changes logically (features, fixes, docs, breaking changes)
+          - Links to relevant documentation where helpful (GitHub repo docs/ directory)
+          - Focuses on user impact (why changes matter, not just what changed)
+          - Mentions Docker image availability with version tag
           
-          1. **Maximum 5 files per pull request** - Keep changes focused and reviewable
-          2. **Skip test files** - Never modify files ending in `_test.go`
-          3. **No side effects** - Logger arguments must NOT compute anything or cause side effects
-          4. **Follow logger naming convention** - Use `pkg:filename` pattern (e.g., `server:routed`)
+          ## Workflow
           
-          ## Logger Guidelines from AGENTS.md
-          
-          ### Logger Declaration
-          
-          If a file doesn't have a logger, add this at the top of the file (after imports):
-          
-          ```go
-          import "github.com/githubnext/gh-aw-mcpg/internal/logger"
-          
-          var log = logger.New("pkg:filename")
-          ```
-          
-          Replace `pkg:filename` with the actual package and filename:
-          - For `internal/server/routed.go` → `"server:routed"`
-          - For `internal/cmd/root.go` → `"cmd:root"`
-          - For `internal/launcher/docker.go` → `"launcher:docker"`
-          
-          ### Logger Usage Patterns
-          
-          **Good logging examples:**
-          
-          ```go
-          // Log function entry with parameters (no side effects)
-          func ProcessRequest(path string, count int) error {
-              log.Printf("Processing request: path=%s, count=%d", path, count)
-              // ... function body ...
-          }
-          
-          // Log important state changes
-          log.Printf("Started %d MCP servers successfully", len(servers))
-          
-          // Log before expensive operations (check if enabled first)
-          if log.Enabled() {
-              log.Printf("Starting server with config: %+v", config)
-          }
-          
-          // Log control flow decisions
-          log.Print("Cache hit, skipping initialization")
-          log.Printf("No matching server found, using default: %s", defaultServer)
-          ```
-          
-          **What NOT to do:**
-          
-          ```go
-          // WRONG - causes side effects
-          log.Printf("Servers: %s", expensiveOperation())  // Don't call functions in log args
-          
-          // WRONG - not meaningful
-          log.Print("Here")  // Too vague
-          
-          // WRONG - duplicates user-facing messages
-          fmt.Fprintln(os.Stderr, "Starting server...")
-          log.Print("Starting server...")  // Redundant with user message above
-          ```
-          
-          ### When to Add Logging
-          
-          Add logging for:
-          1. **Function entry** - Especially for public functions with parameters
-          2. **Important control flow** - Branches, loops, error paths
-          3. **State changes** - Before/after modifying important state
-          4. **Performance-sensitive sections** - Before/after expensive operations
-          5. **Debugging context** - Information that would help troubleshoot issues
-          
-          Do NOT add logging for:
-          1. **Simple getters/setters** - Too verbose
-          2. **Already logged operations** - Don't duplicate existing logs
-          3. **User-facing messages** - Debug logs are separate from console output
-          4. **Test files** - Skip all `*_test.go` files
-          
-          ## Task Steps
-          
-          ### 1. Find Candidate Go Files
-          
-          Use bash to identify Go files that could benefit from additional logging:
+          ### 1. Load Data
           
           ```bash
-          # Find all non-test Go files in internal/
-          find internal -name '*.go' -type f ! -name '*_test.go'
+          # View release metadata
+          cat /tmp/gh-aw-mcpg/release-data/current_release.json | jq
           
-          # Check which files already have loggers
-          grep -r 'var log = logger.New' internal --include='*.go'
+          # List PRs (empty if first release)
+          cat /tmp/gh-aw-mcpg/release-data/pull_requests.json | jq -r '.[] | "- #\(.number): \(.title) by @\(.author.login)"'
+          
+          # Check README context
+          head -100 /tmp/gh-aw-mcpg/release-data/README.md 2>/dev/null || echo "No README"
+          
+          # View available docs
+          cat /tmp/gh-aw-mcpg/release-data/docs_files.txt
           ```
           
-          ### 2. Select Files for Enhancement
+          ### 2. Categorize & Prioritize
           
-          From the list of Go files:
-          1. Prioritize files without loggers or with minimal logging
-          2. Focus on files with complex logic (server, launcher, config)
-          3. Avoid trivial files with just simple functions
-          4. **Select exactly 5 files maximum** for this PR
+          Group PRs by category (omit categories with no items):
+          - **✨ New Features** - User-facing capabilities (routing, server management, etc.)
+          - **🐛 Bug Fixes** - Issue resolutions
+          - **⚡ Performance** - Speed/efficiency improvements
+          - **📚 Documentation** - Guide/reference updates
+          - **⚠️ Breaking Changes** - Requires user action (ALWAYS list first if present)
+          - **🔧 Internal** - Refactoring, dependencies (usually omit from highlights)
           
-          ### 3. Analyze Each Selected File
+          ### 3. Write Highlights
           
-          For each selected file:
-          1. Read the file content to understand its structure
-          2. Identify functions that would benefit from logging
-          3. Check if the file already has a logger declaration
-          4. Plan where to add logging calls
+          Structure:
+          ```markdown
+          ## 🌟 Release Highlights
           
-          ### 4. Add Logger and Logging Calls
+          [1-2 sentence summary of the release theme/focus]
           
-          For each file:
+          ### ⚠️ Breaking Changes
+          [If any - list FIRST with migration guidance]
           
-          1. **Add logger declaration if missing:**
-             - Add import: `"github.com/githubnext/gh-aw-mcpg/internal/logger"`
-             - Add logger variable using correct naming: `var log = logger.New("pkg:filename")`
+          ### ✨ What's New
+          [Top 3-5 features with user benefit, link docs when relevant]
           
-          2. **Add meaningful logging calls:**
-             - Add logging at function entry for important functions
-             - Add logging before/after state changes
-             - Add logging for control flow decisions
-             - Ensure log arguments don't have side effects
-             - Use `log.Enabled()` check for expensive debug info
+          ### 🐛 Bug Fixes & Improvements
+          [Notable fixes - focus on user impact]
           
-          3. **Keep it focused:**
-             - 2-5 logging calls per file is usually sufficient
-             - Don't over-log - focus on the most useful information
-             - Ensure messages are meaningful and helpful for debugging
+          ### 📚 Documentation
+          [Only if significant doc additions/improvements]
           
-          ### 5. Validate Changes
+          ### 🐳 Docker Image
+          The Docker image for this release is available:
+          - `ghcr.io/githubnext/gh-aw-mcpg:${RELEASE_TAG}`
+          - `ghcr.io/githubnext/gh-aw-mcpg:latest`
           
-          After adding logging to the selected files, **validate your changes** before creating a PR:
+          Supported platforms: `linux/amd64`, `linux/arm64`
           
-          1. **Build the project to ensure no compilation errors:**
-             ```bash
-             go build -o awmg
-             ```
-             This will compile the Go code and catch any syntax errors or import issues.
-          
-          2. **Run tests to ensure no regressions:**
-             ```bash
-             go test ./...
-             ```
-             This validates that your changes don't break existing functionality.
-          
-          3. **Run vet to check for common mistakes:**
-             ```bash
-             go vet ./...
-             ```
-             This catches potential issues in your code.
-          
-          4. **Test the binary with debug logging enabled:**
-             ```bash
-             DEBUG=* ./awmg --config config.toml
-             ```
-             This validates that:
-             - The binary was built successfully
-             - Debug logging from your changes appears in the output
-             - The application runs correctly
-          
-          ### 6. Create Pull Request
-          
-          After validating your changes:
-          
-          1. The safe-outputs create-pull-request will automatically create a PR
-          2. Ensure your changes follow the guidelines above
-          3. The PR title will automatically have the "[log] " prefix
-          
-          ## Example Transformation
-          
-          **Before:**
-          ```go
-          package server
-          
-          import (
-              "fmt"
-              "net/http"
-          )
-          
-          func StartServer(port int) error {
-              addr := fmt.Sprintf(":%d", port)
-              return http.ListenAndServe(addr, nil)
-          }
+          ---
+          For complete details, see the [full release notes](__GH_AW_GITHUB_SERVER_URL__/__GH_AW_GITHUB_REPOSITORY__/releases/tag/${RELEASE_TAG}).
           ```
           
-          **After:**
-          ```go
-          package server
+          **Writing Guidelines:**
+          - Lead with benefits: "MCP Gateway now supports remote mode" not "Added remote mode"
+          - Be specific: "Reduced server startup time by 40%" not "Faster startup"
+          - Skip internal changes unless they have user impact
+          - Use docs links: `[Configuration Guide](https://github.com/githubnext/gh-aw-mcpg/blob/main/docs/config.md)`
+          - Keep breaking changes prominent with action items
+          - Mention Docker image availability prominently
           
-          import (
-              "fmt"
-              "net/http"
-              
-              "github.com/githubnext/gh-aw-mcpg/internal/logger"
-          )
+          ### 4. Handle Special Cases
           
-          var log = logger.New("server:server")
+          **First Release** (no `${PREV_RELEASE_TAG}`):
+          ```markdown
+          ## 🎉 First Release
           
-          func StartServer(port int) error {
-              log.Printf("Starting server on port %d", port)
-              
-              addr := fmt.Sprintf(":%d", port)
-              
-              log.Printf("Listening on address: %s", addr)
-              return http.ListenAndServe(addr, nil)
-          }
+          Welcome to the inaugural release of MCP Gateway! This Go-based proxy server enables seamless integration with multiple Model Context Protocol (MCP) servers.
+          
+          ### Key Features
+          - **Multi-server routing**: Route requests to different MCP backends via `/mcp/{serverID}`
+          - **Unified endpoint**: Single `/mcp` endpoint with intelligent routing
+          - **Docker integration**: Launch and manage MCP servers as containers
+          - **JSON-RPC 2.0**: Full support for MCP protocol over stdio
+          - **Security**: Built-in guards and DIFC labeling support
+          
+          ### 🐳 Docker Image
+          Available at: `ghcr.io/githubnext/gh-aw-mcpg:${RELEASE_TAG}`
+          
+          ### Getting Started
+          1. Build: `make build`
+          2. Configure: Edit `config.toml` with your MCP servers
+          3. Run: `./awmg --config config.toml`
+          
+          See the [README](https://github.com/githubnext/gh-aw-mcpg#readme) for complete setup instructions.
           ```
           
-          ## Quality Checklist
+          **Maintenance Release** (no user-facing changes):
+          ```markdown
+          ## 🔧 Maintenance Release
           
-          Before creating the PR, verify:
+          Dependency updates and internal improvements to keep MCP Gateway running smoothly.
           
-          - [ ] Maximum 5 files modified
-          - [ ] No test files modified (`*_test.go`)
-          - [ ] Each file has logger declaration with correct naming convention
-          - [ ] Logger arguments don't compute anything or cause side effects
-          - [ ] Logging messages are meaningful and helpful
-          - [ ] No duplicate logging with existing logs
-          - [ ] Import statements are properly formatted
-          - [ ] Changes validated with `go build -o awmg` (no compilation errors)
-          - [ ] Tests pass with `go test ./...`
-          - [ ] Code checked with `go vet ./...`
+          ### 🐳 Docker Image
+          Updated image available at: `ghcr.io/githubnext/gh-aw-mcpg:${RELEASE_TAG}`
+          ```
           
-          ## Important Notes
+          ## Output Format
           
-          - You have access to the edit tool to modify files
-          - You have access to bash commands to explore the codebase
-          - The safe-outputs create-pull-request will automatically create the PR
-          - Focus on quality over quantity - 5 well-logged files is better than 10 poorly-logged files
-          - Remember: debug logs are for developers, not end users
+          **CRITICAL**: You MUST call the `update_release` tool to update the release with the generated highlights:
           
-          Good luck enhancing the codebase with better logging!
+          ```javascript
+          update_release({
+            tag: "${RELEASE_TAG}",
+            operation: "prepend",
+            body: "## 🌟 Release Highlights\n\n[Your complete markdown highlights here]"
+          })
+          ```
+          
+          **Required Parameters:**
+          - `tag` - Release tag from `${RELEASE_TAG}` environment variable (e.g., "v0.1.0")
+          - `operation` - Must be `"prepend"` to add before existing notes
+          - `body` - Complete markdown content (include all formatting, emojis, links)
+          
+          **WARNING**: If you don't call the `update_release` tool, the release notes will NOT be updated!
+          
+          **Documentation Base URL:**
+          - Repository docs: `https://github.com/githubnext/gh-aw-mcpg/blob/main/docs/`
+          - Repository README: `https://github.com/githubnext/gh-aw-mcpg#readme`
+          
+          Verify paths exist in `docs_files.txt` before linking.
           
           PROMPT_EOF
+      - name: Substitute placeholders
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
+        env:
+          GH_AW_PROMPT: /tmp/gh-aw/aw-prompts/prompt.txt
+          GH_AW_GITHUB_REPOSITORY: ${{ github.repository }}
+          GH_AW_GITHUB_SERVER_URL: ${{ github.server_url }}
+          GH_AW_NEEDS_RELEASE_OUTPUTS_RELEASE_ID: ${{ needs.release.outputs.release_id }}
+        with:
+          script: |
+            const substitutePlaceholders = require('/tmp/gh-aw/actions/substitute_placeholders.cjs');
+            
+            // Call the substitution function
+            return await substitutePlaceholders({
+              file: process.env.GH_AW_PROMPT,
+              substitutions: {
+                GH_AW_GITHUB_REPOSITORY: process.env.GH_AW_GITHUB_REPOSITORY,
+                GH_AW_GITHUB_SERVER_URL: process.env.GH_AW_GITHUB_SERVER_URL,
+                GH_AW_NEEDS_RELEASE_OUTPUTS_RELEASE_ID: process.env.GH_AW_NEEDS_RELEASE_OUTPUTS_RELEASE_ID
+              }
+            });
       - name: Append XPIA security instructions to prompt
         env:
           GH_AW_PROMPT: /tmp/gh-aw/aw-prompts/prompt.txt
@@ -706,31 +624,6 @@ jobs:
           GH_AW_PROMPT: /tmp/gh-aw/aw-prompts/prompt.txt
         run: |
           cat "/tmp/gh-aw/prompts/temp_folder_prompt.md" >> "$GH_AW_PROMPT"
-      - name: Append cache memory instructions to prompt
-        env:
-          GH_AW_PROMPT: /tmp/gh-aw/aw-prompts/prompt.txt
-        run: |
-          cat << 'PROMPT_EOF' >> "$GH_AW_PROMPT"
-          
-          ---
-          
-          ## Cache Folder Available
-          
-          You have access to a persistent cache folder at `/tmp/gh-aw/cache-memory/` where you can read and write files to create memories and store information.
-          
-          - **Read/Write Access**: You can freely read from and write to any files in this folder
-          - **Persistence**: Files in this folder persist across workflow runs via GitHub Actions cache
-          - **Last Write Wins**: If multiple processes write to the same file, the last write will be preserved
-          - **File Share**: Use this as a simple file share - organize files as you see fit
-          
-          Examples of what you can store:
-          - `/tmp/gh-aw/cache-memory/notes.txt` - general notes and observations
-          - `/tmp/gh-aw/cache-memory/preferences.json` - user preferences and settings
-          - `/tmp/gh-aw/cache-memory/history.log` - activity history and logs
-          - `/tmp/gh-aw/cache-memory/state/` - organized state files in subdirectories
-          
-          Feel free to create, read, update, and organize files in this folder as needed for your tasks.
-          PROMPT_EOF
       - name: Append safe outputs instructions to prompt
         env:
           GH_AW_PROMPT: /tmp/gh-aw/aw-prompts/prompt.txt
@@ -744,7 +637,7 @@ jobs:
           <instructions>
           To create or modify GitHub resources (issues, discussions, pull requests, etc.), you MUST call the appropriate safe output tool. Simply writing content will NOT work - the workflow requires actual tool calls.
           
-          **Available tools**: create_pull_request, missing_tool, noop
+          **Available tools**: missing_tool, noop, update_release
           
           **Critical**: Tool calls write structured data that downstream jobs process. Without tool calls, follow-up actions will be skipped.
           </instructions>
@@ -826,6 +719,9 @@ jobs:
         uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
         env:
           GH_AW_PROMPT: /tmp/gh-aw/aw-prompts/prompt.txt
+          GH_AW_GITHUB_REPOSITORY: ${{ github.repository }}
+          GH_AW_GITHUB_SERVER_URL: ${{ github.server_url }}
+          GH_AW_NEEDS_RELEASE_OUTPUTS_RELEASE_ID: ${{ needs.release.outputs.release_id }}
         with:
           script: |
             const { setupGlobals } = require('/tmp/gh-aw/actions/setup_globals.cjs');
@@ -839,42 +735,11 @@ jobs:
       - name: Execute GitHub Copilot CLI
         id: agentic_execution
         # Copilot CLI tool arguments (sorted):
-        # --allow-tool github
-        # --allow-tool safeoutputs
-        # --allow-tool shell(cat)
-        # --allow-tool shell(date)
-        # --allow-tool shell(echo)
-        # --allow-tool shell(find internal -name '*.go' -type f ! -name '*_test.go')
-        # --allow-tool shell(git add:*)
-        # --allow-tool shell(git branch:*)
-        # --allow-tool shell(git checkout:*)
-        # --allow-tool shell(git commit:*)
-        # --allow-tool shell(git merge:*)
-        # --allow-tool shell(git rm:*)
-        # --allow-tool shell(git status)
-        # --allow-tool shell(git switch:*)
-        # --allow-tool shell(go build -o awmg)
-        # --allow-tool shell(go test ./...)
-        # --allow-tool shell(go vet ./...)
-        # --allow-tool shell(grep -n 'func ' internal/*.go)
-        # --allow-tool shell(grep -r 'var log = logger.New' internal --include='*.go')
-        # --allow-tool shell(grep)
-        # --allow-tool shell(head -n * internal/**/*.go)
-        # --allow-tool shell(head)
-        # --allow-tool shell(ls)
-        # --allow-tool shell(pwd)
-        # --allow-tool shell(sort)
-        # --allow-tool shell(tail)
-        # --allow-tool shell(uniq)
-        # --allow-tool shell(wc -l internal/**/*.go)
-        # --allow-tool shell(wc)
-        # --allow-tool shell(yq)
-        # --allow-tool write
-        timeout-minutes: 15
+        timeout-minutes: 30
         run: |
           set -o pipefail
-          sudo -E awf --env-all --container-workdir "${GITHUB_WORKSPACE}" --mount /tmp:/tmp:rw --mount "${GITHUB_WORKSPACE}:${GITHUB_WORKSPACE}:rw" --mount /usr/bin/date:/usr/bin/date:ro --mount /usr/bin/gh:/usr/bin/gh:ro --mount /usr/bin/yq:/usr/bin/yq:ro --mount /usr/local/bin/copilot:/usr/local/bin/copilot:ro --mount /home/runner/.copilot:/home/runner/.copilot:rw --allow-domains api.business.githubcopilot.com,api.enterprise.githubcopilot.com,api.github.com,api.githubcopilot.com,api.individual.githubcopilot.com,github.com,host.docker.internal,raw.githubusercontent.com,registry.npmjs.org --log-level info --proxy-logs-dir /tmp/gh-aw/sandbox/firewall/logs --image-tag 0.8.1 \
-            -- /usr/local/bin/copilot --add-dir /tmp/gh-aw/ --log-level all --log-dir /tmp/gh-aw/sandbox/agent/logs/ --add-dir "${GITHUB_WORKSPACE}" --disable-builtin-mcps --allow-tool github --allow-tool safeoutputs --allow-tool 'shell(cat)' --allow-tool 'shell(date)' --allow-tool 'shell(echo)' --allow-tool 'shell(find internal -name '\''*.go'\'' -type f ! -name '\''*_test.go'\'')' --allow-tool 'shell(git add:*)' --allow-tool 'shell(git branch:*)' --allow-tool 'shell(git checkout:*)' --allow-tool 'shell(git commit:*)' --allow-tool 'shell(git merge:*)' --allow-tool 'shell(git rm:*)' --allow-tool 'shell(git status)' --allow-tool 'shell(git switch:*)' --allow-tool 'shell(go build -o awmg)' --allow-tool 'shell(go test ./...)' --allow-tool 'shell(go vet ./...)' --allow-tool 'shell(grep -n '\''func '\'' internal/*.go)' --allow-tool 'shell(grep -r '\''var log = logger.New'\'' internal --include='\''*.go'\'')' --allow-tool 'shell(grep)' --allow-tool 'shell(head -n * internal/**/*.go)' --allow-tool 'shell(head)' --allow-tool 'shell(ls)' --allow-tool 'shell(pwd)' --allow-tool 'shell(sort)' --allow-tool 'shell(tail)' --allow-tool 'shell(uniq)' --allow-tool 'shell(wc -l internal/**/*.go)' --allow-tool 'shell(wc)' --allow-tool 'shell(yq)' --allow-tool write --add-dir /tmp/gh-aw/cache-memory/ --allow-all-paths --prompt "$(cat /tmp/gh-aw/aw-prompts/prompt.txt)"${GH_AW_MODEL_AGENT_COPILOT:+ --model "$GH_AW_MODEL_AGENT_COPILOT"} \
+          sudo -E awf --env-all --container-workdir "${GITHUB_WORKSPACE}" --mount /tmp:/tmp:rw --mount "${GITHUB_WORKSPACE}:${GITHUB_WORKSPACE}:rw" --mount /usr/bin/date:/usr/bin/date:ro --mount /usr/bin/gh:/usr/bin/gh:ro --mount /usr/bin/yq:/usr/bin/yq:ro --mount /usr/local/bin/copilot:/usr/local/bin/copilot:ro --mount /home/runner/.copilot:/home/runner/.copilot:rw --allow-domains api.business.githubcopilot.com,api.enterprise.githubcopilot.com,api.github.com,api.githubcopilot.com,api.individual.githubcopilot.com,api.npms.io,api.snapcraft.io,archive.ubuntu.com,azure.archive.ubuntu.com,bun.sh,crl.geotrust.com,crl.globalsign.com,crl.identrust.com,crl.sectigo.com,crl.thawte.com,crl.usertrust.com,crl.verisign.com,crl3.digicert.com,crl4.digicert.com,crls.ssl.com,deb.nodesource.com,deno.land,get.pnpm.io,ghcr.io,github.com,host.docker.internal,json-schema.org,json.schemastore.org,keyserver.ubuntu.com,nodejs.org,npm.pkg.github.com,npmjs.com,npmjs.org,ocsp.digicert.com,ocsp.geotrust.com,ocsp.globalsign.com,ocsp.identrust.com,ocsp.sectigo.com,ocsp.ssl.com,ocsp.thawte.com,ocsp.usertrust.com,ocsp.verisign.com,packagecloud.io,packages.cloud.google.com,packages.microsoft.com,ppa.launchpad.net,raw.githubusercontent.com,registry.bower.io,registry.npmjs.com,registry.npmjs.org,registry.yarnpkg.com,repo.yarnpkg.com,s.symcb.com,s.symcd.com,security.ubuntu.com,skimdb.npmjs.com,ts-crl.ws.symantec.com,ts-ocsp.ws.symantec.com,www.npmjs.com,www.npmjs.org,yarnpkg.com --log-level info --proxy-logs-dir /tmp/gh-aw/sandbox/firewall/logs --image-tag 0.8.1 \
+            -- /usr/local/bin/copilot --add-dir /tmp/gh-aw/ --log-level all --log-dir /tmp/gh-aw/sandbox/agent/logs/ --add-dir "${GITHUB_WORKSPACE}" --disable-builtin-mcps --allow-all-tools --allow-all-paths --prompt "$(cat /tmp/gh-aw/aw-prompts/prompt.txt)"${GH_AW_MODEL_AGENT_COPILOT:+ --model "$GH_AW_MODEL_AGENT_COPILOT"} \
             2>&1 | tee /tmp/gh-aw/agent-stdio.log
         env:
           COPILOT_AGENT_RUNNER_TYPE: STANDALONE
@@ -916,7 +781,7 @@ jobs:
         uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
         env:
           GH_AW_SAFE_OUTPUTS: ${{ env.GH_AW_SAFE_OUTPUTS }}
-          GH_AW_ALLOWED_DOMAINS: "api.business.githubcopilot.com,api.enterprise.githubcopilot.com,api.github.com,api.githubcopilot.com,api.individual.githubcopilot.com,github.com,host.docker.internal,raw.githubusercontent.com,registry.npmjs.org"
+          GH_AW_ALLOWED_DOMAINS: "api.business.githubcopilot.com,api.enterprise.githubcopilot.com,api.github.com,api.githubcopilot.com,api.individual.githubcopilot.com,api.npms.io,api.snapcraft.io,archive.ubuntu.com,azure.archive.ubuntu.com,bun.sh,crl.geotrust.com,crl.globalsign.com,crl.identrust.com,crl.sectigo.com,crl.thawte.com,crl.usertrust.com,crl.verisign.com,crl3.digicert.com,crl4.digicert.com,crls.ssl.com,deb.nodesource.com,deno.land,get.pnpm.io,ghcr.io,github.com,host.docker.internal,json-schema.org,json.schemastore.org,keyserver.ubuntu.com,nodejs.org,npm.pkg.github.com,npmjs.com,npmjs.org,ocsp.digicert.com,ocsp.geotrust.com,ocsp.globalsign.com,ocsp.identrust.com,ocsp.sectigo.com,ocsp.ssl.com,ocsp.thawte.com,ocsp.usertrust.com,ocsp.verisign.com,packagecloud.io,packages.cloud.google.com,packages.microsoft.com,ppa.launchpad.net,raw.githubusercontent.com,registry.bower.io,registry.npmjs.com,registry.npmjs.org,registry.yarnpkg.com,repo.yarnpkg.com,s.symcb.com,s.symcd.com,security.ubuntu.com,skimdb.npmjs.com,ts-crl.ws.symantec.com,ts-ocsp.ws.symantec.com,www.npmjs.com,www.npmjs.org,yarnpkg.com"
           GITHUB_SERVER_URL: ${{ github.server_url }}
           GITHUB_API_URL: ${{ github.api_url }}
         with:
@@ -960,12 +825,6 @@ jobs:
             setupGlobals(core, github, context, exec, io);
             const { main } = require('/tmp/gh-aw/actions/parse_firewall_logs.cjs');
             await main();
-      - name: Upload cache-memory data as artifact
-        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
-        if: always()
-        with:
-          name: cache-memory
-          path: /tmp/gh-aw/cache-memory
       - name: Validate agent logs for errors
         if: always()
         uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
@@ -990,7 +849,6 @@ jobs:
             /tmp/gh-aw/mcp-logs/
             /tmp/gh-aw/sandbox/firewall/logs/
             /tmp/gh-aw/agent-stdio.log
-            /tmp/gh-aw/aw.patch
           if-no-files-found: ignore
 
   conclusion:
@@ -999,7 +857,6 @@ jobs:
       - agent
       - detection
       - safe_outputs
-      - update_cache_memory
     if: (always()) && (needs.agent.result != 'skipped')
     runs-on: ubuntu-slim
     permissions:
@@ -1044,7 +901,7 @@ jobs:
         env:
           GH_AW_AGENT_OUTPUT: ${{ env.GH_AW_AGENT_OUTPUT }}
           GH_AW_NOOP_MAX: 1
-          GH_AW_WORKFLOW_NAME: "Go Logger Enhancement"
+          GH_AW_WORKFLOW_NAME: "Release"
         with:
           github-token: ${{ secrets.GH_AW_GITHUB_TOKEN || secrets.GITHUB_TOKEN }}
           script: |
@@ -1057,7 +914,7 @@ jobs:
         uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
         env:
           GH_AW_AGENT_OUTPUT: ${{ env.GH_AW_AGENT_OUTPUT }}
-          GH_AW_WORKFLOW_NAME: "Go Logger Enhancement"
+          GH_AW_WORKFLOW_NAME: "Release"
         with:
           github-token: ${{ secrets.GH_AW_GITHUB_TOKEN || secrets.GITHUB_TOKEN }}
           script: |
@@ -1073,7 +930,7 @@ jobs:
           GH_AW_COMMENT_ID: ${{ needs.activation.outputs.comment_id }}
           GH_AW_COMMENT_REPO: ${{ needs.activation.outputs.comment_repo }}
           GH_AW_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-          GH_AW_WORKFLOW_NAME: "Go Logger Enhancement"
+          GH_AW_WORKFLOW_NAME: "Release"
           GH_AW_AGENT_CONCLUSION: ${{ needs.agent.result }}
           GH_AW_DETECTION_CONCLUSION: ${{ needs.detection.result }}
         with:
@@ -1089,8 +946,6 @@ jobs:
     if: needs.agent.outputs.output_types != '' || needs.agent.outputs.has_patch == 'true'
     runs-on: ubuntu-latest
     permissions: {}
-    concurrency:
-      group: "gh-aw-copilot-${{ github.workflow }}"
     timeout-minutes: 10
     outputs:
       success: ${{ steps.parse_results.outputs.success }}
@@ -1119,8 +974,8 @@ jobs:
       - name: Setup threat detection
         uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
         env:
-          WORKFLOW_NAME: "Go Logger Enhancement"
-          WORKFLOW_DESCRIPTION: "Analyzes and enhances Go logging practices across the codebase for improved debugging and observability"
+          WORKFLOW_NAME: "Release"
+          WORKFLOW_DESCRIPTION: "Build, test, and release MCP Gateway binary and Docker image, then generate and prepend release highlights"
           HAS_PATCH: ${{ needs.agent.outputs.has_patch }}
         with:
           script: |
@@ -1237,22 +1092,216 @@ jobs:
           path: /tmp/gh-aw/threat-detection/detection.log
           if-no-files-found: ignore
 
+  docker:
+    needs: release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@c7c53464625b32c7a7e944ae62b3e17d2b600130 # v3
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+      - name: Log in to GHCR
+        uses: docker/login-action@5e57cd118135c172c3672efd75eb46360885c0ef # v3
+        with:
+          password: ${{ secrets.GITHUB_TOKEN }}
+          registry: ghcr.io
+          username: ${{ github.actor }}
+      - name: Extract tag version
+        id: tag_version
+        run: |
+          RELEASE_TAG="${GITHUB_REF#refs/tags/}"
+          echo "version=$RELEASE_TAG" >> "$GITHUB_OUTPUT"
+          echo "✓ Version: $RELEASE_TAG"
+      - name: Build and push (multi-arch)
+        uses: docker/build-push-action@263435318d21b8e681c14492fe198d362a7d2c83 # v6
+        with:
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository }}:latest
+            ghcr.io/${{ github.repository }}:${{ steps.tag_version.outputs.version }}
+            ghcr.io/${{ github.repository }}:${{ github.sha }}
+      - name: Update release with Docker info
+        run: |
+          DOCKER_INFO="
+
+          ## 🐳 Docker Image
+
+          The Docker image for this release is available at:
+
+          \`\`\`bash
+          docker pull ghcr.io/${{ github.repository }}:${VERSION}
+          # or
+          docker pull ghcr.io/${{ github.repository }}:latest
+          \`\`\`
+
+          Supported platforms: \`linux/amd64\`, \`linux/arm64\`
+          "
+
+          # Get current release body
+          CURRENT_BODY=$(gh release view "$RELEASE_TAG" --json body --jq .body)
+
+          # Append Docker info
+          gh release edit "$RELEASE_TAG" --notes "${CURRENT_BODY}${DOCKER_INFO}"
+          echo "✓ Docker information added to release"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ needs.release.outputs.release_tag }}
+          VERSION: ${{ steps.tag_version.outputs.version }}
+
+  generate-sbom:
+    needs: release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+      - name: Set up Go
+        uses: actions/setup-go@4dc6199c7b1a012772edbd06daecab0f50c9053c # v6
+        with:
+          cache: false
+          go-version-file: go.mod
+      - name: Download Go modules
+        run: go mod download
+      - name: Generate SBOM (SPDX format)
+        uses: anchore/sbom-action@fbfd9c6c189226748411491745178e0c2017392d # v0.20.10
+        with:
+          artifact-name: sbom.spdx.json
+          format: spdx-json
+          output-file: sbom.spdx.json
+      - name: Generate SBOM (CycloneDX format)
+        uses: anchore/sbom-action@fbfd9c6c189226748411491745178e0c2017392d # v0.20.10
+        with:
+          artifact-name: sbom.cdx.json
+          format: cyclonedx-json
+          output-file: sbom.cdx.json
+      - name: Audit SBOM files for secrets
+        run: |
+          echo "Auditing SBOM files for potential secrets..."
+          if grep -rE "GITHUB_TOKEN|SECRET|PASSWORD|API_KEY|PRIVATE_KEY" sbom.*.json; then
+            echo "Error: Potential secrets found in SBOM files"
+            exit 1
+          fi
+          echo "✓ No secrets detected in SBOM files"
+      - name: Upload SBOM artifacts
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
+        with:
+          name: sbom-artifacts
+          path: |
+            sbom.spdx.json
+            sbom.cdx.json
+          retention-days: 7
+      - name: Attach SBOM to release
+        run: |
+          echo "Attaching SBOM files to release: $RELEASE_TAG"
+          gh release upload "$RELEASE_TAG" sbom.spdx.json sbom.cdx.json --clobber
+          echo "✓ SBOM files attached to release"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ needs.release.outputs.release_tag }}
+
+  pre_activation:
+    runs-on: ubuntu-slim
+    outputs:
+      activated: ${{ steps.check_membership.outputs.is_team_member == 'true' }}
+    steps:
+      - name: Setup Scripts
+        uses: githubnext/gh-aw/actions/setup@d76e21bcc92a3146d915794285b0b32f51d00072 # v0.35.1
+        with:
+          destination: /tmp/gh-aw/actions
+      - name: Check team membership for workflow
+        id: check_membership
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
+        env:
+          GH_AW_REQUIRED_ROLES: admin,maintainer
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const { setupGlobals } = require('/tmp/gh-aw/actions/setup_globals.cjs');
+            setupGlobals(core, github, context, exec, io);
+            const { main } = require('/tmp/gh-aw/actions/check_membership.cjs');
+            await main();
+
+  release:
+    needs: activation
+    runs-on: ubuntu-latest
+    permissions:
+      attestations: write
+      contents: write
+      id-token: write
+      packages: write
+
+    outputs:
+      release_id: ${{ steps.get_release.outputs.release_id }}
+      release_tag: ${{ steps.get_release.outputs.release_tag }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Set up Go
+        uses: actions/setup-go@4dc6199c7b1a012772edbd06daecab0f50c9053c # v6
+        with:
+          cache: false
+          go-version-file: go.mod
+      - name: Download Go modules
+        run: go mod download
+      - name: Run tests
+        run: make test
+      - name: Build binary
+        run: make build
+      - name: Create release
+        run: |
+          RELEASE_TAG="${GITHUB_REF#refs/tags/}"
+          echo "Creating release for tag: $RELEASE_TAG"
+
+          # Create release with the binary
+          gh release create "$RELEASE_TAG" \
+            --title "$RELEASE_TAG" \
+            --generate-notes \
+            ./awmg
+
+          echo "✓ Release created with binary"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Get release ID
+        id: get_release
+        run: |
+          RELEASE_TAG="${GITHUB_REF#refs/tags/}"
+          echo "Getting release ID for tag: $RELEASE_TAG"
+          RELEASE_ID=$(gh release view "$RELEASE_TAG" --json databaseId --jq '.databaseId')
+          echo "release_id=$RELEASE_ID" >> "$GITHUB_OUTPUT"
+          echo "release_tag=$RELEASE_TAG" >> "$GITHUB_OUTPUT"
+          echo "✓ Release ID: $RELEASE_ID"
+          echo "✓ Release Tag: $RELEASE_TAG"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
   safe_outputs:
     needs:
-      - activation
       - agent
       - detection
     if: ((!cancelled()) && (needs.agent.result != 'skipped')) && (needs.detection.outputs.success == 'true')
     runs-on: ubuntu-slim
     permissions:
       contents: write
-      issues: write
-      pull-requests: write
     timeout-minutes: 15
     env:
       GH_AW_ENGINE_ID: "copilot"
-      GH_AW_WORKFLOW_ID: "go-logger"
-      GH_AW_WORKFLOW_NAME: "Go Logger Enhancement"
+      GH_AW_WORKFLOW_ID: "release"
+      GH_AW_WORKFLOW_NAME: "Release"
     outputs:
       process_safe_outputs_processed_count: ${{ steps.process_safe_outputs.outputs.processed_count }}
       process_safe_outputs_temporary_id_map: ${{ steps.process_safe_outputs.outputs.temporary_id_map }}
@@ -1272,37 +1321,12 @@ jobs:
           mkdir -p /tmp/gh-aw/safeoutputs/
           find "/tmp/gh-aw/safeoutputs/" -type f -print
           echo "GH_AW_AGENT_OUTPUT=/tmp/gh-aw/safeoutputs/agent_output.json" >> "$GITHUB_ENV"
-      - name: Download patch artifact
-        continue-on-error: true
-        uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53 # v6.0.0
-        with:
-          name: agent-artifacts
-          path: /tmp/gh-aw/
-      - name: Checkout repository
-        if: ((!cancelled()) && (needs.agent.result != 'skipped')) && (contains(needs.agent.outputs.output_types, 'create_pull_request'))
-        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
-        with:
-          token: ${{ github.token }}
-          persist-credentials: false
-          fetch-depth: 1
-      - name: Configure Git credentials
-        if: ((!cancelled()) && (needs.agent.result != 'skipped')) && (contains(needs.agent.outputs.output_types, 'create_pull_request'))
-        env:
-          REPO_NAME: ${{ github.repository }}
-          SERVER_URL: ${{ github.server_url }}
-        run: |
-          git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          git config --global user.name "github-actions[bot]"
-          # Re-authenticate git with GitHub token
-          SERVER_URL_STRIPPED="${SERVER_URL#https://}"
-          git remote set-url origin "https://x-access-token:${{ github.token }}@${SERVER_URL_STRIPPED}/${REPO_NAME}.git"
-          echo "Git configured with standard GitHub Actions identity"
       - name: Process Safe Outputs
         id: process_safe_outputs
         uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
         env:
           GH_AW_AGENT_OUTPUT: ${{ env.GH_AW_AGENT_OUTPUT }}
-          GH_AW_SAFE_OUTPUTS_HANDLER_CONFIG: "{\"create_pull_request\":{\"base_branch\":\"${{ github.ref_name }}\",\"draft\":false,\"labels\":[\"enhancement\",\"automation\"],\"max\":1,\"max_patch_size\":1024,\"title_prefix\":\"[log] \"}}"
+          GH_AW_SAFE_OUTPUTS_HANDLER_CONFIG: "{\"update_release\":{\"max\":1}}"
         with:
           github-token: ${{ secrets.GH_AW_GITHUB_TOKEN || secrets.GITHUB_TOKEN }}
           script: |
@@ -1310,28 +1334,4 @@ jobs:
             setupGlobals(core, github, context, exec, io);
             const { main } = require('/tmp/gh-aw/actions/safe_output_handler_manager.cjs');
             await main();
-
-  update_cache_memory:
-    needs:
-      - agent
-      - detection
-    if: always() && needs.detection.outputs.success == 'true'
-    runs-on: ubuntu-latest
-    permissions: {}
-    steps:
-      - name: Setup Scripts
-        uses: githubnext/gh-aw/actions/setup@d76e21bcc92a3146d915794285b0b32f51d00072 # v0.35.1
-        with:
-          destination: /tmp/gh-aw/actions
-      - name: Download cache-memory artifact (default)
-        uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53 # v6.0.0
-        continue-on-error: true
-        with:
-          name: cache-memory
-          path: /tmp/gh-aw/cache-memory
-      - name: Save cache-memory to cache (default)
-        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
-        with:
-          key: memory-${{ github.workflow }}-${{ github.run_id }}
-          path: /tmp/gh-aw/cache-memory
 
