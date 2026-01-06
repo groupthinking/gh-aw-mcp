@@ -21,6 +21,14 @@ type Session struct {
 	SessionID string
 }
 
+// NewSession creates a new Session with the given session ID and optional token
+func NewSession(sessionID, token string) *Session {
+	return &Session{
+		Token:     token,
+		SessionID: sessionID,
+	}
+}
+
 // ContextKey for session ID (exported so transport can use it)
 type ContextKey string
 
@@ -52,6 +60,7 @@ type UnifiedServer struct {
 	agentRegistry *difc.AgentRegistry
 	capabilities  *difc.Capabilities
 	evaluator     *difc.Evaluator
+	enableDIFC    bool // When true, DIFC enforcement and session requirement are enabled
 }
 
 // NewUnified creates a new unified MCP server
@@ -70,6 +79,7 @@ func NewUnified(ctx context.Context, cfg *config.Config) (*UnifiedServer, error)
 		agentRegistry: difc.NewAgentRegistry(),
 		capabilities:  difc.NewCapabilities(),
 		evaluator:     difc.NewEvaluator(),
+		enableDIFC:    cfg.EnableDIFC,
 	}
 
 	// Create MCP server
@@ -214,10 +224,7 @@ func (us *UnifiedServer) registerSysTools() error {
 
 		// Create session
 		us.sessionMu.Lock()
-		us.sessions[sessionID] = &Session{
-			Token:     token,
-			SessionID: sessionID,
-		}
+		us.sessions[sessionID] = NewSession(sessionID, token)
 		us.sessionMu.Unlock()
 
 		log.Printf("Initialized session: %s", sessionID)
@@ -507,10 +514,32 @@ func (us *UnifiedServer) getSessionID(ctx context.Context) string {
 }
 
 // requireSession checks that a session has been initialized for this request
+// When DIFC is disabled (default), automatically creates a session if one doesn't exist
 func (us *UnifiedServer) requireSession(ctx context.Context) error {
 	sessionID := us.getSessionID(ctx)
 	log.Printf("Checking session for ID: %s", sessionID)
 
+	// If DIFC is disabled (default), use double-checked locking to auto-create session
+	if !us.enableDIFC {
+		us.sessionMu.RLock()
+		session := us.sessions[sessionID]
+		us.sessionMu.RUnlock()
+
+		if session == nil {
+			// Need to create session - acquire write lock
+			us.sessionMu.Lock()
+			// Double-check after acquiring write lock to avoid race condition
+			if us.sessions[sessionID] == nil {
+				log.Printf("DIFC disabled: auto-creating session for ID: %s", sessionID)
+				us.sessions[sessionID] = NewSession(sessionID, "")
+				log.Printf("Session auto-created for ID: %s", sessionID)
+			}
+			us.sessionMu.Unlock()
+		}
+		return nil
+	}
+
+	// DIFC is enabled - require explicit session initialization
 	us.sessionMu.RLock()
 	session := us.sessions[sessionID]
 	us.sessionMu.RUnlock()

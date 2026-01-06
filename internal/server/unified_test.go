@@ -52,10 +52,7 @@ func TestUnifiedServer_SessionManagement(t *testing.T) {
 	token := "test-token"
 
 	us.sessionMu.Lock()
-	us.sessions[sessionID] = &Session{
-		Token:     token,
-		SessionID: sessionID,
-	}
+	us.sessions[sessionID] = NewSession(sessionID, token)
 	us.sessionMu.Unlock()
 
 	// Test session retrieval
@@ -92,7 +89,7 @@ func TestUnifiedServer_GetSessionKeys(t *testing.T) {
 	sessions := []string{"session-1", "session-2", "session-3"}
 	for _, sid := range sessions {
 		us.sessionMu.Lock()
-		us.sessions[sid] = &Session{SessionID: sid, Token: "token"}
+		us.sessions[sid] = NewSession(sid, "token")
 		us.sessionMu.Unlock()
 	}
 
@@ -210,7 +207,8 @@ func TestGetSessionID_FromContext(t *testing.T) {
 
 func TestRequireSession(t *testing.T) {
 	cfg := &config.Config{
-		Servers: map[string]*config.ServerConfig{},
+		Servers:    map[string]*config.ServerConfig{},
+		EnableDIFC: true, // Enable DIFC for this test
 	}
 
 	ctx := context.Background()
@@ -223,7 +221,7 @@ func TestRequireSession(t *testing.T) {
 	// Create a session
 	sessionID := "valid-session"
 	us.sessionMu.Lock()
-	us.sessions[sessionID] = &Session{SessionID: sessionID, Token: "token"}
+	us.sessions[sessionID] = NewSession(sessionID, "token")
 	us.sessionMu.Unlock()
 
 	// Test with valid session
@@ -233,10 +231,99 @@ func TestRequireSession(t *testing.T) {
 		t.Errorf("requireSession() failed for valid session: %v", err)
 	}
 
-	// Test with invalid session
+	// Test with invalid session (DIFC enabled)
 	ctxWithInvalidSession := context.WithValue(ctx, SessionIDContextKey, "invalid-session")
 	err = us.requireSession(ctxWithInvalidSession)
 	if err == nil {
-		t.Error("requireSession() should fail for invalid session")
+		t.Error("requireSession() should fail for invalid session when DIFC is enabled")
+	}
+}
+
+func TestRequireSession_DifcDisabled(t *testing.T) {
+	cfg := &config.Config{
+		Servers:    map[string]*config.ServerConfig{},
+		EnableDIFC: false, // DIFC disabled (default)
+	}
+
+	ctx := context.Background()
+	us, err := NewUnified(ctx, cfg)
+	if err != nil {
+		t.Fatalf("NewUnified() failed: %v", err)
+	}
+	defer us.Close()
+
+	// Test with non-existent session when DIFC is disabled
+	// Should auto-create a session
+	sessionID := "new-session"
+	ctxWithNewSession := context.WithValue(ctx, SessionIDContextKey, sessionID)
+	err = us.requireSession(ctxWithNewSession)
+	if err != nil {
+		t.Errorf("requireSession() should auto-create session when DIFC is disabled: %v", err)
+	}
+
+	// Verify session was created
+	us.sessionMu.RLock()
+	session, exists := us.sessions[sessionID]
+	us.sessionMu.RUnlock()
+
+	if !exists {
+		t.Error("Session should have been auto-created when DIFC is disabled")
+	}
+
+	if session.SessionID != sessionID {
+		t.Errorf("Expected session ID '%s', got '%s'", sessionID, session.SessionID)
+	}
+}
+
+func TestRequireSession_DifcDisabled_Concurrent(t *testing.T) {
+	cfg := &config.Config{
+		Servers:    map[string]*config.ServerConfig{},
+		EnableDIFC: false, // DIFC disabled (default)
+	}
+
+	ctx := context.Background()
+	us, err := NewUnified(ctx, cfg)
+	if err != nil {
+		t.Fatalf("NewUnified() failed: %v", err)
+	}
+	defer us.Close()
+
+	// Test concurrent session creation to verify no race condition
+	sessionID := "concurrent-session"
+	ctxWithSession := context.WithValue(ctx, SessionIDContextKey, sessionID)
+
+	// Run 10 goroutines trying to create the same session simultaneously
+	const numGoroutines = 10
+	errChan := make(chan error, numGoroutines)
+
+	for i := 0; i < numGoroutines; i++ {
+		go func() {
+			errChan <- us.requireSession(ctxWithSession)
+		}()
+	}
+
+	// Collect results
+	for i := 0; i < numGoroutines; i++ {
+		if err := <-errChan; err != nil {
+			t.Errorf("requireSession() failed in concurrent access: %v", err)
+		}
+	}
+
+	// Verify exactly one session was created
+	us.sessionMu.RLock()
+	session, exists := us.sessions[sessionID]
+	sessionCount := len(us.sessions)
+	us.sessionMu.RUnlock()
+
+	if !exists {
+		t.Error("Session should have been created")
+	}
+
+	if sessionCount != 1 {
+		t.Errorf("Expected exactly 1 session, got %d", sessionCount)
+	}
+
+	if session.SessionID != sessionID {
+		t.Errorf("Expected session ID '%s', got '%s'", sessionID, session.SessionID)
 	}
 }
