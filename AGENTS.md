@@ -4,9 +4,13 @@ Quick reference for AI agents working with MCP Gateway (Go-based MCP proxy serve
 
 ## Quick Start
 
-**Build**: `go build -o awmg`  
-**Test**: `go test ./...`  
-**Lint**: `go vet ./... && go fmt ./...`  
+**Install**: `make install` (install toolchains and dependencies)  
+**Build**: `make build` (builds `awmg` binary)  
+**Test**: `make test`  
+**Lint**: `make lint` (runs go vet and gofmt checks)  
+**Coverage**: `make coverage` (tests with coverage report)  
+**Format**: `make format` (auto-format code with gofmt)  
+**Clean**: `make clean` (remove build artifacts)  
 **Run**: `./awmg --config config.toml`
 
 ## Project Structure
@@ -87,19 +91,19 @@ if log.Enabled() {
 **Debug Output Control:**
 ```bash
 # Enable all debug logs
-DEBUG=* ./flowguard-go --config config.toml
+DEBUG=* ./awmg --config config.toml
 
 # Enable specific package
-DEBUG=server:* ./flowguard-go --config config.toml
+DEBUG=server:* ./awmg --config config.toml
 
 # Enable multiple packages
-DEBUG=server:*,launcher:* ./flowguard-go --config config.toml
+DEBUG=server:*,launcher:* ./awmg --config config.toml
 
 # Exclude specific loggers
-DEBUG=*,-launcher:test ./flowguard-go --config config.toml
+DEBUG=*,-launcher:test ./awmg --config config.toml
 
 # Disable colors (auto-disabled when piping)
-DEBUG_COLORS=0 DEBUG=* ./flowguard-go --config config.toml
+DEBUG_COLORS=0 DEBUG=* ./awmg --config config.toml
 ```
 
 **Key Features:**
