@@ -9,6 +9,9 @@
 *.dylib
 flowguard-go
 
+# Built binaries
+flowguard-go
+
 # Test binary, built with `go test -c`
 *.test
 
