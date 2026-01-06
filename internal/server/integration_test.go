@@ -172,15 +172,17 @@ func TestTransparentProxy_RoutedMode(t *testing.T) {
 		}
 
 		// Verify the tool has correct metadata
+		// Note: GetToolsForBackend strips the backend prefix, so we check for unprefixed name
 		if len(tools) > 0 {
 			tool := tools[0]
+			// The tool name should be without the backend prefix after GetToolsForBackend processes it
 			if tool.Name != "test_tool" {
-				t.Errorf("Expected tool name 'test_tool', got '%s'", tool.Name)
+				t.Errorf("Expected tool name 'test_tool' (prefix stripped), got '%s'", tool.Name)
 			}
 			if tool.BackendID != "testserver" {
 				t.Errorf("Expected BackendID 'testserver', got '%s'", tool.BackendID)
 			}
-			t.Logf("✓ Tool registered correctly: %s", tool.Name)
+			t.Logf("✓ Tool registered correctly: %s (backend: %s)", tool.Name, tool.BackendID)
 		}
 	})
 
@@ -214,10 +216,6 @@ func TestTransparentProxy_RoutedMode(t *testing.T) {
 			len(sysTools), len(testTools))
 	})
 }
-
-
-
-
 
 // Helper function to send MCP requests and handle SSE responses
 func sendMCPRequest(t *testing.T, url string, bearerToken string, payload map[string]interface{}) map[string]interface{} {
@@ -445,7 +443,17 @@ func TestProxyDoesNotModifyRequests(t *testing.T) {
 		},
 		Handler: func(ctx context.Context, req *sdk.CallToolRequest, state interface{}) (*sdk.CallToolResult, interface{}, error) {
 			// Echo back the arguments
-			argsJSON, _ := json.Marshal(req.Params.Arguments)
+			argsJSON, err := json.Marshal(req.Params.Arguments)
+			if err != nil {
+				return &sdk.CallToolResult{
+					Content: []sdk.Content{
+						&sdk.TextContent{
+							Text: fmt.Sprintf("Failed to marshal arguments: %v", err),
+						},
+					},
+					IsError: true,
+				}, state, nil
+			}
 			return &sdk.CallToolResult{
 				Content: []sdk.Content{
 					&sdk.TextContent{
