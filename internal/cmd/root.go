@@ -27,9 +27,9 @@ var (
 )
 
 var rootCmd = &cobra.Command{
-	Use:   "flowguard",
-	Short: "FlowGuard MCP proxy server",
-	Long: `FlowGuard is a proxy server for Model Context Protocol (MCP) servers.
+	Use:   "mcpg",
+	Short: "MCPG MCP proxy server",
+	Long: `MCPG is a proxy server for Model Context Protocol (MCP) servers.
 It provides routing, aggregation, and management of multiple MCP backend servers.`,
 	RunE: run,
 }
@@ -112,11 +112,11 @@ func run(cmd *cobra.Command, args []string) error {
 	// Create HTTP server based on mode
 	var httpServer *http.Server
 	if mode == "routed" {
-		log.Printf("Starting FlowGuard in ROUTED mode on %s", listenAddr)
+		log.Printf("Starting MCPG in ROUTED mode on %s", listenAddr)
 		log.Printf("Routes: /mcp/<server> where <server> is one of: %v", unifiedServer.GetServerIDs())
 		httpServer = server.CreateHTTPServerForRoutedMode(listenAddr, unifiedServer)
 	} else {
-		log.Printf("Starting FlowGuard in UNIFIED mode on %s", listenAddr)
+		log.Printf("Starting MCPG in UNIFIED mode on %s", listenAddr)
 		log.Printf("Endpoint: /mcp")
 		httpServer = server.CreateHTTPServerForMCP(listenAddr, unifiedServer)
 	}
