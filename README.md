@@ -1,6 +1,6 @@
 # MCP Gateway
 
-A Go port of FlowGuard - a gateway for Model Context Protocol (MCP) servers.
+A gateway for Model Context Protocol (MCP) servers.
 
 ## Features
 
@@ -22,7 +22,7 @@ A Go port of FlowGuard - a gateway for Model Context Protocol (MCP) servers.
 
 1. **Build the binary**
    ```bash
-   go build -o flowguard-go
+   go build -o mcpg
    ```
 
 2. **Create your environment file**
@@ -52,14 +52,14 @@ A Go port of FlowGuard - a gateway for Model Context Protocol (MCP) servers.
    docker pull mcp/memory
    ```
 
-6. **Start FlowGuard**
+6. **Start MCPG**
    
    In one terminal, run:
    ```bash
    ./run.sh
    ```
    
-   This will start FlowGuard in routed mode on `http://127.0.0.1:8000`.
+   This will start MCPG in routed mode on `http://127.0.0.1:8000`.
 
 7. **Run Codex (in another terminal)**
    ```bash
@@ -69,7 +69,7 @@ A Go port of FlowGuard - a gateway for Model Context Protocol (MCP) servers.
    
    You can use '/mcp' in codex to list the available tools. 
 
-   That's it! FlowGuard is now proxying MCP requests to your configured backend servers.
+   That's it! MCPG is now proxying MCP requests to your configured backend servers.
 
    When you're done you can restore your old codex config file:
 
@@ -121,10 +121,10 @@ If you prefer to run manually without the `run.sh` script:
 
 ```bash
 # Run with TOML config
-./flowguard-go --config config.toml
+./mcpg --config config.toml
 
 # Run with JSON stdin config
-echo '{"mcpServers": {...}}' | ./flowguard-go --config-stdin
+echo '{"mcpServers": {...}}' | ./mcpg --config-stdin
 ```
 
 ## Configuration
@@ -164,17 +164,17 @@ args = ["/path/to/filesystem-server.js"]
 ## Usage
 
 ```
-FlowGuard is a proxy server for Model Context Protocol (MCP) servers.
+MCPG is a proxy server for Model Context Protocol (MCP) servers.
 It provides routing, aggregation, and management of multiple MCP backend servers.
 
 Usage:
-  flowguard-go [flags]
+  mcpg [flags]
 
 Flags:
   -c, --config string   Path to config file (default "config.toml")
       --config-stdin    Read MCP server configuration from stdin (JSON format). When enabled, overrides --config
       --env string      Path to .env file to load environment variables
-  -h, --help            help for flowguard-go
+  -h, --help            help for mcpg
   -l, --listen string   HTTP server listen address (default "127.0.0.1:3000")
       --routed          Run in routed mode (each backend at /mcp/<server>)
       --unified         Run in unified mode (all backends at /mcp)
@@ -185,7 +185,7 @@ Flags:
 ### Build Image
 
 ```bash
-docker build -t flowguard-go .
+docker build -t mcpg .
 ```
 
 ### Run Container
@@ -194,13 +194,13 @@ docker build -t flowguard-go .
 docker run --rm -v $(pwd)/.env:/app/.env \
   -v /var/run/docker.sock:/var/run/docker.sock \
   -p 8000:8000 \
-  flowguard-go
+  mcpg
 ```
 
 The container uses `run.sh` as the entrypoint, which automatically:
 - Detects architecture and sets DOCKER_API_VERSION (1.43 for arm64, 1.44 for amd64)
 - Loads environment variables from `.env`
-- Starts FlowGuard in routed mode on port 8000
+- Starts MCPG in routed mode on port 8000
 - Reads configuration from stdin (via heredoc in run.sh)
 
 ### Override with custom configuration
@@ -216,7 +216,7 @@ docker run --rm -v $(pwd)/config.toml:/app/config.toml \
   -e PORT=8000 \
   -e HOST=127.0.0.1 \
   -p 8000:8000 \
-  flowguard-go
+  mcpg
 ```
 
 Available environment variables for `run.sh`:
@@ -266,7 +266,7 @@ This Go port focuses on core MCP proxy functionality with optional security feat
 
 ### DIFC Integration (Not Yet Enabled)
 
-FlowGuard includes a complete implementation of **Decentralized Information Flow Control (DIFC)** for information security, but it is **not yet enabled by default**. The DIFC system provides:
+MCPG includes a complete implementation of **Decentralized Information Flow Control (DIFC)** for information security, but it is **not yet enabled by default**. The DIFC system provides:
 
 - **Label-based Security**: Track information flow with secrecy and integrity labels
 - **Reference Monitor**: Centralized policy enforcement for all MCP operations
@@ -317,7 +317,7 @@ See [`docs/DIFC_INTEGRATION_PROPOSAL.md`](docs/DIFC_INTEGRATION_PROPOSAL.md) for
 ### Project Structure
 
 ```
-flowguard-go/
+mcpg/
 ├── main.go              # Entry point
 ├── go.mod               # Dependencies
 ├── Dockerfile           # Container image
@@ -337,4 +337,4 @@ flowguard-go/
 
 ## License
 
-Same as original FlowGuard project.
+MIT License

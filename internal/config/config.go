@@ -10,7 +10,7 @@ import (
 	"github.com/BurntSushi/toml"
 )
 
-// Config represents the FlowGuard configuration
+// Config represents the MCPG configuration
 type Config struct {
 	Servers    map[string]*ServerConfig `toml:"servers"`
 	EnableDIFC bool                     // When true, enables DIFC enforcement and requires sys___init call before tool access. Default is false for standard MCP client compatibility.

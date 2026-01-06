@@ -16,7 +16,7 @@ ENV_FILE="${ENV_FILE:-.env}"
 MODE="${MODE:---routed}"
 
 # Build the command
-CMD="./flowguard-go"
+CMD="./mcpg"
 FLAGS="$MODE --listen ${HOST}:${PORT}"
 
 # Only add --env flag if ENV_FILE is set and the file exists
@@ -84,7 +84,7 @@ EOF
 )
 fi
 
-echo "Starting FlowGuard Go server on port $PORT..."
+echo "Starting MCPG Go server on port $PORT..."
 echo "Command: $CMD $FLAGS"
 
 # Execute the command
