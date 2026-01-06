@@ -52,6 +52,7 @@ type UnifiedServer struct {
 	agentRegistry *difc.AgentRegistry
 	capabilities  *difc.Capabilities
 	evaluator     *difc.Evaluator
+	disableDIFC   bool // When true, DIFC enforcement and session requirement are disabled
 }
 
 // NewUnified creates a new unified MCP server
@@ -70,6 +71,7 @@ func NewUnified(ctx context.Context, cfg *config.Config) (*UnifiedServer, error)
 		agentRegistry: difc.NewAgentRegistry(),
 		capabilities:  difc.NewCapabilities(),
 		evaluator:     difc.NewEvaluator(),
+		disableDIFC:   cfg.DisableDIFC,
 	}
 
 	// Create MCP server
@@ -507,6 +509,7 @@ func (us *UnifiedServer) getSessionID(ctx context.Context) string {
 }
 
 // requireSession checks that a session has been initialized for this request
+// When DIFC is disabled, automatically creates a session if one doesn't exist
 func (us *UnifiedServer) requireSession(ctx context.Context) error {
 	sessionID := us.getSessionID(ctx)
 	log.Printf("Checking session for ID: %s", sessionID)
@@ -516,6 +519,19 @@ func (us *UnifiedServer) requireSession(ctx context.Context) error {
 	us.sessionMu.RUnlock()
 
 	if session == nil {
+		// If DIFC is disabled, auto-create a session for standard MCP client compatibility
+		if us.disableDIFC {
+			log.Printf("DIFC disabled: auto-creating session for ID: %s", sessionID)
+			us.sessionMu.Lock()
+			us.sessions[sessionID] = &Session{
+				Token:     "",
+				SessionID: sessionID,
+			}
+			us.sessionMu.Unlock()
+			log.Printf("Session auto-created for ID: %s", sessionID)
+			return nil
+		}
+
 		log.Printf("Session not found for ID: %s. Available sessions: %v", sessionID, us.getSessionKeys())
 		return fmt.Errorf("sys___init must be called before any other tool calls")
 	}

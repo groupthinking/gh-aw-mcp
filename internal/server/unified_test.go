@@ -233,10 +233,46 @@ func TestRequireSession(t *testing.T) {
 		t.Errorf("requireSession() failed for valid session: %v", err)
 	}
 
-	// Test with invalid session
+	// Test with invalid session (DIFC enabled)
 	ctxWithInvalidSession := context.WithValue(ctx, SessionIDContextKey, "invalid-session")
 	err = us.requireSession(ctxWithInvalidSession)
 	if err == nil {
-		t.Error("requireSession() should fail for invalid session")
+		t.Error("requireSession() should fail for invalid session when DIFC is enabled")
+	}
+}
+
+func TestRequireSession_DifcDisabled(t *testing.T) {
+	cfg := &config.Config{
+		Servers:     map[string]*config.ServerConfig{},
+		DisableDIFC: true,
+	}
+
+	ctx := context.Background()
+	us, err := NewUnified(ctx, cfg)
+	if err != nil {
+		t.Fatalf("NewUnified() failed: %v", err)
+	}
+	defer us.Close()
+
+	// Test with non-existent session when DIFC is disabled
+	// Should auto-create a session
+	sessionID := "new-session"
+	ctxWithNewSession := context.WithValue(ctx, SessionIDContextKey, sessionID)
+	err = us.requireSession(ctxWithNewSession)
+	if err != nil {
+		t.Errorf("requireSession() should auto-create session when DIFC is disabled: %v", err)
+	}
+
+	// Verify session was created
+	us.sessionMu.RLock()
+	session, exists := us.sessions[sessionID]
+	us.sessionMu.RUnlock()
+
+	if !exists {
+		t.Error("Session should have been auto-created when DIFC is disabled")
+	}
+
+	if session.SessionID != sessionID {
+		t.Errorf("Expected session ID '%s', got '%s'", sessionID, session.SessionID)
 	}
 }
