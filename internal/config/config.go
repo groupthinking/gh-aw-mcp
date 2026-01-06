@@ -13,7 +13,7 @@ import (
 // Config represents the FlowGuard configuration
 type Config struct {
 	Servers     map[string]*ServerConfig `toml:"servers"`
-	DisableDIFC bool                     // DisableDIFC when true, disables DIFC enforcement and session requirement
+	DisableDIFC bool                     // When true, disables DIFC enforcement and allows automatic session creation for standard MCP client compatibility
 }
 
 // ServerConfig represents a single MCP server configuration

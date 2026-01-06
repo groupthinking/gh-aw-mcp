@@ -21,6 +21,14 @@ type Session struct {
 	SessionID string
 }
 
+// NewSession creates a new Session with the given session ID and optional token
+func NewSession(sessionID, token string) *Session {
+	return &Session{
+		Token:     token,
+		SessionID: sessionID,
+	}
+}
+
 // ContextKey for session ID (exported so transport can use it)
 type ContextKey string
 
@@ -216,10 +224,7 @@ func (us *UnifiedServer) registerSysTools() error {
 
 		// Create session
 		us.sessionMu.Lock()
-		us.sessions[sessionID] = &Session{
-			Token:     token,
-			SessionID: sessionID,
-		}
+		us.sessions[sessionID] = NewSession(sessionID, token)
 		us.sessionMu.Unlock()
 
 		log.Printf("Initialized session: %s", sessionID)
@@ -526,10 +531,7 @@ func (us *UnifiedServer) requireSession(ctx context.Context) error {
 			// Double-check after acquiring write lock to avoid race condition
 			if us.sessions[sessionID] == nil {
 				log.Printf("DIFC disabled: auto-creating session for ID: %s", sessionID)
-				us.sessions[sessionID] = &Session{
-					Token:     "",
-					SessionID: sessionID,
-				}
+				us.sessions[sessionID] = NewSession(sessionID, "")
 				log.Printf("Session auto-created for ID: %s", sessionID)
 			}
 			us.sessionMu.Unlock()

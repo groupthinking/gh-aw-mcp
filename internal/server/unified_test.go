@@ -52,10 +52,7 @@ func TestUnifiedServer_SessionManagement(t *testing.T) {
 	token := "test-token"
 
 	us.sessionMu.Lock()
-	us.sessions[sessionID] = &Session{
-		Token:     token,
-		SessionID: sessionID,
-	}
+	us.sessions[sessionID] = NewSession(sessionID, token)
 	us.sessionMu.Unlock()
 
 	// Test session retrieval
@@ -92,7 +89,7 @@ func TestUnifiedServer_GetSessionKeys(t *testing.T) {
 	sessions := []string{"session-1", "session-2", "session-3"}
 	for _, sid := range sessions {
 		us.sessionMu.Lock()
-		us.sessions[sid] = &Session{SessionID: sid, Token: "token"}
+		us.sessions[sid] = NewSession(sid, "token")
 		us.sessionMu.Unlock()
 	}
 
@@ -223,7 +220,7 @@ func TestRequireSession(t *testing.T) {
 	// Create a session
 	sessionID := "valid-session"
 	us.sessionMu.Lock()
-	us.sessions[sessionID] = &Session{SessionID: sessionID, Token: "token"}
+	us.sessions[sessionID] = NewSession(sessionID, "token")
 	us.sessionMu.Unlock()
 
 	// Test with valid session
