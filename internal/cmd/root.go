@@ -23,6 +23,7 @@ var (
 	routedMode  bool
 	unifiedMode bool
 	envFile     string
+	disableDIFC bool
 )
 
 var rootCmd = &cobra.Command{
@@ -40,6 +41,7 @@ func init() {
 	rootCmd.Flags().BoolVar(&routedMode, "routed", false, "Run in routed mode (each backend at /mcp/<server>)")
 	rootCmd.Flags().BoolVar(&unifiedMode, "unified", false, "Run in unified mode (all backends at /mcp)")
 	rootCmd.Flags().StringVar(&envFile, "env", "", "Path to .env file to load environment variables")
+	rootCmd.Flags().BoolVar(&disableDIFC, "disable-difc", false, "Disable DIFC enforcement and session requirement (allows standard MCP clients)")
 }
 
 func run(cmd *cobra.Command, args []string) error {
@@ -70,6 +72,12 @@ func run(cmd *cobra.Command, args []string) error {
 	}
 
 	log.Printf("Loaded %d MCP server(s)", len(cfg.Servers))
+
+	// Apply command-line flags to config
+	cfg.DisableDIFC = disableDIFC
+	if disableDIFC {
+		log.Println("DIFC enforcement and session requirement disabled")
+	}
 
 	// Determine mode (default to unified if neither flag is set)
 	mode := "unified"
