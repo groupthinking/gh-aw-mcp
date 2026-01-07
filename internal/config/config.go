@@ -35,18 +35,22 @@ type StdinConfig struct {
 
 // StdinServerConfig represents a single server from stdin JSON
 type StdinServerConfig struct {
-	Type           string            `json:"type"`
+	Type           string            `json:"type"` // "stdio" | "http" ("local" supported for backward compatibility)
 	Command        string            `json:"command,omitempty"`
 	Args           []string          `json:"args,omitempty"`
 	Env            map[string]string `json:"env,omitempty"`
 	Container      string            `json:"container,omitempty"`
 	EntrypointArgs []string          `json:"entrypointArgs,omitempty"`
+	URL            string            `json:"url,omitempty"` // For HTTP-based MCP servers
 }
 
 // StdinGatewayConfig represents gateway configuration from stdin JSON
 type StdinGatewayConfig struct {
-	Port   *int   `json:"port,omitempty"`
-	APIKey string `json:"apiKey,omitempty"`
+	Port           *int   `json:"port,omitempty"`
+	APIKey         string `json:"apiKey,omitempty"`
+	Domain         string `json:"domain,omitempty"`
+	StartupTimeout *int   `json:"startupTimeout,omitempty"` // Seconds to wait for backend startup
+	ToolTimeout    *int   `json:"toolTimeout,omitempty"`    // Seconds to wait for tool execution
 }
 
 // LoadFromFile loads configuration from a TOML file
@@ -78,7 +82,9 @@ func LoadFromStdin() (*Config, error) {
 
 	// Log gateway configuration if present (reserved for future use)
 	if stdinCfg.Gateway != nil {
-		if stdinCfg.Gateway.Port != nil || stdinCfg.Gateway.APIKey != "" {
+		if stdinCfg.Gateway.Port != nil || stdinCfg.Gateway.APIKey != "" ||
+			stdinCfg.Gateway.Domain != "" || stdinCfg.Gateway.StartupTimeout != nil ||
+			stdinCfg.Gateway.ToolTimeout != nil {
 			log.Println("Gateway configuration present but not yet implemented (reserved for future use)")
 		}
 	}
@@ -89,9 +95,21 @@ func LoadFromStdin() (*Config, error) {
 	}
 
 	for name, server := range stdinCfg.MCPServers {
-		// Only support "local" type for now
-		if server.Type != "local" {
-			log.Printf("Warning: skipping server '%s' with unsupported type '%s'", name, server.Type)
+		// Normalize type: "local" is an alias for "stdio" (backward compatibility)
+		serverType := server.Type
+		if serverType == "local" {
+			serverType = "stdio"
+		}
+
+		// Validate type
+		if serverType != "stdio" && serverType != "http" {
+			log.Printf("Warning: skipping server '%s' with unsupported type '%s' (expected 'stdio' or 'http')", name, server.Type)
+			continue
+		}
+
+		// HTTP servers are not yet implemented
+		if serverType == "http" {
+			log.Printf("Warning: skipping server '%s' with type 'http' (HTTP transport not yet implemented)", name)
 			continue
 		}
 
