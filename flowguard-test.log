@@ -1,0 +1,101 @@
+2025/12/30 16:02:06 Loading environment from .env...
+2025/12/30 16:02:06   Loaded: GH_TOKEN=
+2025/12/30 16:02:06   Loaded: GITHUB_PERSONAL_ACCESS_TOKEN=github_pat...
+2025/12/30 16:02:06   Loaded: GITHUB_TOKEN=
+2025/12/30 16:02:06 Loaded 3 environment variables from .env
+2025/12/30 16:02:06 Reading configuration from config.toml...
+2025/12/30 16:02:06 Loaded 3 MCP server(s)
+2025/12/30 16:02:06 [Guard] Registered guard 'noop' for server 'github'
+2025/12/30 16:02:06 [DIFC] Registered guard 'noop' for server 'github'
+2025/12/30 16:02:06 [Guard] Registered guard 'noop' for server 'fetch'
+2025/12/30 16:02:06 [DIFC] Registered guard 'noop' for server 'fetch'
+2025/12/30 16:02:06 [Guard] Registered guard 'noop' for server 'memory'
+2025/12/30 16:02:06 [DIFC] Registered guard 'noop' for server 'memory'
+2025/12/30 16:02:06 Registering tools from all backends...
+2025/12/30 16:02:06 Registering sys tools...
+2025/12/30 16:02:06 Registered 2 sys tools
+2025/12/30 16:02:06 Registering tools from backend: memory
+2025/12/30 16:02:06 [LAUNCHER] Starting MCP server: memory
+2025/12/30 16:02:06 [LAUNCHER] Command: docker
+2025/12/30 16:02:06 [LAUNCHER] Args: [run --rm -i -e NO_COLOR=1 -e TERM=dumb -e PYTHONUNBUFFERED=1 mcp/memory]
+2025/12/30 16:02:06 Starting MCP server command: docker [run --rm -i -e NO_COLOR=1 -e TERM=dumb -e PYTHONUNBUFFERED=1 mcp/memory]
+2025/12/30 16:02:06 Connecting to MCP server...
+2025/12/30 16:02:06 Warning: failed to register tools from memory: failed to connect: failed to create connection: failed to connect: calling "initialize": EOF
+2025/12/30 16:02:06 Registering tools from backend: github
+2025/12/30 16:02:06 [LAUNCHER] Starting MCP server: github
+2025/12/30 16:02:06 [LAUNCHER] Command: docker
+2025/12/30 16:02:06 [LAUNCHER] Args: [run --rm -i --name flowguard-github-mcp -e GITHUB_PERSONAL_ACCESS_TOKEN -e NO_COLOR=1 -e TERM=dumb ghcr.io/github/github-mcp-server:latest]
+2025/12/30 16:02:06 [LAUNCHER] ✓ Env passthrough: GITHUB_PERSONAL_ACCESS_TOKEN=github_pat... (from FlowGuard process)
+2025/12/30 16:02:06 Starting MCP server command: docker [run --rm -i --name flowguard-github-mcp -e GITHUB_PERSONAL_ACCESS_TOKEN -e NO_COLOR=1 -e TERM=dumb ghcr.io/github/github-mcp-server:latest]
+2025/12/30 16:02:06 Connecting to MCP server...
+2025/12/30 16:02:06 Warning: failed to register tools from github: failed to connect: failed to create connection: failed to connect: calling "initialize": EOF
+2025/12/30 16:02:06 Registering tools from backend: fetch
+2025/12/30 16:02:06 [LAUNCHER] Starting MCP server: fetch
+2025/12/30 16:02:06 [LAUNCHER] Command: docker
+2025/12/30 16:02:06 [LAUNCHER] Args: [run --rm -i -e NO_COLOR=1 -e TERM=dumb -e PYTHONUNBUFFERED=1 mcp/fetch]
+2025/12/30 16:02:06 Starting MCP server command: docker [run --rm -i -e NO_COLOR=1 -e TERM=dumb -e PYTHONUNBUFFERED=1 mcp/fetch]
+2025/12/30 16:02:06 Connecting to MCP server...
+2025/12/30 16:02:06 Warning: failed to register tools from fetch: failed to connect: failed to create connection: failed to connect: calling "initialize": EOF
+2025/12/30 16:02:06 Starting FlowGuard in ROUTED mode on 127.0.0.1:3001
+2025/12/30 16:02:06 Routes: /mcp/<server> where <server> is one of: [github fetch memory]
+2025/12/30 16:02:06 Registered route: /mcp/sys
+2025/12/30 16:02:06 Registered route: /mcp/github
+2025/12/30 16:02:06 Registered route: /mcp/fetch
+2025/12/30 16:02:06 Registered route: /mcp/memory
+2025/12/30 16:08:13 === NEW SSE CONNECTION (ROUTED) ===
+2025/12/30 16:08:13 [127.0.0.1:52952] POST /mcp/sys
+2025/12/30 16:08:13 Backend: sys
+2025/12/30 16:08:13 Bearer Token (Session ID): test-agent-123
+2025/12/30 16:08:13 Request body: {
+    "jsonrpc": "2.0",
+    "method": "tools/call",
+    "id": 1,
+    "params": {
+      "name": "sys_init",
+      "arguments": {
+        "token": "test-token"
+      }
+    }
+  }
+2025/12/30 16:08:13 ✓ Injected session ID and backend ID into context
+2025/12/30 16:08:13 ===================================
+2025/12/30 16:08:13 Creating filtered server for sys with 2 tools
+2025/12/30 16:08:20 === NEW SSE CONNECTION (ROUTED) ===
+2025/12/30 16:08:20 [127.0.0.1:52954] POST /mcp/sys
+2025/12/30 16:08:20 Backend: sys
+2025/12/30 16:08:20 Bearer Token (Session ID): test-agent-123
+2025/12/30 16:08:20 Request body: {
+    "jsonrpc": "2.0",
+    "method": "initialize",
+    "id": 1,
+    "params": {
+      "protocolVersion": "2024-11-05",
+      "capabilities": {},
+      "clientInfo": {
+        "name": "test-client",
+        "version": "1.0.0"
+      }
+    }
+  }
+2025/12/30 16:08:20 ✓ Injected session ID and backend ID into context
+2025/12/30 16:08:20 ===================================
+2025/12/30 16:08:20 Creating filtered server for sys with 2 tools
+2025/12/30 16:08:26 === NEW SSE CONNECTION (ROUTED) ===
+2025/12/30 16:08:26 [127.0.0.1:52958] POST /mcp/sys
+2025/12/30 16:08:26 Backend: sys
+2025/12/30 16:08:26 Bearer Token (Session ID): test-agent-123
+2025/12/30 16:08:26 Request body: {
+    "jsonrpc": "2.0",
+    "method": "tools/call",
+    "id": 2,
+    "params": {
+      "name": "sys_init",
+      "arguments": {
+        "token": "test-token"
+      }
+    }
+  }
+2025/12/30 16:08:26 ✓ Injected session ID and backend ID into context
+2025/12/30 16:08:26 ===================================
+2025/12/30 16:08:26 Creating filtered server for sys with 2 tools
+2025/12/30 16:09:56 Shutting down...

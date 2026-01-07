@@ -1,5 +1,5 @@
 # Build stage
-FROM golang:1.23-alpine AS builder
+FROM golang:1.25-alpine AS builder
 
 WORKDIR /app
 
@@ -9,9 +9,10 @@ RUN go mod download
 
 # Copy source code
 COPY . .
+RUN go mod tidy
 
 # Build the binary
-RUN CGO_ENABLED=0 GOOS=linux go build -o flowguard-go .
+RUN CGO_ENABLED=0 GOOS=linux go build -o awmg .
 
 # Runtime stage
 FROM alpine:latest
@@ -22,7 +23,7 @@ RUN apk add --no-cache docker-cli bash
 WORKDIR /app
 
 # Copy binary from builder
-COPY --from=builder /app/flowguard-go .
+COPY --from=builder /app/awmg .
 
 # Copy run.sh script
 COPY run.sh .

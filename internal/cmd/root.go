@@ -12,6 +12,7 @@ import (
 	"syscall"
 
 	"github.com/githubnext/gh-aw-mcpg/internal/config"
+	"github.com/githubnext/gh-aw-mcpg/internal/logger"
 	"github.com/githubnext/gh-aw-mcpg/internal/server"
 	"github.com/spf13/cobra"
 )
@@ -23,12 +24,16 @@ var (
 	routedMode  bool
 	unifiedMode bool
 	envFile     string
+	enableDIFC  bool
+	debugLog    = logger.New("cmd:root")
+	version     = "dev" // Default version, overridden by SetVersion
 )
 
 var rootCmd = &cobra.Command{
-	Use:   "flowguard",
-	Short: "FlowGuard MCP proxy server",
-	Long: `FlowGuard is a proxy server for Model Context Protocol (MCP) servers.
+	Use:     "awmg",
+	Short:   "MCPG MCP proxy server",
+	Version: version,
+	Long: `MCPG is a proxy server for Model Context Protocol (MCP) servers.
 It provides routing, aggregation, and management of multiple MCP backend servers.`,
 	RunE: run,
 }
@@ -40,14 +45,24 @@ func init() {
 	rootCmd.Flags().BoolVar(&routedMode, "routed", false, "Run in routed mode (each backend at /mcp/<server>)")
 	rootCmd.Flags().BoolVar(&unifiedMode, "unified", false, "Run in unified mode (all backends at /mcp)")
 	rootCmd.Flags().StringVar(&envFile, "env", "", "Path to .env file to load environment variables")
+	rootCmd.Flags().BoolVar(&enableDIFC, "enable-difc", false, "Enable DIFC enforcement and session requirement (requires sys___init call before tool access)")
+
+	// Mark mutually exclusive flags
+	rootCmd.MarkFlagsMutuallyExclusive("routed", "unified")
+
+	// Add completion command
+	rootCmd.AddCommand(newCompletionCmd())
 }
 
 func run(cmd *cobra.Command, args []string) error {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
+	debugLog.Printf("Starting MCPG with config: %s, listen: %s", configFile, listenAddr)
+
 	// Load .env file if specified
 	if envFile != "" {
+		debugLog.Printf("Loading environment from file: %s", envFile)
 		if err := loadEnvFile(envFile); err != nil {
 			return fmt.Errorf("failed to load .env file: %w", err)
 		}
@@ -69,16 +84,24 @@ func run(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to load config: %w", err)
 	}
 
+	debugLog.Printf("Configuration loaded with %d servers", len(cfg.Servers))
 	log.Printf("Loaded %d MCP server(s)", len(cfg.Servers))
+
+	// Apply command-line flags to config
+	cfg.EnableDIFC = enableDIFC
+	if enableDIFC {
+		log.Println("DIFC enforcement and session requirement enabled")
+	} else {
+		log.Println("DIFC enforcement disabled (sessions auto-created for standard MCP client compatibility)")
+	}
 
 	// Determine mode (default to unified if neither flag is set)
 	mode := "unified"
-	if routedMode && unifiedMode {
-		return fmt.Errorf("cannot specify both --routed and --unified")
-	}
 	if routedMode {
 		mode = "routed"
 	}
+
+	debugLog.Printf("Server mode: %s, DIFC enabled: %v", mode, cfg.EnableDIFC)
 
 	// Create unified MCP server (backend for both modes)
 	unifiedServer, err := server.NewUnified(ctx, cfg)
@@ -102,11 +125,11 @@ func run(cmd *cobra.Command, args []string) error {
 	// Create HTTP server based on mode
 	var httpServer *http.Server
 	if mode == "routed" {
-		log.Printf("Starting FlowGuard in ROUTED mode on %s", listenAddr)
+		log.Printf("Starting MCPG in ROUTED mode on %s", listenAddr)
 		log.Printf("Routes: /mcp/<server> where <server> is one of: %v", unifiedServer.GetServerIDs())
 		httpServer = server.CreateHTTPServerForRoutedMode(listenAddr, unifiedServer)
 	} else {
-		log.Printf("Starting FlowGuard in UNIFIED mode on %s", listenAddr)
+		log.Printf("Starting MCPG in UNIFIED mode on %s", listenAddr)
 		log.Printf("Endpoint: /mcp")
 		httpServer = server.CreateHTTPServerForMCP(listenAddr, unifiedServer)
 	}
@@ -174,4 +197,10 @@ func Execute() {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
+}
+
+// SetVersion sets the version string for the CLI
+func SetVersion(v string) {
+	version = v
+	rootCmd.Version = v
 }

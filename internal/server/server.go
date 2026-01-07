@@ -13,7 +13,7 @@ import (
 	"github.com/githubnext/gh-aw-mcpg/internal/sys"
 )
 
-// Server represents the FlowGuard HTTP server
+// Server represents the MCPG HTTP server
 type Server struct {
 	launcher  *launcher.Launcher
 	sysServer *sys.SysServer
@@ -139,7 +139,7 @@ func (s *Server) handleInitialize(w http.ResponseWriter, req *mcp.Request, serve
 			"prompts":   map[string]interface{}{},
 		},
 		"serverInfo": map[string]interface{}{
-			"name":    "flowguard-" + serverID,
+			"name":    "awmg-" + serverID,
 			"version": "1.0.0",
 		},
 	}
@@ -257,6 +257,6 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 // ListenAndServe starts the HTTP server
 func (s *Server) ListenAndServe(addr string) error {
-	log.Printf("Starting FlowGuard HTTP server on %s (mode: %s)", addr, s.mode)
+	log.Printf("Starting MCPG HTTP server on %s (mode: %s)", addr, s.mode)
 	return http.ListenAndServe(addr, s)
 }

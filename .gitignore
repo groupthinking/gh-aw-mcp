@@ -7,6 +7,16 @@
 *.dll
 *.so
 *.dylib
+flowguard-go
+
+# Built binaries
+flowguard-go
+
+# Project binary
+mcpg
+awmg
+flowguard-go
+gh-aw-mcpg
 
 # Test binary, built with `go test -c`
 *.test
@@ -16,6 +26,7 @@
 coverage.*
 *.coverprofile
 profile.cov
+test-result-unit.json
 
 # Dependency directories (remove the comment below to include it)
 # vendor/

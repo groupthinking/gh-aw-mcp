@@ -9,23 +9,29 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/githubnext/gh-aw-mcpg/internal/logger"
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 )
+
+var logRouted = logger.New("server:routed")
 
 // CreateHTTPServerForRoutedMode creates an HTTP server for routed mode
 // In routed mode, each backend is accessible at /mcp/<server>
 // Multiple routes from the same Bearer token share a session
 func CreateHTTPServerForRoutedMode(addr string, unifiedServer *UnifiedServer) *http.Server {
+	logRouted.Printf("Creating HTTP server for routed mode: addr=%s", addr)
 	mux := http.NewServeMux()
 
 	// OAuth discovery endpoint - return 404 since we don't use OAuth
-	mux.HandleFunc("/mcp/.well-known/oauth-authorization-server", func(w http.ResponseWriter, r *http.Request) {
+	oauthHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		log.Printf("[%s] %s %s - OAuth discovery (not supported)", r.RemoteAddr, r.Method, r.URL.Path)
 		http.NotFound(w, r)
 	})
+	mux.Handle("/mcp/.well-known/oauth-authorization-server", withResponseLogging(oauthHandler))
 
 	// Create routes for all backends plus sys
 	allBackends := append([]string{"sys"}, unifiedServer.GetServerIDs()...)
+	logRouted.Printf("Registering routes for %d backends: %v", len(allBackends), allBackends)
 
 	// Create a proxy for each backend server (including sys)
 	for _, serverID := range allBackends {
@@ -84,10 +90,11 @@ func CreateHTTPServerForRoutedMode(addr string, unifiedServer *UnifiedServer) *h
 	}
 
 	// Health check
-	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
+	healthHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		fmt.Fprintf(w, "OK\n")
 	})
+	mux.Handle("/health", withResponseLogging(healthHandler))
 
 	return &http.Server{
 		Addr:    addr,
@@ -98,9 +105,11 @@ func CreateHTTPServerForRoutedMode(addr string, unifiedServer *UnifiedServer) *h
 // createFilteredServer creates an MCP server that only exposes tools for a specific backend
 // This reuses the unified server's tool handlers, ensuring all calls go through the same session
 func createFilteredServer(unifiedServer *UnifiedServer, backendID string) *sdk.Server {
+	logRouted.Printf("Creating filtered server: backend=%s", backendID)
+
 	// Create a new SDK server for this route
 	server := sdk.NewServer(&sdk.Implementation{
-		Name:    fmt.Sprintf("flowguard-%s", backendID),
+		Name:    fmt.Sprintf("awmg-%s", backendID),
 		Version: "1.0.0",
 	}, nil)
 
@@ -108,6 +117,7 @@ func createFilteredServer(unifiedServer *UnifiedServer, backendID string) *sdk.S
 	tools := unifiedServer.GetToolsForBackend(backendID)
 
 	log.Printf("Creating filtered server for %s with %d tools", backendID, len(tools))
+	logRouted.Printf("Backend %s has %d tools available", backendID, len(tools))
 
 	// Register each tool (without prefix) using the unified server's handlers
 	for _, toolInfo := range tools {
