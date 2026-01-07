@@ -59,6 +59,7 @@ func GetOrLaunch(l *Launcher, serverID string) (*mcp.Connection, error) {
 	// Get server config
 	serverCfg, ok := l.config.Servers[serverID]
 	if !ok {
+		logLauncher.Printf("Server not found in config: serverID=%s", serverID)
 		return nil, fmt.Errorf("server '%s' not found in config", serverID)
 	}
 
@@ -98,6 +99,7 @@ func GetOrLaunch(l *Launcher, serverID string) (*mcp.Connection, error) {
 	// Create connection
 	conn, err := mcp.NewConnection(l.ctx, serverCfg.Command, serverCfg.Args, serverCfg.Env)
 	if err != nil {
+		logLauncher.Printf("Connection creation failed: serverID=%s, error=%v", serverID, err)
 		return nil, fmt.Errorf("failed to create connection: %w", err)
 	}
 

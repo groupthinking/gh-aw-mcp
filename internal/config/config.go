@@ -54,6 +54,7 @@ func LoadFromFile(path string) (*Config, error) {
 	logConfig.Printf("Loading configuration from file: path=%s", path)
 	var cfg Config
 	if _, err := toml.DecodeFile(path, &cfg); err != nil {
+		logConfig.Printf("Failed to decode TOML: path=%s, error=%v", path, err)
 		return nil, fmt.Errorf("failed to decode TOML: %w", err)
 	}
 	logConfig.Printf("Successfully loaded %d servers from TOML file", len(cfg.Servers))
@@ -71,6 +72,7 @@ func LoadFromStdin() (*Config, error) {
 	logConfig.Printf("Read %d bytes from stdin", len(data))
 	var stdinCfg StdinConfig
 	if err := json.Unmarshal(data, &stdinCfg); err != nil {
+		logConfig.Printf("Failed to parse stdin JSON: error=%v", err)
 		return nil, fmt.Errorf("failed to parse JSON: %w", err)
 	}
 
@@ -92,6 +94,7 @@ func LoadFromStdin() (*Config, error) {
 		// Only support "local" type for now
 		if server.Type != "local" {
 			log.Printf("Warning: skipping server '%s' with unsupported type '%s'", name, server.Type)
+			logConfig.Printf("Unsupported server type: name=%s, type=%s", name, server.Type)
 			continue
 		}
 

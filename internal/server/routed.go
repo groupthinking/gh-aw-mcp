@@ -53,6 +53,7 @@ func CreateHTTPServerForRoutedMode(addr string, unifiedServer *UnifiedServer) *h
 			// Reject requests without valid Bearer token
 			if sessionID == "" {
 				log.Printf("[%s] %s %s - REJECTED: No Bearer token", r.RemoteAddr, r.Method, r.URL.Path)
+				logRouted.Printf("Request rejected: no Bearer token for backend=%s", backendID)
 				return nil
 			}
 
@@ -128,6 +129,7 @@ func createFilteredServer(unifiedServer *UnifiedServer, backendID string) *sdk.S
 		handler := unifiedServer.GetToolHandler(backendID, toolInfo.Name)
 		if handler == nil {
 			log.Printf("WARNING: No handler found for %s___%s", backendID, toolInfo.Name)
+			logRouted.Printf("Handler not found: backend=%s, tool=%s", backendID, toolInfo.Name)
 			continue
 		}
 

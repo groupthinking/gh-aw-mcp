@@ -64,8 +64,10 @@ func run(cmd *cobra.Command, args []string) error {
 	if envFile != "" {
 		debugLog.Printf("Loading environment from file: %s", envFile)
 		if err := loadEnvFile(envFile); err != nil {
+			debugLog.Printf("Failed to load env file: path=%s, error=%v", envFile, err)
 			return fmt.Errorf("failed to load .env file: %w", err)
 		}
+		debugLog.Print("Environment file loaded successfully")
 	}
 
 	// Load configuration
@@ -74,13 +76,16 @@ func run(cmd *cobra.Command, args []string) error {
 
 	if configStdin {
 		log.Println("Reading configuration from stdin...")
+		debugLog.Print("Loading configuration from stdin")
 		cfg, err = config.LoadFromStdin()
 	} else {
 		log.Printf("Reading configuration from %s...", configFile)
+		debugLog.Printf("Loading configuration from file: %s", configFile)
 		cfg, err = config.LoadFromFile(configFile)
 	}
 
 	if err != nil {
+		debugLog.Printf("Configuration load failed: error=%v", err)
 		return fmt.Errorf("failed to load config: %w", err)
 	}
 
@@ -104,11 +109,14 @@ func run(cmd *cobra.Command, args []string) error {
 	debugLog.Printf("Server mode: %s, DIFC enabled: %v", mode, cfg.EnableDIFC)
 
 	// Create unified MCP server (backend for both modes)
+	debugLog.Printf("Creating unified server: mode=%s", mode)
 	unifiedServer, err := server.NewUnified(ctx, cfg)
 	if err != nil {
+		debugLog.Printf("Failed to create unified server: error=%v", err)
 		return fmt.Errorf("failed to create unified server: %w", err)
 	}
 	defer unifiedServer.Close()
+	debugLog.Print("Unified server created successfully")
 
 	// Handle graceful shutdown
 	sigChan := make(chan os.Signal, 1)
@@ -127,12 +135,15 @@ func run(cmd *cobra.Command, args []string) error {
 	if mode == "routed" {
 		log.Printf("Starting MCPG in ROUTED mode on %s", listenAddr)
 		log.Printf("Routes: /mcp/<server> where <server> is one of: %v", unifiedServer.GetServerIDs())
+		debugLog.Printf("Creating routed mode HTTP server: addr=%s, backends=%v", listenAddr, unifiedServer.GetServerIDs())
 		httpServer = server.CreateHTTPServerForRoutedMode(listenAddr, unifiedServer)
 	} else {
 		log.Printf("Starting MCPG in UNIFIED mode on %s", listenAddr)
 		log.Printf("Endpoint: /mcp")
+		debugLog.Printf("Creating unified mode HTTP server: addr=%s", listenAddr)
 		httpServer = server.CreateHTTPServerForMCP(listenAddr, unifiedServer)
 	}
+	debugLog.Print("HTTP server created, starting listener")
 
 	// Start HTTP server
 	if err := httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {

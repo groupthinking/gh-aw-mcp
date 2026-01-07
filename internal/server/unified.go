@@ -124,6 +124,7 @@ func (us *UnifiedServer) registerAllTools() error {
 		logUnified.Printf("Registering tools from backend: %s", serverID)
 		if err := us.registerToolsFromBackend(serverID); err != nil {
 			log.Printf("Warning: failed to register tools from %s: %v", serverID, err)
+			logUnified.Printf("Failed to register tools: backend=%s, error=%v", serverID, err)
 			// Continue with other backends
 		}
 	}
@@ -135,10 +136,12 @@ func (us *UnifiedServer) registerAllTools() error {
 // registerToolsFromBackend registers tools from a specific backend with <server>___<tool> naming
 func (us *UnifiedServer) registerToolsFromBackend(serverID string) error {
 	log.Printf("Registering tools from backend: %s", serverID)
+	logUnified.Printf("Starting tool registration: backend=%s", serverID)
 
 	// Get connection to backend
 	conn, err := launcher.GetOrLaunch(us.launcher, serverID)
 	if err != nil {
+		logUnified.Printf("Connection failed: backend=%s, error=%v", serverID, err)
 		return fmt.Errorf("failed to connect: %w", err)
 	}
 
@@ -158,9 +161,12 @@ func (us *UnifiedServer) registerToolsFromBackend(serverID string) error {
 	}
 
 	if err := json.Unmarshal(result.Result, &listResult); err != nil {
+		logUnified.Printf("Failed to parse tool list: backend=%s, error=%v", serverID, err)
 		return fmt.Errorf("failed to parse tools: %w", err)
 	}
 
+	logUnified.Printf("Received %d tools from backend: %s", len(listResult.Tools), serverID)
+	
 	// Register each tool with prefixed name
 	toolNames := []string{}
 	for _, tool := range listResult.Tools {
@@ -378,6 +384,7 @@ func (us *UnifiedServer) callBackendTool(ctx context.Context, serverID, toolName
 	// Note: Session validation happens at the tool registration level via closures
 	// The closure captures the request and validates before calling this method
 	log.Printf("Calling tool on %s: %s with DIFC enforcement", serverID, toolName)
+	logUnified.Printf("Tool call initiated: backend=%s, tool=%s", serverID, toolName)
 
 	// **Phase 0: Extract agent ID and get/create agent labels**
 	agentID := guard.GetAgentIDFromContext(ctx)
