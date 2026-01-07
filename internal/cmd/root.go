@@ -46,6 +46,12 @@ func init() {
 	rootCmd.Flags().BoolVar(&unifiedMode, "unified", false, "Run in unified mode (all backends at /mcp)")
 	rootCmd.Flags().StringVar(&envFile, "env", "", "Path to .env file to load environment variables")
 	rootCmd.Flags().BoolVar(&enableDIFC, "enable-difc", false, "Enable DIFC enforcement and session requirement (requires sys___init call before tool access)")
+
+	// Mark mutually exclusive flags
+	rootCmd.MarkFlagsMutuallyExclusive("routed", "unified")
+
+	// Add completion command
+	rootCmd.AddCommand(newCompletionCmd())
 }
 
 func run(cmd *cobra.Command, args []string) error {
@@ -91,9 +97,6 @@ func run(cmd *cobra.Command, args []string) error {
 
 	// Determine mode (default to unified if neither flag is set)
 	mode := "unified"
-	if routedMode && unifiedMode {
-		return fmt.Errorf("cannot specify both --routed and --unified")
-	}
 	if routedMode {
 		mode = "routed"
 	}
