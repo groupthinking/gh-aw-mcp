@@ -80,6 +80,11 @@ func LoadFromStdin() (*Config, error) {
 
 	logConfig.Printf("Parsed stdin config with %d servers", len(stdinCfg.MCPServers))
 
+	// Validate gateway configuration first (fail-fast)
+	if err := validateGatewayConfig(stdinCfg.Gateway); err != nil {
+		return nil, err
+	}
+
 	// Log gateway configuration if present (reserved for future use)
 	if stdinCfg.Gateway != nil {
 		if stdinCfg.Gateway.Port != nil || stdinCfg.Gateway.APIKey != "" ||
@@ -95,16 +100,26 @@ func LoadFromStdin() (*Config, error) {
 	}
 
 	for name, server := range stdinCfg.MCPServers {
-		// Normalize type: "local" is an alias for "stdio" (backward compatibility)
-		serverType := server.Type
-		if serverType == "local" {
-			serverType = "stdio"
+		// Validate server configuration (fail-fast)
+		if err := validateStdioServer(name, server); err != nil {
+			return nil, err
 		}
 
-		// Validate type
-		if serverType != "stdio" && serverType != "http" {
-			log.Printf("Warning: skipping server '%s' with unsupported type '%s' (expected 'stdio' or 'http')", name, server.Type)
-			continue
+		// Expand variable expressions in env vars (fail-fast on undefined vars)
+		if len(server.Env) > 0 {
+			expandedEnv, err := expandEnvVariables(server.Env, name)
+			if err != nil {
+				return nil, err
+			}
+			server.Env = expandedEnv
+		}
+		// Normalize type: "local" is an alias for "stdio" (backward compatibility)
+		serverType := server.Type
+		if serverType == "" {
+			serverType = "stdio"
+		}
+		if serverType == "local" {
+			serverType = "stdio"
 		}
 
 		// HTTP servers are not yet implemented
@@ -112,6 +127,8 @@ func LoadFromStdin() (*Config, error) {
 			log.Printf("Warning: skipping server '%s' with type 'http' (HTTP transport not yet implemented)", name)
 			continue
 		}
+
+		// stdio/local servers only from this point
 
 		// For Docker containers
 		if server.Container != "" {

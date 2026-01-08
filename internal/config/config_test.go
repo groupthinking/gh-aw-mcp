@@ -158,11 +158,11 @@ func TestLoadFromStdin_UnsupportedType(t *testing.T) {
 		"mcpServers": {
 			"unsupported": {
 				"type": "remote",
-				"container": "test/container:latest"
+				"command": "node"
 			},
 			"supported": {
 				"type": "local",
-				"container": "test/container:latest"
+				"command": "node"
 			}
 		}
 	}`
@@ -178,21 +178,19 @@ func TestLoadFromStdin_UnsupportedType(t *testing.T) {
 	cfg, err := LoadFromStdin()
 	os.Stdin = oldStdin
 
-	if err != nil {
-		t.Fatalf("LoadFromStdin() failed: %v", err)
+	// Should fail validation for unsupported type
+	if err == nil {
+		t.Fatal("Expected error for unsupported type 'remote'")
 	}
 
-	// Only 'local' type should be loaded
-	if len(cfg.Servers) != 1 {
-		t.Errorf("Expected 1 server (local type only), got %d", len(cfg.Servers))
+	// Error should mention validation issue
+	if !strings.Contains(err.Error(), "remote") && !strings.Contains(err.Error(), "required") {
+		t.Errorf("Expected validation error, got: %v", err)
 	}
 
-	if _, ok := cfg.Servers["unsupported"]; ok {
-		t.Error("Unsupported server type was loaded")
-	}
-
-	if _, ok := cfg.Servers["supported"]; !ok {
-		t.Error("Supported server type was not loaded")
+	// Config should be nil on validation error
+	if cfg != nil {
+		t.Error("Config should be nil when validation fails")
 	}
 }
 
@@ -526,10 +524,6 @@ func TestLoadFromStdin_MixedServerTypes(t *testing.T) {
 			"http-server": {
 				"type": "http",
 				"url": "https://example.com/mcp"
-			},
-			"invalid-type": {
-				"type": "websocket",
-				"url": "ws://example.com"
 			}
 		}
 	}`
@@ -550,7 +544,7 @@ func TestLoadFromStdin_MixedServerTypes(t *testing.T) {
 	}
 
 	// Should load: stdio-direct, stdio-container, local-legacy (3 total)
-	// Should skip: http-server (not implemented), invalid-type (unsupported)
+	// Should skip: http-server (not implemented)
 	if len(cfg.Servers) != 3 {
 		t.Errorf("Expected 3 servers, got %d", len(cfg.Servers))
 	}
@@ -569,10 +563,6 @@ func TestLoadFromStdin_MixedServerTypes(t *testing.T) {
 
 	if _, ok := cfg.Servers["http-server"]; ok {
 		t.Error("http-server should be skipped")
-	}
-
-	if _, ok := cfg.Servers["invalid-type"]; ok {
-		t.Error("invalid-type server should be skipped")
 	}
 }
 
