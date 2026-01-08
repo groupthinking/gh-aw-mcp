@@ -63,6 +63,34 @@ func TestWriteGatewayConfigToStdout(t *testing.T) {
 			wantHost:   "127.0.0.1",
 			wantPort:   "3000",
 		},
+		{
+			name: "IPv6 address with port",
+			cfg: &config.Config{
+				Servers: map[string]*config.ServerConfig{
+					"test": {
+						Command: "echo",
+					},
+				},
+			},
+			listenAddr: "[::1]:8080",
+			mode:       "routed",
+			wantHost:   "::1",
+			wantPort:   "8080",
+		},
+		{
+			name: "IPv6 address with full notation",
+			cfg: &config.Config{
+				Servers: map[string]*config.ServerConfig{
+					"github": {
+						Command: "docker",
+					},
+				},
+			},
+			listenAddr: "[2001:db8::1]:3000",
+			mode:       "unified",
+			wantHost:   "2001:db8::1",
+			wantPort:   "3000",
+		},
 	}
 
 	for _, tt := range tests {
