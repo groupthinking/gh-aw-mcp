@@ -75,6 +75,54 @@ func expandEnvVariables(env map[string]string, serverName string) (map[string]st
 	return result, nil
 }
 
+// validateMounts validates mount specifications
+func validateMounts(mounts []string, jsonPath string) error {
+	for i, mount := range mounts {
+		parts := strings.Split(mount, ":")
+		if len(parts) != 3 {
+			return &ValidationError{
+				Field:      "mounts",
+				Message:    fmt.Sprintf("invalid mount format '%s' (expected 'source:dest:mode')", mount),
+				JSONPath:   fmt.Sprintf("%s.mounts[%d]", jsonPath, i),
+				Suggestion: "Use format 'source:dest:mode' where mode is 'ro' (read-only) or 'rw' (read-write)",
+			}
+		}
+
+		source, dest, mode := parts[0], parts[1], parts[2]
+
+		// Validate source is not empty
+		if source == "" {
+			return &ValidationError{
+				Field:      "mounts",
+				Message:    fmt.Sprintf("mount source cannot be empty in '%s'", mount),
+				JSONPath:   fmt.Sprintf("%s.mounts[%d]", jsonPath, i),
+				Suggestion: "Provide a valid source path",
+			}
+		}
+
+		// Validate dest is not empty
+		if dest == "" {
+			return &ValidationError{
+				Field:      "mounts",
+				Message:    fmt.Sprintf("mount destination cannot be empty in '%s'", mount),
+				JSONPath:   fmt.Sprintf("%s.mounts[%d]", jsonPath, i),
+				Suggestion: "Provide a valid destination path",
+			}
+		}
+
+		// Validate mode
+		if mode != "ro" && mode != "rw" {
+			return &ValidationError{
+				Field:      "mounts",
+				Message:    fmt.Sprintf("invalid mount mode '%s' (must be 'ro' or 'rw')", mode),
+				JSONPath:   fmt.Sprintf("%s.mounts[%d]", jsonPath, i),
+				Suggestion: "Use 'ro' for read-only or 'rw' for read-write",
+			}
+		}
+	}
+	return nil
+}
+
 // validateStdioServer validates a stdio server configuration
 func validateStdioServer(name string, server *StdinServerConfig) error {
 	jsonPath := fmt.Sprintf("mcpServers.%s", name)
@@ -117,6 +165,13 @@ func validateStdioServer(name string, server *StdinServerConfig) error {
 				Message:    "'command' field is not supported (stdio servers must use 'container')",
 				JSONPath:   jsonPath,
 				Suggestion: "Remove 'command' field and use 'container' instead",
+			}
+		}
+
+		// Validate mounts if provided
+		if len(server.Mounts) > 0 {
+			if err := validateMounts(server.Mounts, jsonPath); err != nil {
+				return err
 			}
 		}
 	}

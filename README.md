@@ -67,7 +67,12 @@ For the complete JSON configuration specification with all validation rules, see
     "github": {
       "type": "stdio",
       "container": "ghcr.io/github/github-mcp-server:latest",
+      "entrypoint": "/custom/entrypoint.sh",
       "entrypointArgs": ["--verbose"],
+      "mounts": [
+        "/host/config:/app/config:ro",
+        "/host/data:/app/data:rw"
+      ],
       "env": {
         "GITHUB_PERSONAL_ACCESS_TOKEN": "",
         "EXPANDED_VAR": "${MY_HOME}/config"
@@ -94,11 +99,26 @@ For the complete JSON configuration specification with all validation rules, see
 - **`container`** (required for stdio): Docker container image (e.g., `"ghcr.io/github/github-mcp-server:latest"`)
   - Automatically wraps as `docker run --rm -i <container>`
   - **Note**: The `command` field is NOT supported per the specification
+
+- **`entrypoint`** (optional): Custom entrypoint for the container
+  - Overrides the default container entrypoint
+  - Applied as `--entrypoint` flag to Docker
+
 - **`entrypointArgs`** (optional): Arguments passed to container entrypoint
+  - Array of strings passed after the container image
+
+- **`mounts`** (optional): Volume mounts for the container
+  - Array of strings in format `"source:dest:mode"`
+  - `source` - Host path to mount (can use environment variables with `${VAR}` syntax)
+  - `dest` - Container path where the volume is mounted
+  - `mode` - Either `"ro"` (read-only) or `"rw"` (read-write)
+  - Example: `["/host/config:/app/config:ro", "/host/data:/app/data:rw"]`
+
 - **`env`** (optional): Environment variables
   - Set to `""` (empty string) for passthrough from host environment
   - Set to `"value"` for explicit value
   - Use `"${VAR_NAME}"` for environment variable expansion (fails if undefined)
+
 - **`url`** (required for http): HTTP endpoint URL for `type: "http"` servers
 
 **Validation Rules:**
@@ -109,6 +129,9 @@ For the complete JSON configuration specification with all validation rules, see
 - Variable expansion with `${VAR_NAME}` fails fast on undefined variables
 - All validation errors include JSONPath and helpful suggestions
 - **The `command` field is not supported** - stdio servers must use `container`
+- **Mount specifications** must follow `"source:dest:mode"` format
+  - `mode` must be either `"ro"` or `"rw"`
+  - Both source and destination paths are required (cannot be empty)
 
 See **[Configuration Specification](https://github.com/githubnext/gh-aw/blob/main/docs/src/content/docs/reference/mcp-gateway.md)** for complete validation rules.
 

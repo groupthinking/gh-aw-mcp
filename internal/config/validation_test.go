@@ -186,6 +186,56 @@ func TestValidateStdioServer(t *testing.T) {
 			shouldErr: false,
 		},
 		{
+			name: "valid with entrypoint and container",
+			server: &StdinServerConfig{
+				Type:       "stdio",
+				Container:  "test:latest",
+				Entrypoint: "/bin/bash",
+			},
+			shouldErr: false,
+		},
+		{
+			name: "valid with mounts (ro)",
+			server: &StdinServerConfig{
+				Type:      "stdio",
+				Container: "test:latest",
+				Mounts:    []string{"/host/path:/container/path:ro"},
+			},
+			shouldErr: false,
+		},
+		{
+			name: "valid with mounts (rw)",
+			server: &StdinServerConfig{
+				Type:      "stdio",
+				Container: "test:latest",
+				Mounts:    []string{"/host/data:/app/data:rw"},
+			},
+			shouldErr: false,
+		},
+		{
+			name: "valid with multiple mounts",
+			server: &StdinServerConfig{
+				Type:      "stdio",
+				Container: "test:latest",
+				Mounts: []string{
+					"/host/path1:/container/path1:ro",
+					"/host/path2:/container/path2:rw",
+				},
+			},
+			shouldErr: false,
+		},
+		{
+			name: "valid with all new fields",
+			server: &StdinServerConfig{
+				Type:           "stdio",
+				Container:      "test:latest",
+				Entrypoint:     "/custom/entrypoint.sh",
+				EntrypointArgs: []string{"--verbose", "--debug"},
+				Mounts:         []string{"/host:/container:ro"},
+			},
+			shouldErr: false,
+		},
+		{
 			name: "missing container",
 			server: &StdinServerConfig{
 				Type: "stdio",
@@ -242,6 +292,56 @@ func TestValidateStdioServer(t *testing.T) {
 				Container: "test:latest",
 			},
 			shouldErr: false,
+		},
+		{
+			name: "invalid mount format - missing mode",
+			server: &StdinServerConfig{
+				Type:      "stdio",
+				Container: "test:latest",
+				Mounts:    []string{"/host:/container"},
+			},
+			shouldErr: true,
+			errorMsg:  "invalid mount format",
+		},
+		{
+			name: "invalid mount format - too many parts",
+			server: &StdinServerConfig{
+				Type:      "stdio",
+				Container: "test:latest",
+				Mounts:    []string{"/host:/container:ro:extra"},
+			},
+			shouldErr: true,
+			errorMsg:  "invalid mount format",
+		},
+		{
+			name: "invalid mount mode",
+			server: &StdinServerConfig{
+				Type:      "stdio",
+				Container: "test:latest",
+				Mounts:    []string{"/host:/container:invalid"},
+			},
+			shouldErr: true,
+			errorMsg:  "invalid mount mode",
+		},
+		{
+			name: "mount with empty source",
+			server: &StdinServerConfig{
+				Type:      "stdio",
+				Container: "test:latest",
+				Mounts:    []string{":/container:ro"},
+			},
+			shouldErr: true,
+			errorMsg:  "mount source cannot be empty",
+		},
+		{
+			name: "mount with empty destination",
+			server: &StdinServerConfig{
+				Type:      "stdio",
+				Container: "test:latest",
+				Mounts:    []string{"/host::ro"},
+			},
+			shouldErr: true,
+			errorMsg:  "mount destination cannot be empty",
 		},
 	}
 
