@@ -6,9 +6,12 @@ Quick reference for AI agents working with MCP Gateway (Go-based MCP proxy serve
 
 **Install**: `make install` (install toolchains and dependencies)  
 **Build**: `make build` (builds `awmg` binary)  
-**Test**: `make test`  
+**Test**: `make test` (run unit tests, no build required)  
+**Test-Unit**: `make test-unit` (run unit tests only)  
+**Test-Integration**: `make test-integration` (run binary integration tests, requires build)  
+**Test-All**: `make test-all` (run both unit and integration tests)  
 **Lint**: `make lint` (runs go vet and gofmt checks)  
-**Coverage**: `make coverage` (tests with coverage report)  
+**Coverage**: `make coverage` (unit tests with coverage report)  
 **Format**: `make format` (auto-format code with gofmt)  
 **Clean**: `make clean` (remove build artifacts)  
 **Agent-Finished**: `make agent-finished` (run format, build, lint, test - ALWAYS run before completion)  
@@ -82,12 +85,29 @@ args = ["run", "--rm", "-e", "GITHUB_PERSONAL_ACCESS_TOKEN", "-i", "ghcr.io/gith
 - Godoc comments for exports
 - Mock external dependencies (Docker, network)
 
+## Test Structure
+
+**Unit Tests** (`internal/` packages):
+- Run without building the binary
+- Test code in isolation with mocks
+- Fast execution, no external dependencies
+- Run with: `make test` or `make test-unit`
+
+**Integration Tests** (`test/integration/`):
+- Test the compiled `awmg` binary end-to-end
+- Require building the binary first
+- Test actual server behavior and CLI flags
+- Run with: `make test-integration`
+
+**All Tests**: `make test-all` runs both unit and integration tests
+
 ## Common Tasks
 
 **Add MCP Server**: Update config.toml with new server entry  
 **Add Route**: Edit `internal/server/routed.go` or `unified.go`  
 **Add Guard**: Implement in `internal/guard/` and register  
-**Add Test**: Create `*_test.go` with Go testing package
+**Add Unit Test**: Create `*_test.go` in the appropriate `internal/` package  
+**Add Integration Test**: Create test in `test/integration/` that uses the binary
 
 ## Agent Completion Checklist
 
