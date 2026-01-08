@@ -22,33 +22,26 @@ Thank you for your interest in contributing to MCP Gateway! This document provid
    ```bash
    make install
    ```
-   
+
    This will:
    - Verify Go installation (and warn if version doesn't match 1.25.0)
    - Install golangci-lint if not present
    - Download and verify Go module dependencies
 
-3. **Create your environment file**
-   ```bash
-   cp example.env .env
-   ```
-
-4. **Create a GitHub Personal Access Token**
+3. **Create a GitHub Personal Access Token**
    - Go to https://github.com/settings/tokens
    - Click "Generate new token (classic)"
    - Select scopes as needed (e.g., `repo` for repository access)
    - Copy the generated token
 
-5. **Add your token to `.env`**
-   
+4. **Create your Environment File**
+
    Replace the placeholder value with your actual token:
    ```bash
-   sed -i '' 's/GITHUB_PERSONAL_ACCESS_TOKEN=.*/GITHUB_PERSONAL_ACCESS_TOKEN=your_token_here/' .env
+   sed 's/GITHUB_PERSONAL_ACCESS_TOKEN=.*/GITHUB_PERSONAL_ACCESS_TOKEN=your_token_here/' example.env > .env
    ```
-   
-   Or edit `.env` manually and replace the value of `GITHUB_PERSONAL_ACCESS_TOKEN`.
 
-6. **Pull required Docker images**
+5. **Pull required Docker images**
    ```bash
    docker pull ghcr.io/github/github-mcp-server:latest
    docker pull mcp/fetch
@@ -104,7 +97,7 @@ Start the server with:
 ./run.sh
 ```
 
-This will start MCPG in routed mode on `http://127.0.0.1:8000`.
+This will start MCPG in routed mode on `http://127.0.0.1:3000`.
 
 Or run manually:
 ```bash
@@ -123,7 +116,7 @@ cp ~/.codex/config.toml ~/.codex/config.toml.bak && cp agent-configs/codex.confi
 AGENT_ID=demo-agent codex
 ```
 
-You can use '/mcp' in codex to list the available tools. 
+You can use '/mcp' in codex to list the available tools.
 
 When you're done you can restore your old codex config file:
 
@@ -138,7 +131,7 @@ You can test the MCP server directly using curl commands:
 #### 1. Initialize a session and extract session ID
 
 ```bash
-MCP_URL="http://127.0.0.1:8000/mcp/github"
+MCP_URL="http://127.0.0.1:3000/mcp/github"
 
 SESSION_ID=$(
   curl -isS -X POST $MCP_URL \
@@ -215,7 +208,7 @@ awmg/
 - Follow standard Go conventions (see [Effective Go](https://golang.org/doc/effective_go.html))
 - Use internal packages in `internal/` for non-exported code
 - Test files: `*_test.go` with table-driven tests
-- Naming: 
+- Naming:
   - `camelCase` for private/unexported identifiers
   - `PascalCase` for public/exported identifiers
 - Always handle errors explicitly
@@ -294,7 +287,7 @@ func TestMyFunction(t *testing.T) {
     }{
         // test cases...
     }
-    
+
     for _, tt := range tests {
         t.Run(tt.name, func(t *testing.T) {
             // test implementation...
@@ -399,7 +392,7 @@ make release major
    ```
    ✓ Tag v1.2.4 created and pushed
    ✓ Release workflow will be triggered automatically
-   
+
    Monitor the release workflow at:
      https://github.com/githubnext/gh-aw-mcpg/actions/workflows/release.lock.yml
    ```
