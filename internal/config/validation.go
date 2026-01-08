@@ -25,7 +25,7 @@ func (e *ValidationError) Error() string {
 }
 
 // Variable expression pattern: ${VARIABLE_NAME}
-var varExprPattern = regexp.MustCompile(`\$\{([A-Z_][A-Z0-9_]*)\}`)
+var varExprPattern = regexp.MustCompile(`\$\{([A-Za-z_][A-Za-z0-9_]*)\}`)
 
 // expandVariables expands variable expressions in a string
 // Returns the expanded string and error if any variable is undefined
