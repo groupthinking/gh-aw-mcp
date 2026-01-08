@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/githubnext/gh-aw-mcpg/internal/logger"
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -101,12 +102,14 @@ func CreateHTTPServerForMCP(addr string, unifiedServer *UnifiedServer, apiKey st
 
 		// Reject requests without valid Bearer token
 		if sessionID == "" {
+			logger.LogError("client", "MCP connection rejected: no Bearer token, remote=%s, path=%s", r.RemoteAddr, r.URL.Path)
 			log.Printf("[%s] %s %s - REJECTED: No Bearer token", r.RemoteAddr, r.Method, r.URL.Path)
 			// Return nil to reject the connection
 			// The SDK will handle sending an appropriate error response
 			return nil
 		}
 
+		logger.LogInfo("client", "MCP connection established, remote=%s, method=%s, path=%s, session=%s", r.RemoteAddr, r.Method, r.URL.Path, sessionID)
 		log.Printf("=== NEW SSE CONNECTION ===")
 		log.Printf("[%s] %s %s", r.RemoteAddr, r.Method, r.URL.Path)
 		log.Printf("Bearer Token (Session ID): %s", sessionID)
@@ -117,6 +120,7 @@ func CreateHTTPServerForMCP(addr string, unifiedServer *UnifiedServer, apiKey st
 		if r.Method == "POST" && r.Body != nil {
 			bodyBytes, err := io.ReadAll(r.Body)
 			if err == nil && len(bodyBytes) > 0 {
+				logger.LogDebug("client", "MCP initialize request body, session=%s, body=%s", sessionID, string(bodyBytes))
 				log.Printf("Request body: %s", string(bodyBytes))
 				// Restore body
 				r.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))

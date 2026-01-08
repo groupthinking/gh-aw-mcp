@@ -53,10 +53,13 @@ func CreateHTTPServerForRoutedMode(addr string, unifiedServer *UnifiedServer, ap
 
 			// Reject requests without valid Bearer token
 			if sessionID == "" {
+				logger.LogError("client", "Rejected MCP client connection: no Bearer token, remote=%s, path=%s", r.RemoteAddr, r.URL.Path)
 				log.Printf("[%s] %s %s - REJECTED: No Bearer token", r.RemoteAddr, r.Method, r.URL.Path)
 				return nil
 			}
 
+			logger.LogInfo("client", "New MCP client connection, remote=%s, method=%s, path=%s, backend=%s, session=%s",
+				r.RemoteAddr, r.Method, r.URL.Path, backendID, sessionID)
 			log.Printf("=== NEW SSE CONNECTION (ROUTED) ===")
 			log.Printf("[%s] %s %s", r.RemoteAddr, r.Method, r.URL.Path)
 			log.Printf("Backend: %s", backendID)
@@ -66,6 +69,7 @@ func CreateHTTPServerForRoutedMode(addr string, unifiedServer *UnifiedServer, ap
 			if r.Method == "POST" && r.Body != nil {
 				bodyBytes, err := io.ReadAll(r.Body)
 				if err == nil && len(bodyBytes) > 0 {
+					logger.LogDebug("client", "MCP client request body, backend=%s, body=%s", backendID, string(bodyBytes))
 					log.Printf("Request body: %s", string(bodyBytes))
 					r.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
 				}

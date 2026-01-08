@@ -13,6 +13,7 @@ Quick reference for AI agents working with MCP Gateway (Go-based MCP proxy serve
 **Clean**: `make clean` (remove build artifacts)  
 **Agent-Finished**: `make agent-finished` (run format, build, lint, test - ALWAYS run before completion)  
 **Run**: `./awmg --config config.toml`
+**Run with Custom Log Directory**: `./awmg --config config.toml --log-dir /path/to/logs`
 
 ## Project Structure
 
@@ -137,6 +138,25 @@ if log.Enabled() {
 }
 ```
 
+**For operational/file logging, use the file logger:**
+
+```go
+import "github.com/githubnext/gh-aw-mcpg/internal/logger"
+
+// Log operational events (written to mcp-gateway.log)
+logger.LogInfo("category", "Operation completed successfully")
+logger.LogWarn("category", "Potential issue detected: %s", issue)
+logger.LogError("category", "Operation failed: %v", err)
+logger.LogDebug("category", "Debug details: %+v", details)
+```
+
+**Logging Categories:**
+- `startup` - Gateway initialization and configuration
+- `shutdown` - Graceful shutdown events
+- `client` - MCP client interactions and requests
+- `backend` - Backend MCP server operations
+- `auth` - Authentication events (success and failures)
+
 **Category Naming Convention:**
 - Follow the pattern: `pkg:filename` (e.g., `server:routed`, `launcher:docker`)
 - Use colon (`:`) as separator between package and file/component name
@@ -184,6 +204,12 @@ DEBUG_COLORS=0 DEBUG=* ./awmg --config config.toml
 - `PORT`, `HOST`, `MODE` - Server config (via run.sh)
 - `DEBUG` - Enable debug logging (e.g., `DEBUG=*`, `DEBUG=server:*,launcher:*`)
 - `DEBUG_COLORS` - Control colored output (0 to disable, auto-disabled when piping)
+
+**File Logging:**
+- Operational logs are always written to `mcp-gateway.log` in the configured log directory
+- Default log directory: `/tmp/gh-aw/sandbox/mcp` (configurable via `--log-dir` flag)
+- Falls back to stdout if log directory cannot be created
+- Logs include: startup, client interactions, backend operations, auth events, errors
 
 ## Error Debugging
 

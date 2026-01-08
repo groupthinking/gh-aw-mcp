@@ -44,12 +44,14 @@ func New(ctx context.Context, cfg *config.Config) *Launcher {
 
 // GetOrLaunch returns an existing connection or launches a new one
 func GetOrLaunch(l *Launcher, serverID string) (*mcp.Connection, error) {
+	logger.LogDebug("backend", "GetOrLaunch called for server: %s", serverID)
 	logLauncher.Printf("GetOrLaunch called: serverID=%s", serverID)
 
 	// Check if already exists
 	l.mu.RLock()
 	if conn, ok := l.connections[serverID]; ok {
 		l.mu.RUnlock()
+		logger.LogDebug("backend", "Reusing existing backend connection: %s", serverID)
 		logLauncher.Printf("Reusing existing connection: serverID=%s", serverID)
 		return conn, nil
 	}
@@ -61,6 +63,7 @@ func GetOrLaunch(l *Launcher, serverID string) (*mcp.Connection, error) {
 
 	// Double-check after acquiring write lock
 	if conn, ok := l.connections[serverID]; ok {
+		logger.LogDebug("backend", "Backend connection created by another goroutine: %s", serverID)
 		logLauncher.Printf("Connection created by another goroutine: serverID=%s", serverID)
 		return conn, nil
 	}
@@ -68,18 +71,21 @@ func GetOrLaunch(l *Launcher, serverID string) (*mcp.Connection, error) {
 	// Get server config
 	serverCfg, ok := l.config.Servers[serverID]
 	if !ok {
+		logger.LogError("backend", "Backend server not found in config: %s", serverID)
 		return nil, fmt.Errorf("server '%s' not found in config", serverID)
 	}
 
 	// Warn if using direct command in a container
 	isDirectCommand := serverCfg.Command != "docker"
 	if l.runningInContainer && isDirectCommand {
+		logger.LogWarn("backend", "Server '%s' uses direct command execution inside a container (command: %s)", serverID, serverCfg.Command)
 		log.Printf("[LAUNCHER] ⚠️  WARNING: Server '%s' uses direct command execution inside a container", serverID)
 		log.Printf("[LAUNCHER] ⚠️  Security Notice: Command '%s' will execute with the same privileges as the gateway", serverCfg.Command)
 		log.Printf("[LAUNCHER] ⚠️  Consider using 'container' field instead for better isolation")
 	}
 
 	// Log the command being executed
+	logger.LogInfo("backend", "Launching MCP backend server: %s, command=%s, args=%v", serverID, serverCfg.Command, serverCfg.Args)
 	log.Printf("[LAUNCHER] Starting MCP server: %s", serverID)
 	log.Printf("[LAUNCHER] Command: %s", serverCfg.Command)
 	log.Printf("[LAUNCHER] Args: %v", serverCfg.Args)
@@ -117,6 +123,7 @@ func GetOrLaunch(l *Launcher, serverID string) (*mcp.Connection, error) {
 	conn, err := mcp.NewConnection(l.ctx, serverCfg.Command, serverCfg.Args, serverCfg.Env)
 	if err != nil {
 		// Enhanced error logging for command-based servers
+		logger.LogError("backend", "Failed to launch MCP backend server: %s, error=%v", serverID, err)
 		log.Printf("[LAUNCHER] ❌ FAILED to launch server '%s'", serverID)
 		log.Printf("[LAUNCHER] Error: %v", err)
 		log.Printf("[LAUNCHER] Debug Information:")
@@ -141,6 +148,7 @@ func GetOrLaunch(l *Launcher, serverID string) (*mcp.Connection, error) {
 		return nil, fmt.Errorf("failed to create connection: %w", err)
 	}
 
+	logger.LogInfo("backend", "Successfully launched MCP backend server: %s", serverID)
 	log.Printf("[LAUNCHER] Successfully launched: %s", serverID)
 	logLauncher.Printf("Connection established: serverID=%s", serverID)
 

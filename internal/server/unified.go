@@ -184,11 +184,28 @@ func (us *UnifiedServer) registerToolsFromBackend(serverID string) error {
 
 		// Create the handler function
 		handler := func(ctx context.Context, req *sdk.CallToolRequest, args interface{}) (*sdk.CallToolResult, interface{}, error) {
+			// Log the MCP tool call request
+			sessionID := us.getSessionID(ctx)
+			argsJSON, _ := json.Marshal(args)
+			logger.LogInfo("client", "MCP tool call request, session=%s, tool=%s, args=%s", sessionID, toolNameCopy, string(argsJSON))
+
 			// Check session is initialized
 			if err := us.requireSession(ctx); err != nil {
+				logger.LogError("client", "MCP tool call failed: session not initialized, session=%s, tool=%s", sessionID, toolNameCopy)
 				return &sdk.CallToolResult{IsError: true}, nil, err
 			}
-			return us.callBackendTool(ctx, serverIDCopy, toolNameCopy, args)
+
+			result, data, err := us.callBackendTool(ctx, serverIDCopy, toolNameCopy, args)
+
+			// Log the MCP tool call response
+			if err != nil {
+				logger.LogError("client", "MCP tool call error, session=%s, tool=%s, error=%v", sessionID, toolNameCopy, err)
+			} else {
+				resultJSON, _ := json.Marshal(data)
+				logger.LogInfo("client", "MCP tool call response, session=%s, tool=%s, result=%s", sessionID, toolNameCopy, string(resultJSON))
+			}
+
+			return result, data, err
 		}
 
 		// Store handler for routed mode to reuse
@@ -222,19 +239,21 @@ func (us *UnifiedServer) registerSysTools() error {
 			}
 		}
 
-		// TODO: Security check on token will be implemented later
-
 		// Get session ID from context
 		sessionID := us.getSessionID(ctx)
 		if sessionID == "" {
+			logger.LogError("client", "MCP session initialization failed: no session ID provided")
 			return &sdk.CallToolResult{IsError: true}, nil, fmt.Errorf("no session ID provided")
 		}
+
+		logger.LogInfo("client", "MCP session initialization started, session=%s, has_token=%v", sessionID, token != "")
 
 		// Create session
 		us.sessionMu.Lock()
 		us.sessions[sessionID] = NewSession(sessionID, token)
 		us.sessionMu.Unlock()
 
+		logger.LogInfo("client", "MCP session initialized successfully, session=%s, available_servers=%v", sessionID, us.launcher.ServerIDs())
 		log.Printf("Initialized session: %s", sessionID)
 
 		// Call sys_init
@@ -244,8 +263,12 @@ func (us *UnifiedServer) registerSysTools() error {
 		})
 		result, err := us.sysServer.HandleRequest("tools/call", json.RawMessage(params))
 		if err != nil {
+			logger.LogError("client", "MCP session initialization: sys_init call failed, session=%s, error=%v", sessionID, err)
 			return &sdk.CallToolResult{IsError: true}, nil, err
 		}
+
+		resultJSON, _ := json.Marshal(result)
+		logger.LogInfo("client", "MCP session initialization complete, session=%s, result=%s", sessionID, string(resultJSON))
 		return nil, result, nil
 	}
 
@@ -285,8 +308,12 @@ func (us *UnifiedServer) registerSysTools() error {
 
 	// Create sys_list_servers handler
 	sysListHandler := func(ctx context.Context, req *sdk.CallToolRequest, args interface{}) (*sdk.CallToolResult, interface{}, error) {
+		sessionID := us.getSessionID(ctx)
+		logger.LogInfo("client", "MCP sys_list_servers request, session=%s", sessionID)
+
 		// Check session is initialized
 		if err := us.requireSession(ctx); err != nil {
+			logger.LogError("client", "MCP sys_list_servers failed: session not initialized, session=%s", sessionID)
 			return &sdk.CallToolResult{IsError: true}, nil, err
 		}
 
@@ -296,8 +323,12 @@ func (us *UnifiedServer) registerSysTools() error {
 		})
 		result, err := us.sysServer.HandleRequest("tools/call", json.RawMessage(params))
 		if err != nil {
+			logger.LogError("client", "MCP sys_list_servers error, session=%s, error=%v", sessionID, err)
 			return &sdk.CallToolResult{IsError: true}, nil, err
 		}
+
+		resultJSON, _ := json.Marshal(result)
+		logger.LogInfo("client", "MCP sys_list_servers response, session=%s, result=%s", sessionID, string(resultJSON))
 		return nil, result, nil
 	}
 

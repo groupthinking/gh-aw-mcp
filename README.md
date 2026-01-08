@@ -167,9 +167,65 @@ Flags:
       --env string      Path to .env file to load environment variables
   -h, --help            help for awmg
   -l, --listen string   HTTP server listen address (default "127.0.0.1:3000")
+      --log-dir string  Directory for log files (falls back to stdout if directory cannot be created) (default "/tmp/gh-aw/sandbox/mcp")
       --routed          Run in routed mode (each backend at /mcp/<server>)
       --unified         Run in unified mode (all backends at /mcp)
 ```
+
+## Logging
+
+MCPG provides comprehensive logging of all gateway operations to help diagnose issues and monitor activity.
+
+### Log File Location
+
+By default, logs are written to `/tmp/gh-aw/sandbox/mcp/mcp-gateway.log`. This location can be configured using the `--log-dir` flag:
+
+```bash
+./awmg --config config.toml --log-dir /var/log/mcp-gateway
+```
+
+If the log directory cannot be created or accessed, MCPG automatically falls back to logging to stdout.
+
+### What Gets Logged
+
+MCPG logs all important gateway events including:
+
+- **Startup and Shutdown**: Gateway initialization, configuration loading, and graceful shutdown
+- **MCP Client Interactions**: Client connection events, request/response details, session management
+- **Backend Server Interactions**: Backend server launches, connection establishment, communication events
+- **Authentication Events**: Successful authentications and authentication failures (missing/invalid tokens)
+- **Connectivity Errors**: Connection failures, timeouts, protocol errors, and command execution issues
+- **Debug Information**: Optional detailed debugging via the `DEBUG` environment variable
+
+### Log Format
+
+Each log entry includes:
+- **Timestamp** (RFC3339 format)
+- **Log Level** (INFO, WARN, ERROR, DEBUG)
+- **Category** (startup, client, backend, auth, shutdown)
+- **Message** with contextual details
+
+Example log entries:
+```
+[2026-01-08T23:00:00Z] [INFO] [startup] Starting MCPG with config: config.toml, listen: 127.0.0.1:3000, log-dir: /tmp/gh-aw/sandbox/mcp
+[2026-01-08T23:00:01Z] [INFO] [backend] Launching MCP backend server: github, command=docker, args=[run --rm -i ghcr.io/github/github-mcp-server:latest]
+[2026-01-08T23:00:02Z] [INFO] [client] New MCP client connection, remote=127.0.0.1:54321, method=POST, path=/mcp/github, backend=github, session=abc123
+[2026-01-08T23:00:03Z] [ERROR] [auth] Authentication failed: invalid API key, remote=127.0.0.1:54322, path=/mcp/github
+```
+
+### Debug Logging
+
+For development and troubleshooting, enable debug logging using the `DEBUG` environment variable:
+
+```bash
+# Enable all debug logs
+DEBUG=* ./awmg --config config.toml
+
+# Enable specific categories
+DEBUG=server:*,launcher:* ./awmg --config config.toml
+```
+
+Debug logs are written to stderr and follow the same pattern-matching syntax as the file logger.
 ## API Endpoints
 
 ### Routed Mode (default)
