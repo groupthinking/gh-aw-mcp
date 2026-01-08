@@ -188,15 +188,15 @@ func (us *UnifiedServer) registerToolsFromBackend(serverID string) error {
 			sessionID := us.getSessionID(ctx)
 			argsJSON, _ := json.Marshal(args)
 			logger.LogInfo("client", "MCP tool call request, session=%s, tool=%s, args=%s", sessionID, toolNameCopy, string(argsJSON))
-			
+
 			// Check session is initialized
 			if err := us.requireSession(ctx); err != nil {
 				logger.LogError("client", "MCP tool call failed: session not initialized, session=%s, tool=%s", sessionID, toolNameCopy)
 				return &sdk.CallToolResult{IsError: true}, nil, err
 			}
-			
+
 			result, data, err := us.callBackendTool(ctx, serverIDCopy, toolNameCopy, args)
-			
+
 			// Log the MCP tool call response
 			if err != nil {
 				logger.LogError("client", "MCP tool call error, session=%s, tool=%s, error=%v", sessionID, toolNameCopy, err)
@@ -204,7 +204,7 @@ func (us *UnifiedServer) registerToolsFromBackend(serverID string) error {
 				resultJSON, _ := json.Marshal(data)
 				logger.LogInfo("client", "MCP tool call response, session=%s, tool=%s, result=%s", sessionID, toolNameCopy, string(resultJSON))
 			}
-			
+
 			return result, data, err
 		}
 
@@ -266,7 +266,7 @@ func (us *UnifiedServer) registerSysTools() error {
 			logger.LogError("client", "MCP session initialization: sys_init call failed, session=%s, error=%v", sessionID, err)
 			return &sdk.CallToolResult{IsError: true}, nil, err
 		}
-		
+
 		resultJSON, _ := json.Marshal(result)
 		logger.LogInfo("client", "MCP session initialization complete, session=%s, result=%s", sessionID, string(resultJSON))
 		return nil, result, nil
@@ -310,7 +310,7 @@ func (us *UnifiedServer) registerSysTools() error {
 	sysListHandler := func(ctx context.Context, req *sdk.CallToolRequest, args interface{}) (*sdk.CallToolResult, interface{}, error) {
 		sessionID := us.getSessionID(ctx)
 		logger.LogInfo("client", "MCP sys_list_servers request, session=%s", sessionID)
-		
+
 		// Check session is initialized
 		if err := us.requireSession(ctx); err != nil {
 			logger.LogError("client", "MCP sys_list_servers failed: session not initialized, session=%s", sessionID)
@@ -326,7 +326,7 @@ func (us *UnifiedServer) registerSysTools() error {
 			logger.LogError("client", "MCP sys_list_servers error, session=%s, error=%v", sessionID, err)
 			return &sdk.CallToolResult{IsError: true}, nil, err
 		}
-		
+
 		resultJSON, _ := json.Marshal(result)
 		logger.LogInfo("client", "MCP sys_list_servers response, session=%s, result=%s", sessionID, string(resultJSON))
 		return nil, result, nil
