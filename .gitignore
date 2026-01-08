@@ -37,6 +37,8 @@ go.work.sum
 
 # env file
 .env
+.env.*
+.env.githubnext
 
 # Editor/IDE
 # .idea/
