@@ -70,7 +70,7 @@ For the complete JSON configuration specification with all validation rules, see
       "entrypointArgs": ["--verbose"],
       "env": {
         "GITHUB_PERSONAL_ACCESS_TOKEN": "",
-        "EXPANDED_VAR": "${HOME}/config"
+        "EXPANDED_VAR": "${MY_HOME}/config"
       }
     }
   },
