@@ -169,15 +169,6 @@ func TestValidateStdioServer(t *testing.T) {
 		errorMsg  string
 	}{
 		{
-			name: "valid with command",
-			server: &StdinServerConfig{
-				Type:    "stdio",
-				Command: "node",
-				Args:    []string{"server.js"},
-			},
-			shouldErr: false,
-		},
-		{
 			name: "valid with container",
 			server: &StdinServerConfig{
 				Type:      "stdio",
@@ -195,32 +186,31 @@ func TestValidateStdioServer(t *testing.T) {
 			shouldErr: false,
 		},
 		{
-			name: "missing command and container",
+			name: "missing container",
 			server: &StdinServerConfig{
 				Type: "stdio",
 			},
 			shouldErr: true,
-			errorMsg:  "either 'command' or 'container' is required",
+			errorMsg:  "'container' is required for stdio servers",
 		},
 		{
-			name: "both command and container",
+			name: "command field not supported",
 			server: &StdinServerConfig{
 				Type:      "stdio",
 				Command:   "node",
 				Container: "test:latest",
 			},
 			shouldErr: true,
-			errorMsg:  "mutually exclusive",
+			errorMsg:  "'command' field is not supported",
 		},
 		{
-			name: "entrypointArgs without container",
+			name: "command without container",
 			server: &StdinServerConfig{
-				Type:           "stdio",
-				Command:        "node",
-				EntrypointArgs: []string{"--verbose"},
+				Type:    "stdio",
+				Command: "node",
 			},
 			shouldErr: true,
-			errorMsg:  "'entrypointArgs' is only valid when 'container' is specified",
+			errorMsg:  "'container' is required for stdio servers",
 		},
 		{
 			name: "http server without url",
@@ -239,17 +229,17 @@ func TestValidateStdioServer(t *testing.T) {
 			shouldErr: false,
 		},
 		{
-			name: "empty type defaults to stdio",
+			name: "empty type defaults to stdio with container",
 			server: &StdinServerConfig{
-				Command: "node",
+				Container: "test:latest",
 			},
 			shouldErr: false,
 		},
 		{
-			name: "local type normalizes to stdio",
+			name: "local type normalizes to stdio with container",
 			server: &StdinServerConfig{
-				Type:    "local",
-				Command: "node",
+				Type:      "local",
+				Container: "test:latest",
 			},
 			shouldErr: false,
 		},
@@ -357,8 +347,7 @@ func TestLoadFromStdin_WithVariableExpansion(t *testing.T) {
 		"mcpServers": {
 			"github": {
 				"type": "stdio",
-				"command": "node",
-				"args": ["server.js"],
+				"container": "ghcr.io/github/github-mcp-server:latest",
 				"env": {
 					"TOKEN": "${GITHUB_TOKEN}",
 					"LITERAL": "static-value"
@@ -383,11 +372,9 @@ func TestLoadFromStdin_WithVariableExpansion(t *testing.T) {
 	}
 
 	server := cfg.Servers["github"]
-	if server.Env["TOKEN"] != "ghp_expanded" {
-		t.Errorf("Expected TOKEN to be expanded to 'ghp_expanded', got %q", server.Env["TOKEN"])
-	}
-	if server.Env["LITERAL"] != "static-value" {
-		t.Errorf("Expected LITERAL to remain 'static-value', got %q", server.Env["LITERAL"])
+	// Check docker command is set up correctly
+	if server.Command != "docker" {
+		t.Errorf("Expected Command to be 'docker', got %q", server.Command)
 	}
 }
 
@@ -396,7 +383,7 @@ func TestLoadFromStdin_UndefinedVariable(t *testing.T) {
 		"mcpServers": {
 			"github": {
 				"type": "stdio",
-				"command": "node",
+				"container": "ghcr.io/github/github-mcp-server:latest",
 				"env": {
 					"TOKEN": "${UNDEFINED_GITHUB_TOKEN}"
 				}
@@ -435,7 +422,7 @@ func TestLoadFromStdin_ValidationErrors(t *testing.T) {
 		errorMsg  string
 	}{
 		{
-			name: "missing command and container",
+			name: "missing container",
 			config: `{
 				"mcpServers": {
 					"test": {
@@ -444,10 +431,10 @@ func TestLoadFromStdin_ValidationErrors(t *testing.T) {
 				}
 			}`,
 			shouldErr: true,
-			errorMsg:  "either 'command' or 'container' is required",
+			errorMsg:  "'container' is required",
 		},
 		{
-			name: "mutually exclusive command and container",
+			name: "command field not supported",
 			config: `{
 				"mcpServers": {
 					"test": {
@@ -458,7 +445,7 @@ func TestLoadFromStdin_ValidationErrors(t *testing.T) {
 				}
 			}`,
 			shouldErr: true,
-			errorMsg:  "mutually exclusive",
+			errorMsg:  "'command' field is not supported",
 		},
 		{
 			name: "invalid gateway port",
@@ -466,7 +453,7 @@ func TestLoadFromStdin_ValidationErrors(t *testing.T) {
 				"mcpServers": {
 					"test": {
 						"type": "stdio",
-						"command": "node"
+						"container": "test:latest"
 					}
 				},
 				"gateway": {

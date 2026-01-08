@@ -22,12 +22,11 @@ Quick reference for AI agents working with MCP Gateway (Go-based MCP proxy serve
   - `validation_test.go` - 21 comprehensive validation tests
 - `internal/server/` - HTTP server (routed/unified modes)
 - `internal/mcp/` - MCP protocol types with enhanced error logging
-- `internal/launcher/` - Backend process management with container detection
+- `internal/launcher/` - Backend process management
 - `internal/difc/` - Security labels (not enabled)
 - `internal/guard/` - Security guards (NoopGuard active)
 - `internal/logger/` - Debug logging framework (micro logger)
 - `internal/timeutil/` - Time formatting utilities
-- `internal/tty/` - Terminal and container detection utilities
 
 ## Key Tech
 
@@ -37,7 +36,6 @@ Quick reference for AI agents working with MCP Gateway (Go-based MCP proxy serve
 - **Docker**: Launches MCP servers as containers
 - **Validation**: Spec-compliant with fail-fast error handling
 - **Variable Expansion**: `${VAR_NAME}` syntax for environment variables
-- **Container Detection**: Multi-method detection (/.dockerenv, cgroups, env vars)
 
 ## Config Examples
 
@@ -70,8 +68,8 @@ args = ["run", "--rm", "-e", "GITHUB_PERSONAL_ACCESS_TOKEN", "-i", "ghcr.io/gith
 
 **Validation Features**:
 - Environment variable expansion: `${VAR_NAME}` (fails if undefined)
-- Mutually exclusive fields: `command` OR `container` (not both)
-- Required fields: `command`/`container` for stdio, `url` for http
+- Required fields: `container` for stdio, `url` for http
+- **Note**: The `command` field is not supported - stdio servers must use `container`
 - Port range validation: 1-65535
 - Timeout validation: positive integers only
 
@@ -187,32 +185,22 @@ DEBUG_COLORS=0 DEBUG=* ./awmg --config config.toml
 - `DEBUG` - Enable debug logging (e.g., `DEBUG=*`, `DEBUG=server:*,launcher:*`)
 - `DEBUG_COLORS` - Control colored output (0 to disable, auto-disabled when piping)
 
-## Security & Container Detection
-
-**Container Detection**: Gateway automatically detects containerized environments using:
-- `/.dockerenv` file presence
-- `/proc/1/cgroup` parsing (docker/containerd/kubepods/lxc patterns)
-- `RUNNING_IN_CONTAINER` environment variable
-
-**Security Warnings**: When running in a container with direct `command` servers:
-```
-⚠️ WARNING: Server uses direct command execution inside a container
-⚠️ Security Notice: Command will execute with same privileges as gateway
-💡 Consider using 'container' field instead for better isolation
-```
+## Error Debugging
 
 **Enhanced Error Context**: Command failures include:
 - Full command, args, and environment variables
-- Container status (running in container: true/false)
-- Direct command detection (is direct command: true/false)
-- Context-specific troubleshooting suggestions
-- Different guidance for containerized vs bare-metal environments
+- Context-specific troubleshooting suggestions:
+  - Docker daemon connectivity checks
+  - Container image availability
+  - Network connectivity issues
+  - MCP protocol compatibility checks
 
 ## Security Notes
 
 - Auth: `Authorization: Bearer <token>` header
 - Sessions: `Mcp-Session-Id` header
 - DIFC: Implemented but disabled (NoopGuard active)
+- Stdio servers: Containerized execution only (no direct command support)
 
 ## Resources
 

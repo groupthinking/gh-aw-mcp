@@ -99,34 +99,24 @@ func validateStdioServer(name string, server *StdinServerConfig) error {
 		}
 	}
 
-	// For stdio servers, either command or container is required
+	// For stdio servers, container is required
 	if server.Type == "stdio" || server.Type == "local" {
-		if server.Command == "" && server.Container == "" {
+		if server.Container == "" {
 			return &ValidationError{
-				Field:      "command/container",
-				Message:    "either 'command' or 'container' is required for stdio servers",
+				Field:      "container",
+				Message:    "'container' is required for stdio servers",
 				JSONPath:   jsonPath,
-				Suggestion: "Add a 'command' field (e.g., \"node\") or 'container' field (e.g., \"ghcr.io/owner/image:tag\")",
+				Suggestion: "Add a 'container' field (e.g., \"ghcr.io/owner/image:tag\")",
 			}
 		}
 
-		// Ensure command and container are mutually exclusive
-		if server.Command != "" && server.Container != "" {
+		// Reject unsupported 'command' field
+		if server.Command != "" {
 			return &ValidationError{
-				Field:      "command/container",
-				Message:    "'command' and 'container' are mutually exclusive",
+				Field:      "command",
+				Message:    "'command' field is not supported (stdio servers must use 'container')",
 				JSONPath:   jsonPath,
-				Suggestion: "Remove either 'command' or 'container' field",
-			}
-		}
-
-		// Validate entrypointArgs only allowed with container
-		if len(server.EntrypointArgs) > 0 && server.Container == "" {
-			return &ValidationError{
-				Field:      "entrypointArgs",
-				Message:    "'entrypointArgs' is only valid when 'container' is specified",
-				JSONPath:   jsonPath,
-				Suggestion: "Remove 'entrypointArgs' or add 'container' field",
+				Suggestion: "Remove 'command' field and use 'container' instead",
 			}
 		}
 	}

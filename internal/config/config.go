@@ -129,51 +129,42 @@ func LoadFromStdin() (*Config, error) {
 		}
 
 		// stdio/local servers only from this point
+		// All stdio servers use Docker containers
 
-		// For Docker containers
-		if server.Container != "" {
-			args := []string{
-				"run",
-				"--rm",
-				"-i",
-				// Standard environment variables for better Docker compatibility
-				"-e", "NO_COLOR=1",
-				"-e", "TERM=dumb",
-				"-e", "PYTHONUNBUFFERED=1",
+		args := []string{
+			"run",
+			"--rm",
+			"-i",
+			// Standard environment variables for better Docker compatibility
+			"-e", "NO_COLOR=1",
+			"-e", "TERM=dumb",
+			"-e", "PYTHONUNBUFFERED=1",
+		}
+
+		// Add user-specified environment variables
+		// Empty string "" means passthrough from host (just -e KEY)
+		// Non-empty string means explicit value (-e KEY=value)
+		for k, v := range server.Env {
+			args = append(args, "-e")
+			if v == "" {
+				// Passthrough from host environment
+				args = append(args, k)
+			} else {
+				// Explicit value
+				args = append(args, fmt.Sprintf("%s=%s", k, v))
 			}
+		}
 
-			// Add user-specified environment variables
-			// Empty string "" means passthrough from host (just -e KEY)
-			// Non-empty string means explicit value (-e KEY=value)
-			for k, v := range server.Env {
-				args = append(args, "-e")
-				if v == "" {
-					// Passthrough from host environment
-					args = append(args, k)
-				} else {
-					// Explicit value
-					args = append(args, fmt.Sprintf("%s=%s", k, v))
-				}
-			}
+		// Add container name
+		args = append(args, server.Container)
 
-			// Add container name
-			args = append(args, server.Container)
+		// Add entrypoint args
+		args = append(args, server.EntrypointArgs...)
 
-			// Add entrypoint args
-			args = append(args, server.EntrypointArgs...)
-
-			cfg.Servers[name] = &ServerConfig{
-				Command: "docker",
-				Args:    args,
-				Env:     make(map[string]string),
-			}
-		} else {
-			// Direct command execution
-			cfg.Servers[name] = &ServerConfig{
-				Command: server.Command,
-				Args:    server.Args,
-				Env:     server.Env,
-			}
+		cfg.Servers[name] = &ServerConfig{
+			Command: "docker",
+			Args:    args,
+			Env:     make(map[string]string),
 		}
 	}
 

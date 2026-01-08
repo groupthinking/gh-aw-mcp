@@ -11,7 +11,7 @@ func TestLoadFromStdin_ValidJSON(t *testing.T) {
 	jsonConfig := `{
 		"mcpServers": {
 			"test": {
-				"type": "local",
+				"type": "stdio",
 				"container": "test/container:latest",
 				"entrypointArgs": ["arg1", "arg2"],
 				"env": {
@@ -113,7 +113,7 @@ func TestLoadFromStdin_WithGateway(t *testing.T) {
 	jsonConfig := `{
 		"mcpServers": {
 			"test": {
-				"type": "local",
+				"type": "stdio",
 				"container": "test/container:latest"
 			}
 		},
@@ -158,11 +158,11 @@ func TestLoadFromStdin_UnsupportedType(t *testing.T) {
 		"mcpServers": {
 			"unsupported": {
 				"type": "remote",
-				"command": "node"
+				"container": "test/container:latest"
 			},
 			"supported": {
-				"type": "local",
-				"command": "node"
+				"type": "stdio",
+				"container": "test/server:latest"
 			}
 		}
 	}`
@@ -198,7 +198,7 @@ func TestLoadFromStdin_DirectCommand(t *testing.T) {
 	jsonConfig := `{
 		"mcpServers": {
 			"direct": {
-				"type": "local",
+				"type": "stdio",
 				"command": "node",
 				"args": ["index.js"],
 				"env": {
@@ -219,25 +219,18 @@ func TestLoadFromStdin_DirectCommand(t *testing.T) {
 	cfg, err := LoadFromStdin()
 	os.Stdin = oldStdin
 
-	if err != nil {
-		t.Fatalf("LoadFromStdin() failed: %v", err)
+	// Command field is no longer supported - should cause validation error
+	if err == nil {
+		t.Fatal("Expected error for deprecated 'command' field, got nil")
 	}
 
-	server, ok := cfg.Servers["direct"]
-	if !ok {
-		t.Fatal("Server 'direct' not found")
+	if !strings.Contains(err.Error(), "command") && !strings.Contains(err.Error(), "container") {
+		t.Errorf("Expected validation error about command/container field, got: %v", err)
 	}
 
-	if server.Command != "node" {
-		t.Errorf("Expected command 'node', got '%s'", server.Command)
-	}
-
-	if !contains(server.Args, "index.js") {
-		t.Error("Args not preserved for direct command")
-	}
-
-	if server.Env["NODE_ENV"] != "production" {
-		t.Error("Env vars not preserved for direct command")
+	// Config should be nil on validation error
+	if cfg != nil {
+		t.Error("Config should be nil when validation fails")
 	}
 }
 
@@ -269,8 +262,8 @@ func TestLoadFromStdin_StdioType(t *testing.T) {
 		"mcpServers": {
 			"stdio-server": {
 				"type": "stdio",
-				"command": "node",
-				"args": ["server.js"],
+				"container": "test/server:latest",
+				"entrypointArgs": ["server.js"],
 				"env": {
 					"NODE_ENV": "test"
 				}
@@ -302,16 +295,30 @@ func TestLoadFromStdin_StdioType(t *testing.T) {
 		t.Fatal("Server 'stdio-server' not found")
 	}
 
-	if server.Command != "node" {
-		t.Errorf("Expected command 'node', got '%s'", server.Command)
+	if server.Command != "docker" {
+		t.Errorf("Expected command 'docker', got '%s'", server.Command)
+	}
+
+	if !contains(server.Args, "test/server:latest") {
+		t.Error("Container not found in args")
 	}
 
 	if !contains(server.Args, "server.js") {
-		t.Error("Args not preserved for stdio type")
+		t.Error("Entrypoint args not preserved for stdio type")
 	}
 
-	if server.Env["NODE_ENV"] != "test" {
-		t.Error("Env vars not preserved for stdio type")
+	// Check env vars
+	hasNodeEnv := false
+	for i := 0; i < len(server.Args); i++ {
+		if server.Args[i] == "-e" && i+1 < len(server.Args) {
+			if server.Args[i+1] == "NODE_ENV=test" {
+				hasNodeEnv = true
+			}
+		}
+	}
+
+	if !hasNodeEnv {
+		t.Error("Env var NODE_ENV=test not found")
 	}
 }
 
@@ -324,8 +331,8 @@ func TestLoadFromStdin_HttpType(t *testing.T) {
 			},
 			"stdio-server": {
 				"type": "stdio",
-				"command": "node",
-				"args": ["server.js"]
+				"container": "test/server:latest",
+				"entrypointArgs": ["server.js"]
 			}
 		}
 	}`
@@ -364,8 +371,8 @@ func TestLoadFromStdin_LocalTypeBackwardCompatibility(t *testing.T) {
 		"mcpServers": {
 			"legacy": {
 				"type": "local",
-				"command": "node",
-				"args": ["server.js"]
+				"container": "test/server:latest",
+				"entrypointArgs": ["server.js"]
 			}
 		}
 	}`
@@ -395,8 +402,12 @@ func TestLoadFromStdin_LocalTypeBackwardCompatibility(t *testing.T) {
 		t.Fatal("Server 'legacy' with type 'local' not loaded")
 	}
 
-	if server.Command != "node" {
-		t.Errorf("Expected command 'node', got '%s'", server.Command)
+	if server.Command != "docker" {
+		t.Errorf("Expected command 'docker', got '%s'", server.Command)
+	}
+
+	if !contains(server.Args, "test/server:latest") {
+		t.Error("Container not found in args")
 	}
 }
 
@@ -408,8 +419,8 @@ func TestLoadFromStdin_GatewayWithAllFields(t *testing.T) {
 		"mcpServers": {
 			"test": {
 				"type": "stdio",
-				"command": "node",
-				"args": ["server.js"]
+				"container": "test/server:latest",
+				"entrypointArgs": ["server.js"]
 			}
 		},
 		"gateway": {
@@ -507,19 +518,17 @@ func TestLoadFromStdin_ServerWithURL(t *testing.T) {
 func TestLoadFromStdin_MixedServerTypes(t *testing.T) {
 	jsonConfig := `{
 		"mcpServers": {
-			"stdio-direct": {
+			"stdio-container-1": {
 				"type": "stdio",
-				"command": "node",
-				"args": ["server.js"]
+				"container": "test/server:latest"
 			},
-			"stdio-container": {
+			"stdio-container-2": {
 				"type": "stdio",
-				"container": "test/container:latest"
+				"container": "test/another:v1"
 			},
-			"local-legacy": {
+			"local-container": {
 				"type": "local",
-				"command": "python",
-				"args": ["server.py"]
+				"container": "test/legacy:latest"
 			},
 			"http-server": {
 				"type": "http",
@@ -543,22 +552,22 @@ func TestLoadFromStdin_MixedServerTypes(t *testing.T) {
 		t.Fatalf("LoadFromStdin() failed: %v", err)
 	}
 
-	// Should load: stdio-direct, stdio-container, local-legacy (3 total)
+	// Should load: stdio-container-1, stdio-container-2, local-container (3 total)
 	// Should skip: http-server (not implemented)
 	if len(cfg.Servers) != 3 {
 		t.Errorf("Expected 3 servers, got %d", len(cfg.Servers))
 	}
 
-	if _, ok := cfg.Servers["stdio-direct"]; !ok {
-		t.Error("stdio-direct server not loaded")
+	if _, ok := cfg.Servers["stdio-container-1"]; !ok {
+		t.Error("stdio-container-1 server not loaded")
 	}
 
-	if _, ok := cfg.Servers["stdio-container"]; !ok {
-		t.Error("stdio-container server not loaded")
+	if _, ok := cfg.Servers["stdio-container-2"]; !ok {
+		t.Error("stdio-container-2 server not loaded")
 	}
 
-	if _, ok := cfg.Servers["local-legacy"]; !ok {
-		t.Error("local-legacy server not loaded")
+	if _, ok := cfg.Servers["local-container"]; !ok {
+		t.Error("local-container server not loaded")
 	}
 
 	if _, ok := cfg.Servers["http-server"]; ok {

@@ -64,22 +64,13 @@ For the complete JSON configuration specification with all validation rules, see
 ```json
 {
   "mcpServers": {
-    "server-name": {
-      "type": "stdio",
-      "command": "node",
-      "args": ["server.js"],
-      "env": {
-        "VAR_NAME": "value",
-        "PASSTHROUGH_VAR": "",
-        "EXPANDED_VAR": "${HOME}/config"
-      }
-    },
     "github": {
       "type": "stdio",
       "container": "ghcr.io/github/github-mcp-server:latest",
       "entrypointArgs": ["--verbose"],
       "env": {
-        "GITHUB_PERSONAL_ACCESS_TOKEN": ""
+        "GITHUB_PERSONAL_ACCESS_TOKEN": "",
+        "EXPANDED_VAR": "${HOME}/config"
       }
     }
   },
@@ -95,29 +86,29 @@ For the complete JSON configuration specification with all validation rules, see
 
 #### Server Configuration Fields
 
-- **`type`** (required): Server transport type
-  - `"stdio"` - Standard input/output transport (recommended)
+- **`type`** (optional): Server transport type
+  - `"stdio"` - Standard input/output transport (default)
   - `"http"` - HTTP transport (not yet implemented)
   - `"local"` - Alias for `"stdio"` (backward compatibility)
 
-- **`command`** (optional): Direct command to execute (e.g., `"node"`, `"python"`)
-- **`args`** (optional): Command arguments (e.g., `["server.js"]`)
-- **`container`** (optional): Docker container image (e.g., `"ghcr.io/github/github-mcp-server:latest"`)
-  - When specified, automatically wraps as `docker run --rm -i <container>`
+- **`container`** (required for stdio): Docker container image (e.g., `"ghcr.io/github/github-mcp-server:latest"`)
+  - Automatically wraps as `docker run --rm -i <container>`
+  - **Note**: The `command` field is NOT supported per the specification
 - **`entrypointArgs`** (optional): Arguments passed to container entrypoint
 - **`env`** (optional): Environment variables
   - Set to `""` (empty string) for passthrough from host environment
   - Set to `"value"` for explicit value
   - Use `"${VAR_NAME}"` for environment variable expansion (fails if undefined)
-- **`url`** (optional): HTTP endpoint URL for `type: "http"` servers
+- **`url`** (required for http): HTTP endpoint URL for `type: "http"` servers
 
 **Validation Rules:**
 
-- **Stdio servers** must specify either `command` OR `container` (mutually exclusive)
-- **HTTP servers** must specify `url`
+- **Stdio servers** must specify `container` (required)
+- **HTTP servers** must specify `url` (required)
 - Empty/"local" type automatically normalized to "stdio"
 - Variable expansion with `${VAR_NAME}` fails fast on undefined variables
 - All validation errors include JSONPath and helpful suggestions
+- **The `command` field is not supported** - stdio servers must use `container`
 
 See **[Configuration Specification](https://github.com/githubnext/gh-aw/blob/main/docs/src/content/docs/reference/mcp-gateway.md)** for complete validation rules.
 
@@ -181,31 +172,16 @@ Supported JSON-RPC 2.0 methods:
 
 ## Security Features
 
-### Container Detection
-
-MCPG automatically detects if it's running inside a container and provides security warnings:
-
-- **Multi-Method Detection**: Checks `/.dockerenv`, `/proc/1/cgroup`, and environment variables
-- **Security Warnings**: Alerts when direct `command` servers run in containers (privilege sharing risk)
-- **Recommendation**: Use `container` field instead of `command` for better isolation
-
-**Example Warning:**
-```
-⚠️ WARNING: Server uses direct command execution inside a container
-⚠️ Security Notice: Command will execute with same privileges as gateway
-💡 Consider using 'container' field instead for better isolation
-```
-
 ### Enhanced Error Debugging
 
 Command failures now include extensive debugging information:
 
 - Full command, arguments, and environment variables
-- Container status detection
 - Context-specific troubleshooting suggestions:
-  - Missing executable detection
+  - Docker daemon connectivity checks
+  - Container image availability
+  - Network connectivity issues
   - MCP protocol compatibility checks
-  - Different guidance for containerized vs bare-metal environments
 
 ## Architecture
 
@@ -215,11 +191,10 @@ This Go port focuses on core MCP proxy functionality with optional security feat
 
 - ✅ TOML and JSON stdin configuration with spec-compliant validation
 - ✅ Environment variable expansion (`${VAR_NAME}`) with fail-fast behavior
-- ✅ Stdio transport for backend servers
+- ✅ Stdio transport for backend servers (containerized execution only)
 - ✅ Docker container launching
 - ✅ Routed and unified modes
 - ✅ Basic request/response proxying
-- ✅ Container detection with security warnings
 - ✅ Enhanced error debugging and troubleshooting
 
 ### DIFC Integration (Not Yet Enabled)
