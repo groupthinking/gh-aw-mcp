@@ -97,7 +97,7 @@ Start the server with:
 ./run.sh
 ```
 
-This will start MCPG in routed mode on `http://127.0.0.1:8000`.
+This will start MCPG in routed mode on `http://127.0.0.1:3000`.
 
 Or run manually:
 ```bash
@@ -131,7 +131,7 @@ You can test the MCP server directly using curl commands:
 #### 1. Initialize a session and extract session ID
 
 ```bash
-MCP_URL="http://127.0.0.1:8000/mcp/github"
+MCP_URL="http://127.0.0.1:3000/mcp/github"
 
 SESSION_ID=$(
   curl -isS -X POST $MCP_URL \
