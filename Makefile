@@ -73,6 +73,7 @@ coverage:
 # Run tests with coverage and JSON output for CI
 test-ci:
 	@echo "Running tests with coverage and JSON output..."
+	@go mod tidy
 	@go test -v -parallel=8 -timeout=3m -coverprofile=coverage.out -json ./... | tee test-result-unit.json
 	@echo "Test results saved to test-result-unit.json"
 	@echo "Coverage profile saved to coverage.out"
