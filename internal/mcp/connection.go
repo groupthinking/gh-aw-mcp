@@ -7,6 +7,7 @@ import (
 	"log"
 	"os"
 	"os/exec"
+	"strings"
 
 	"github.com/githubnext/gh-aw-mcpg/internal/logger"
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
@@ -60,6 +61,27 @@ func NewConnection(ctx context.Context, command string, args []string, env map[s
 	session, err := client.Connect(ctx, transport, nil)
 	if err != nil {
 		cancel()
+
+		// Enhanced error context for debugging
+		log.Printf("❌ MCP Connection Failed:")
+		log.Printf("   Command: %s", command)
+		log.Printf("   Args: %v", expandedArgs)
+		log.Printf("   Error: %v", err)
+
+		// Check if it's a command not found error
+		if strings.Contains(err.Error(), "executable file not found") ||
+			strings.Contains(err.Error(), "no such file or directory") {
+			log.Printf("   ⚠️  Command '%s' not found in PATH", command)
+			log.Printf("   ⚠️  Verify the command is installed and executable")
+		}
+
+		// Check if it's a connection/protocol error
+		if strings.Contains(err.Error(), "EOF") || strings.Contains(err.Error(), "broken pipe") {
+			log.Printf("   ⚠️  Process started but terminated unexpectedly")
+			log.Printf("   ⚠️  Check if the command supports MCP protocol over stdio")
+		}
+
+		logConn.Printf("Connection failed: command=%s, error=%v", command, err)
 		return nil, fmt.Errorf("failed to connect: %w", err)
 	}
 

@@ -19,6 +19,7 @@ build:
 # Run all linters
 lint:
 	@echo "Running linters..."
+	@go mod tidy
 	@go vet ./...
 	@echo "Running gofmt check..."
 	@test -z "$$(gofmt -l .)" || (echo "The following files are not formatted:"; gofmt -l .; exit 1)
@@ -27,6 +28,7 @@ lint:
 # Run all tests
 test:
 	@echo "Running tests..."
+	@go mod tidy
 	@go test -v ./...
 
 # Run binary integration tests (requires built binary)
@@ -39,7 +41,7 @@ test-integration:
 	@go test -v ./test/integration/...
 
 # Run format, build, lint, and test (for agents before completion)
-agent-finished:
+agent-finished: clean
 	@echo "Running agent-finished checks..."
 	@echo ""
 	@$(MAKE) format
@@ -87,6 +89,8 @@ clean:
 	@rm -f $(BINARY_NAME)
 	@rm -f coverage.out
 	@rm -f test-result-unit.json
+	@go mod tidy
+	@go clean
 	@echo "Clean complete!"
 
 # Create and push a release tag

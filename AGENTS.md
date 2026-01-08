@@ -17,15 +17,17 @@ Quick reference for AI agents working with MCP Gateway (Go-based MCP proxy serve
 ## Project Structure
 
 - `internal/cmd/` - CLI (Cobra)
-- `internal/config/` - Config parsing (TOML/JSON)
+- `internal/config/` - Config parsing (TOML/JSON) with validation
+  - `validation.go` - Variable expansion and fail-fast validation
+  - `validation_test.go` - 21 comprehensive validation tests
 - `internal/server/` - HTTP server (routed/unified modes)
-- `internal/mcp/` - MCP protocol types
-- `internal/launcher/` - Backend process management
+- `internal/mcp/` - MCP protocol types with enhanced error logging
+- `internal/launcher/` - Backend process management with container detection
 - `internal/difc/` - Security labels (not enabled)
 - `internal/guard/` - Security guards (NoopGuard active)
 - `internal/logger/` - Debug logging framework (micro logger)
 - `internal/timeutil/` - Time formatting utilities
-- `internal/tty/` - Terminal detection utilities
+- `internal/tty/` - Terminal and container detection utilities
 
 ## Key Tech
 
@@ -33,8 +35,13 @@ Quick reference for AI agents working with MCP Gateway (Go-based MCP proxy serve
 - **Protocol**: JSON-RPC 2.0 over stdio
 - **Routing**: `/mcp/{serverID}` (routed) or `/mcp` (unified)
 - **Docker**: Launches MCP servers as containers
+- **Validation**: Spec-compliant with fail-fast error handling
+- **Variable Expansion**: `${VAR_NAME}` syntax for environment variables
+- **Container Detection**: Multi-method detection (/.dockerenv, cgroups, env vars)
 
 ## Config Examples
+
+**Configuration Spec**: See **[MCP Gateway Configuration Reference](https://github.com/githubnext/gh-aw/blob/main/docs/src/content/docs/reference/mcp-gateway.md)** for complete specification.
 
 **TOML** (`config.toml`):
 ```toml
@@ -45,8 +52,28 @@ args = ["run", "--rm", "-e", "GITHUB_PERSONAL_ACCESS_TOKEN", "-i", "ghcr.io/gith
 
 **JSON** (stdin):
 ```json
-{"mcpServers": {"github": {"type": "local", "container": "ghcr.io/github/github-mcp-server:latest", "env": {"GITHUB_PERSONAL_ACCESS_TOKEN": ""}}}}
+{
+  "mcpServers": {
+    "github": {
+      "type": "stdio",
+      "container": "ghcr.io/github/github-mcp-server:latest",
+      "env": {
+        "GITHUB_PERSONAL_ACCESS_TOKEN": "",
+        "CONFIG_PATH": "${HOME}/.config/github"
+      }
+    }
+  }
+}
 ```
+
+**Supported Types**: `"stdio"`, `"http"` (not implemented), `"local"` (alias for stdio)
+
+**Validation Features**:
+- Environment variable expansion: `${VAR_NAME}` (fails if undefined)
+- Mutually exclusive fields: `command` OR `container` (not both)
+- Required fields: `command`/`container` for stdio, `url` for http
+- Port range validation: 1-65535
+- Timeout validation: positive integers only
 
 ## Go Conventions
 
@@ -157,6 +184,29 @@ DEBUG_COLORS=0 DEBUG=* ./awmg --config config.toml
 - `GITHUB_PERSONAL_ACCESS_TOKEN` - GitHub auth
 - `DOCKER_API_VERSION` - 1.43 (arm64) or 1.44 (amd64)
 - `PORT`, `HOST`, `MODE` - Server config (via run.sh)
+- `DEBUG` - Enable debug logging (e.g., `DEBUG=*`, `DEBUG=server:*,launcher:*`)
+- `DEBUG_COLORS` - Control colored output (0 to disable, auto-disabled when piping)
+
+## Security & Container Detection
+
+**Container Detection**: Gateway automatically detects containerized environments using:
+- `/.dockerenv` file presence
+- `/proc/1/cgroup` parsing (docker/containerd/kubepods/lxc patterns)
+- `RUNNING_IN_CONTAINER` environment variable
+
+**Security Warnings**: When running in a container with direct `command` servers:
+```
+⚠️ WARNING: Server uses direct command execution inside a container
+⚠️ Security Notice: Command will execute with same privileges as gateway
+💡 Consider using 'container' field instead for better isolation
+```
+
+**Enhanced Error Context**: Command failures include:
+- Full command, args, and environment variables
+- Container status (running in container: true/false)
+- Direct command detection (is direct command: true/false)
+- Context-specific troubleshooting suggestions
+- Different guidance for containerized vs bare-metal environments
 
 ## Security Notes
 
