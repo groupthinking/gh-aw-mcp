@@ -2,6 +2,7 @@ package config
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"strings"
 	"testing"
@@ -655,4 +656,254 @@ func contains(slice []string, item string) bool {
 		}
 	}
 	return false
+}
+
+func TestLoadFromStdin_WithEntrypoint(t *testing.T) {
+	jsonConfig := `{
+		"mcpServers": {
+			"custom": {
+				"type": "stdio",
+				"container": "test/container:latest",
+				"entrypoint": "/custom/entrypoint.sh",
+				"entrypointArgs": ["--verbose"]
+			}
+		}
+	}`
+
+	r, w, _ := os.Pipe()
+	oldStdin := os.Stdin
+	os.Stdin = r
+	go func() {
+		w.Write([]byte(jsonConfig))
+		w.Close()
+	}()
+
+	cfg, err := LoadFromStdin()
+	os.Stdin = oldStdin
+
+	if err != nil {
+		t.Fatalf("LoadFromStdin() failed: %v", err)
+	}
+
+	server, ok := cfg.Servers["custom"]
+	if !ok {
+		t.Fatal("Server 'custom' not found")
+	}
+
+	// Check that --entrypoint flag is present
+	hasEntrypoint := false
+	for i := 0; i < len(server.Args); i++ {
+		if server.Args[i] == "--entrypoint" && i+1 < len(server.Args) {
+			if server.Args[i+1] == "/custom/entrypoint.sh" {
+				hasEntrypoint = true
+			}
+		}
+	}
+
+	if !hasEntrypoint {
+		t.Error("Entrypoint flag not found in Docker args")
+	}
+
+	// Check that entrypoint args are present
+	if !contains(server.Args, "--verbose") {
+		t.Error("Entrypoint args not found")
+	}
+}
+
+func TestLoadFromStdin_WithMounts(t *testing.T) {
+	jsonConfig := `{
+		"mcpServers": {
+			"mounted": {
+				"type": "stdio",
+				"container": "test/container:latest",
+				"mounts": [
+					"/host/path:/container/path:ro",
+					"/host/data:/app/data:rw"
+				]
+			}
+		}
+	}`
+
+	r, w, _ := os.Pipe()
+	oldStdin := os.Stdin
+	os.Stdin = r
+	go func() {
+		w.Write([]byte(jsonConfig))
+		w.Close()
+	}()
+
+	cfg, err := LoadFromStdin()
+	os.Stdin = oldStdin
+
+	if err != nil {
+		t.Fatalf("LoadFromStdin() failed: %v", err)
+	}
+
+	server, ok := cfg.Servers["mounted"]
+	if !ok {
+		t.Fatal("Server 'mounted' not found")
+	}
+
+	// Check that volume mount flags are present
+	mountCount := 0
+	for i := 0; i < len(server.Args); i++ {
+		if server.Args[i] == "-v" && i+1 < len(server.Args) {
+			nextArg := server.Args[i+1]
+			if nextArg == "/host/path:/container/path:ro" || nextArg == "/host/data:/app/data:rw" {
+				mountCount++
+			}
+		}
+	}
+
+	if mountCount != 2 {
+		t.Errorf("Expected 2 volume mounts, found %d", mountCount)
+	}
+}
+
+func TestLoadFromStdin_WithAllNewFields(t *testing.T) {
+	jsonConfig := `{
+		"mcpServers": {
+			"comprehensive": {
+				"type": "stdio",
+				"container": "test/container:latest",
+				"entrypoint": "/bin/bash",
+				"entrypointArgs": ["-c", "echo test"],
+				"mounts": ["/tmp:/data:rw"],
+				"env": {
+					"DEBUG": "true"
+				}
+			}
+		}
+	}`
+
+	r, w, _ := os.Pipe()
+	oldStdin := os.Stdin
+	os.Stdin = r
+	go func() {
+		w.Write([]byte(jsonConfig))
+		w.Close()
+	}()
+
+	cfg, err := LoadFromStdin()
+	os.Stdin = oldStdin
+
+	if err != nil {
+		t.Fatalf("LoadFromStdin() failed: %v", err)
+	}
+
+	server, ok := cfg.Servers["comprehensive"]
+	if !ok {
+		t.Fatal("Server 'comprehensive' not found")
+	}
+
+	// Verify command is docker
+	if server.Command != "docker" {
+		t.Errorf("Expected command 'docker', got '%s'", server.Command)
+	}
+
+	// Check entrypoint
+	hasEntrypoint := false
+	for i := 0; i < len(server.Args)-1; i++ {
+		if server.Args[i] == "--entrypoint" && server.Args[i+1] == "/bin/bash" {
+			hasEntrypoint = true
+			break
+		}
+	}
+	if !hasEntrypoint {
+		t.Error("Entrypoint not found in args")
+	}
+
+	// Check mounts
+	hasMount := false
+	for i := 0; i < len(server.Args)-1; i++ {
+		if server.Args[i] == "-v" && server.Args[i+1] == "/tmp:/data:rw" {
+			hasMount = true
+			break
+		}
+	}
+	if !hasMount {
+		t.Error("Mount not found in args")
+	}
+
+	// Check env var
+	hasDebug := false
+	for i := 0; i < len(server.Args)-1; i++ {
+		if server.Args[i] == "-e" && server.Args[i+1] == "DEBUG=true" {
+			hasDebug = true
+			break
+		}
+	}
+	if !hasDebug {
+		t.Error("Environment variable DEBUG=true not found")
+	}
+
+	// Check entrypoint args
+	if !contains(server.Args, "-c") || !contains(server.Args, "echo test") {
+		t.Error("Entrypoint args not found")
+	}
+
+	// Verify container name is present
+	if !contains(server.Args, "test/container:latest") {
+		t.Error("Container name not found")
+	}
+}
+
+func TestLoadFromStdin_InvalidMountFormat(t *testing.T) {
+	tests := []struct {
+		name     string
+		mounts   string
+		errorMsg string
+	}{
+		{
+			name:     "missing mode",
+			mounts:   `["/host:/container"]`,
+			errorMsg: "invalid mount format",
+		},
+		{
+			name:     "invalid mode",
+			mounts:   `["/host:/container:invalid"]`,
+			errorMsg: "invalid mount mode",
+		},
+		{
+			name:     "empty source",
+			mounts:   `[":/container:ro"]`,
+			errorMsg: "mount source cannot be empty",
+		},
+		{
+			name:     "empty destination",
+			mounts:   `["/host::ro"]`,
+			errorMsg: "mount destination cannot be empty",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			jsonConfig := fmt.Sprintf(`{
+				"mcpServers": {
+					"test": {
+						"type": "stdio",
+						"container": "test:latest",
+						"mounts": %s
+					}
+				}
+			}`, tt.mounts)
+
+			r, w, _ := os.Pipe()
+			oldStdin := os.Stdin
+			os.Stdin = r
+			go func() {
+				w.Write([]byte(jsonConfig))
+				w.Close()
+			}()
+
+			_, err := LoadFromStdin()
+			os.Stdin = oldStdin
+
+			if err == nil {
+				t.Error("Expected error but got none")
+			} else if !strings.Contains(err.Error(), tt.errorMsg) {
+				t.Errorf("Expected error containing %q, got: %v", tt.errorMsg, err)
+			}
+		})
+	}
 }

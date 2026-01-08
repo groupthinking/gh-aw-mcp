@@ -50,7 +50,9 @@ type StdinServerConfig struct {
 	Args           []string          `json:"args,omitempty"`
 	Env            map[string]string `json:"env,omitempty"`
 	Container      string            `json:"container,omitempty"`
+	Entrypoint     string            `json:"entrypoint,omitempty"`
 	EntrypointArgs []string          `json:"entrypointArgs,omitempty"`
+	Mounts         []string          `json:"mounts,omitempty"`
 	URL            string            `json:"url,omitempty"` // For HTTP-based MCP servers
 }
 
@@ -178,6 +180,16 @@ func LoadFromStdin() (*Config, error) {
 			"-e", "NO_COLOR=1",
 			"-e", "TERM=dumb",
 			"-e", "PYTHONUNBUFFERED=1",
+		}
+
+		// Add entrypoint override if specified
+		if server.Entrypoint != "" {
+			args = append(args, "--entrypoint", server.Entrypoint)
+		}
+
+		// Add volume mounts if specified
+		for _, mount := range server.Mounts {
+			args = append(args, "-v", mount)
 		}
 
 		// Add user-specified environment variables
