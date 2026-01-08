@@ -1,4 +1,4 @@
-.PHONY: build lint test test-integration coverage test-ci format clean install release help agent-finished
+.PHONY: build lint test test-unit test-integration test-all coverage test-ci format clean install release help agent-finished
 
 # Default target
 .DEFAULT_GOAL := help
@@ -26,11 +26,20 @@ lint:
 	@test -z "$$(gofmt -l .)" || (echo "The following files are not formatted:"; gofmt -l .; exit 1)
 	@echo "Linting complete!"
 
-# Run all tests
-test:
-	@echo "Running tests..."
+# Run unit tests only (no build required)
+test-unit:
+	@echo "Running unit tests..."
+	@go mod tidy
+	@go test -v ./internal/...
+
+# Run all tests (unit + integration)
+test-all:
+	@echo "Running all tests..."
 	@go mod tidy
 	@go test -v ./...
+
+# Legacy target: run unit tests (for backward compatibility)
+test: test-unit
 
 # Run binary integration tests (requires built binary)
 test-integration:
@@ -55,10 +64,10 @@ agent-finished: clean
 	@echo ""
 	@echo "✓ All agent-finished checks passed!"
 
-# Run tests with coverage
+# Run unit tests with coverage
 coverage:
-	@echo "Running tests with coverage..."
-	@go test -coverprofile=coverage.out ./... 2>&1 | grep -vE "go: no such tool \"covdata\"|no such tool" | grep -v "^$$" || true
+	@echo "Running unit tests with coverage..."
+	@go test -coverprofile=coverage.out ./internal/... 2>&1 | grep -vE "go: no such tool \"covdata\"|no such tool" | grep -v "^$$" || true
 	@echo ""
 	@echo "Coverage report:"
 	@if [ -f coverage.out ]; then \
@@ -71,11 +80,11 @@ coverage:
 	@echo "Coverage profile saved to coverage.out"
 	@echo "To view HTML coverage report, run: go tool cover -html=coverage.out"
 
-# Run tests with coverage and JSON output for CI
+# Run unit tests with coverage and JSON output for CI
 test-ci:
-	@echo "Running tests with coverage and JSON output..."
+	@echo "Running unit tests with coverage and JSON output..."
 	@go mod tidy
-	@go test -v -parallel=8 -timeout=3m -coverprofile=coverage.out -json ./... | tee test-result-unit.json
+	@go test -v -parallel=8 -timeout=3m -coverprofile=coverage.out -json ./internal/... | tee test-result-unit.json
 	@echo "Test results saved to test-result-unit.json"
 	@echo "Coverage profile saved to coverage.out"
 
@@ -199,10 +208,12 @@ help:
 	@echo "Available targets:"
 	@echo "  build           - Build the CLI binary"
 	@echo "  lint            - Run all linters (go vet, gofmt check)"
-	@echo "  test            - Run all tests"
+	@echo "  test            - Run unit tests (no build required)"
+	@echo "  test-unit       - Run unit tests (no build required)"
 	@echo "  test-integration - Run binary integration tests (requires built binary)"
-	@echo "  coverage        - Run tests with coverage report"
-	@echo "  test-ci         - Run tests with coverage and JSON output for CI"
+	@echo "  test-all        - Run all tests (unit + integration)"
+	@echo "  coverage        - Run unit tests with coverage report"
+	@echo "  test-ci         - Run unit tests with coverage and JSON output for CI"
 	@echo "  format          - Format Go code using gofmt"
 	@echo "  clean           - Clean build artifacts"
 	@echo "  install         - Install required toolchains and dependencies"
