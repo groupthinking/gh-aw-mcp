@@ -28,6 +28,7 @@ var (
 	unifiedMode bool
 	envFile     string
 	enableDIFC  bool
+	logDir      string
 	debugLog    = logger.New("cmd:root")
 	version     = "dev" // Default version, overridden by SetVersion
 )
@@ -49,6 +50,7 @@ func init() {
 	rootCmd.Flags().BoolVar(&unifiedMode, "unified", false, "Run in unified mode (all backends at /mcp)")
 	rootCmd.Flags().StringVar(&envFile, "env", "", "Path to .env file to load environment variables")
 	rootCmd.Flags().BoolVar(&enableDIFC, "enable-difc", false, "Enable DIFC enforcement and session requirement (requires sys___init call before tool access)")
+	rootCmd.Flags().StringVar(&logDir, "log-dir", "/tmp/gh-aw/sandbox/mcp", "Directory for log files (falls back to stdout if directory cannot be created)")
 
 	// Mark mutually exclusive flags
 	rootCmd.MarkFlagsMutuallyExclusive("routed", "unified")
@@ -61,6 +63,13 @@ func run(cmd *cobra.Command, args []string) error {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
+	// Initialize file logger early
+	if err := logger.InitFileLogger(logDir, "mcp-gateway.log"); err != nil {
+		log.Printf("Warning: Failed to initialize file logger: %v", err)
+	}
+	defer logger.CloseGlobalLogger()
+
+	logger.LogInfo("startup", "Starting MCPG with config: %s, listen: %s, log-dir: %s", configFile, listenAddr, logDir)
 	debugLog.Printf("Starting MCPG with config: %s, listen: %s", configFile, listenAddr)
 
 	// Load .env file if specified
@@ -119,9 +128,11 @@ func run(cmd *cobra.Command, args []string) error {
 
 	go func() {
 		<-sigChan
+		logger.LogInfo("shutdown", "Shutting down gateway...")
 		log.Println("Shutting down...")
 		cancel()
 		unifiedServer.Close()
+		logger.CloseGlobalLogger()
 		os.Exit(0)
 	}()
 
