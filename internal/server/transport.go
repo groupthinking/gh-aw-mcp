@@ -71,7 +71,8 @@ func withResponseLogging(handler http.Handler) http.Handler {
 }
 
 // CreateHTTPServerForMCP creates an HTTP server that handles MCP over SSE
-func CreateHTTPServerForMCP(addr string, unifiedServer *UnifiedServer) *http.Server {
+// If apiKey is provided, all requests except /health require authentication (spec 7.1)
+func CreateHTTPServerForMCP(addr string, unifiedServer *UnifiedServer, apiKey string) *http.Server {
 	mux := http.NewServeMux()
 
 	// OAuth discovery endpoint - return 404 since we don't use OAuth
@@ -134,9 +135,15 @@ func CreateHTTPServerForMCP(addr string, unifiedServer *UnifiedServer) *http.Ser
 		Stateless: false, // Support stateful sessions
 	})
 
-	// Mount streamableHandler directly at /mcp endpoint (logging is done in the callback above)
-	mux.Handle("/mcp/", streamableHandler)
-	mux.Handle("/mcp", streamableHandler)
+	// Apply auth middleware if API key is configured (spec 7.1)
+	var finalHandler http.Handler = streamableHandler
+	if apiKey != "" {
+		finalHandler = authMiddleware(apiKey, streamableHandler.ServeHTTP)
+	}
+
+	// Mount handler at /mcp endpoint (logging is done in the callback above)
+	mux.Handle("/mcp/", finalHandler)
+	mux.Handle("/mcp", finalHandler)
 
 	// Health check
 	healthHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

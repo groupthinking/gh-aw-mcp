@@ -18,7 +18,8 @@ var logRouted = logger.New("server:routed")
 // CreateHTTPServerForRoutedMode creates an HTTP server for routed mode
 // In routed mode, each backend is accessible at /mcp/<server>
 // Multiple routes from the same Bearer token share a session
-func CreateHTTPServerForRoutedMode(addr string, unifiedServer *UnifiedServer) *http.Server {
+// If apiKey is provided, all requests except /health require authentication (spec 7.1)
+func CreateHTTPServerForRoutedMode(addr string, unifiedServer *UnifiedServer, apiKey string) *http.Server {
 	logRouted.Printf("Creating HTTP server for routed mode: addr=%s", addr)
 	mux := http.NewServeMux()
 
@@ -83,9 +84,15 @@ func CreateHTTPServerForRoutedMode(addr string, unifiedServer *UnifiedServer) *h
 			Stateless: false,
 		})
 
+		// Apply auth middleware if API key is configured (spec 7.1)
+		var finalHandler http.Handler = routeHandler
+		if apiKey != "" {
+			finalHandler = authMiddleware(apiKey, routeHandler.ServeHTTP)
+		}
+
 		// Mount the handler at both /mcp/<server> and /mcp/<server>/
-		mux.Handle(route+"/", routeHandler)
-		mux.Handle(route, routeHandler)
+		mux.Handle(route+"/", finalHandler)
+		mux.Handle(route, finalHandler)
 		log.Printf("Registered route: %s", route)
 	}
 

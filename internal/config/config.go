@@ -17,6 +17,16 @@ var logConfig = logger.New("config:config")
 type Config struct {
 	Servers    map[string]*ServerConfig `toml:"servers"`
 	EnableDIFC bool                     // When true, enables DIFC enforcement and requires sys___init call before tool access. Default is false for standard MCP client compatibility.
+	Gateway    *GatewayConfig           // Gateway configuration (port, API key, etc.)
+}
+
+// GatewayConfig represents gateway-level configuration
+type GatewayConfig struct {
+	Port           int
+	APIKey         string
+	Domain         string
+	StartupTimeout int // Seconds
+	ToolTimeout    int // Seconds
 }
 
 // ServerConfig represents a single MCP server configuration
@@ -73,6 +83,24 @@ func LoadFromStdin() (*Config, error) {
 	}
 
 	logConfig.Printf("Read %d bytes from stdin", len(data))
+
+	// First unmarshal into a generic map to detect unknown fields (spec 4.3.1)
+	var rawConfig map[string]interface{}
+	if err := json.Unmarshal(data, &rawConfig); err != nil {
+		return nil, fmt.Errorf("failed to parse JSON: %w", err)
+	}
+
+	// Check for unknown top-level fields
+	knownFields := map[string]bool{
+		"mcpServers": true,
+		"gateway":    true,
+	}
+	for field := range rawConfig {
+		if !knownFields[field] {
+			return nil, fmt.Errorf("configuration error: unrecognized field '%s' at top level. Please check the specification version. Known fields are: mcpServers, gateway", field)
+		}
+	}
+
 	var stdinCfg StdinConfig
 	if err := json.Unmarshal(data, &stdinCfg); err != nil {
 		return nil, fmt.Errorf("failed to parse JSON: %w", err)
@@ -85,18 +113,29 @@ func LoadFromStdin() (*Config, error) {
 		return nil, err
 	}
 
-	// Log gateway configuration if present (reserved for future use)
-	if stdinCfg.Gateway != nil {
-		if stdinCfg.Gateway.Port != nil || stdinCfg.Gateway.APIKey != "" ||
-			stdinCfg.Gateway.Domain != "" || stdinCfg.Gateway.StartupTimeout != nil ||
-			stdinCfg.Gateway.ToolTimeout != nil {
-			log.Println("Gateway configuration present but not yet implemented (reserved for future use)")
-		}
-	}
-
 	// Convert stdin config to internal format
 	cfg := &Config{
 		Servers: make(map[string]*ServerConfig),
+	}
+
+	// Store gateway config with defaults
+	if stdinCfg.Gateway != nil {
+		cfg.Gateway = &GatewayConfig{
+			Port:           3000,
+			APIKey:         stdinCfg.Gateway.APIKey,
+			Domain:         stdinCfg.Gateway.Domain,
+			StartupTimeout: 60,
+			ToolTimeout:    120,
+		}
+		if stdinCfg.Gateway.Port != nil {
+			cfg.Gateway.Port = *stdinCfg.Gateway.Port
+		}
+		if stdinCfg.Gateway.StartupTimeout != nil {
+			cfg.Gateway.StartupTimeout = *stdinCfg.Gateway.StartupTimeout
+		}
+		if stdinCfg.Gateway.ToolTimeout != nil {
+			cfg.Gateway.ToolTimeout = *stdinCfg.Gateway.ToolTimeout
+		}
 	}
 
 	for name, server := range stdinCfg.MCPServers {
