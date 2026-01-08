@@ -57,7 +57,7 @@ args = ["run", "--rm", "-e", "GITHUB_PERSONAL_ACCESS_TOKEN", "-i", "ghcr.io/gith
       "container": "ghcr.io/github/github-mcp-server:latest",
       "env": {
         "GITHUB_PERSONAL_ACCESS_TOKEN": "",
-        "CONFIG_PATH": "${HOME}/.config/github"
+        "CONFIG_PATH": "${GITHUB_CONFIG_DIR}"
       }
     }
   }

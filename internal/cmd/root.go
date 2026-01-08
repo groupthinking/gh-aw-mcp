@@ -175,15 +175,15 @@ func writeGatewayConfigToStdout(cfg *config.Config, listenAddr, mode string) err
 }
 
 func writeGatewayConfig(cfg *config.Config, listenAddr, mode string, w io.Writer) error {
-	// Parse listen address to extract host and port using net.SplitHostPort
-	// This properly handles both IPv4 and IPv6 addresses
+	// Parse listen address to extract host and port
+	// Use net.SplitHostPort which properly handles both IPv4 and IPv6 addresses
 	host, port := "127.0.0.1", "3000"
-	if parsedHost, parsedPort, err := net.SplitHostPort(listenAddr); err == nil {
-		if parsedHost != "" {
-			host = parsedHost
+	if h, p, err := net.SplitHostPort(listenAddr); err == nil {
+		if h != "" {
+			host = h
 		}
-		if parsedPort != "" {
-			port = parsedPort
+		if p != "" {
+			port = p
 		}
 	}
 
