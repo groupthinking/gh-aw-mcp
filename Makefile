@@ -13,12 +13,14 @@ GOLANGCI_LINT_VERSION=v2.2.0
 # Build the CLI binary
 build:
 	@echo "Building $(BINARY_NAME)..."
+	@go mod tidy
 	@go build -o $(BINARY_NAME) .
 	@echo "Build complete: $(BINARY_NAME)"
 
 # Run all linters
 lint:
 	@echo "Running linters..."
+	@go mod tidy
 	@go vet ./...
 	@echo "Running gofmt check..."
 	@test -z "$$(gofmt -l .)" || (echo "The following files are not formatted:"; gofmt -l .; exit 1)
@@ -27,6 +29,7 @@ lint:
 # Run all tests
 test:
 	@echo "Running tests..."
+	@go mod tidy
 	@go test -v ./...
 
 # Run binary integration tests (requires built binary)
@@ -39,7 +42,7 @@ test-integration:
 	@go test -v ./test/integration/...
 
 # Run format, build, lint, and test (for agents before completion)
-agent-finished:
+agent-finished: clean
 	@echo "Running agent-finished checks..."
 	@echo ""
 	@$(MAKE) format
@@ -71,6 +74,7 @@ coverage:
 # Run tests with coverage and JSON output for CI
 test-ci:
 	@echo "Running tests with coverage and JSON output..."
+	@go mod tidy
 	@go test -v -parallel=8 -timeout=3m -coverprofile=coverage.out -json ./... | tee test-result-unit.json
 	@echo "Test results saved to test-result-unit.json"
 	@echo "Coverage profile saved to coverage.out"
@@ -87,6 +91,8 @@ clean:
 	@rm -f $(BINARY_NAME)
 	@rm -f coverage.out
 	@rm -f test-result-unit.json
+	@go mod tidy
+	@go clean
 	@echo "Clean complete!"
 
 # Create and push a release tag

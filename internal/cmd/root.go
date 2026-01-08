@@ -3,8 +3,11 @@ package cmd
 import (
 	"bufio"
 	"context"
+	"encoding/json"
 	"fmt"
+	"io"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
@@ -127,16 +130,103 @@ func run(cmd *cobra.Command, args []string) error {
 	if mode == "routed" {
 		log.Printf("Starting MCPG in ROUTED mode on %s", listenAddr)
 		log.Printf("Routes: /mcp/<server> where <server> is one of: %v", unifiedServer.GetServerIDs())
-		httpServer = server.CreateHTTPServerForRoutedMode(listenAddr, unifiedServer)
+
+		// Extract API key from gateway config (spec 7.1)
+		apiKey := ""
+		if cfg.Gateway != nil {
+			apiKey = cfg.Gateway.APIKey
+		}
+
+		httpServer = server.CreateHTTPServerForRoutedMode(listenAddr, unifiedServer, apiKey)
 	} else {
 		log.Printf("Starting MCPG in UNIFIED mode on %s", listenAddr)
 		log.Printf("Endpoint: /mcp")
-		httpServer = server.CreateHTTPServerForMCP(listenAddr, unifiedServer)
+
+		// Extract API key from gateway config (spec 7.1)
+		apiKey := ""
+		if cfg.Gateway != nil {
+			apiKey = cfg.Gateway.APIKey
+		}
+
+		httpServer = server.CreateHTTPServerForMCP(listenAddr, unifiedServer, apiKey)
+	}
+	// Start HTTP server in background
+	go func() {
+		if err := httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			log.Printf("HTTP server error: %v", err)
+			cancel()
+		}
+	}()
+
+	// Write gateway configuration to stdout per spec section 5.4
+	if err := writeGatewayConfigToStdout(cfg, listenAddr, mode); err != nil {
+		log.Printf("Warning: failed to write gateway configuration to stdout: %v", err)
 	}
 
-	// Start HTTP server
-	if err := httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-		return fmt.Errorf("server error: %w", err)
+	// Wait for shutdown signal
+	<-ctx.Done()
+	return nil
+}
+
+// writeGatewayConfigToStdout writes the rewritten gateway configuration to stdout
+// per MCP Gateway Specification Section 5.4
+func writeGatewayConfigToStdout(cfg *config.Config, listenAddr, mode string) error {
+	return writeGatewayConfig(cfg, listenAddr, mode, os.Stdout)
+}
+
+func writeGatewayConfig(cfg *config.Config, listenAddr, mode string, w io.Writer) error {
+	// Parse listen address to extract host and port
+	// Use net.SplitHostPort which properly handles both IPv4 and IPv6 addresses
+	host, port := "127.0.0.1", "3000"
+	if h, p, err := net.SplitHostPort(listenAddr); err == nil {
+		if h != "" {
+			host = h
+		}
+		if p != "" {
+			port = p
+		}
+	}
+
+	// Determine domain (use host from listen address)
+	domain := host
+
+	// Build output configuration
+	outputConfig := map[string]interface{}{
+		"mcpServers": make(map[string]interface{}),
+	}
+
+	servers := outputConfig["mcpServers"].(map[string]interface{})
+
+	for name := range cfg.Servers {
+		serverConfig := map[string]interface{}{
+			"type": "http",
+		}
+
+		if mode == "routed" {
+			serverConfig["url"] = fmt.Sprintf("http://%s:%s/mcp/%s", domain, port, name)
+		} else {
+			// Unified mode - all servers use /mcp endpoint
+			serverConfig["url"] = fmt.Sprintf("http://%s:%s/mcp", domain, port)
+		}
+
+		// Note: apiKey would be added to headers if implemented
+		// serverConfig["headers"] = map[string]string{"Authorization": apiKey}
+
+		servers[name] = serverConfig
+	}
+
+	// Write to output as single JSON document
+	encoder := json.NewEncoder(w)
+	encoder.SetIndent("", "  ")
+	if err := encoder.Encode(outputConfig); err != nil {
+		return fmt.Errorf("failed to encode configuration: %w", err)
+	}
+
+	// Flush stdout buffer if it's a file
+	if f, ok := w.(*os.File); ok {
+		if err := f.Sync(); err != nil {
+			return fmt.Errorf("failed to flush stdout: %w", err)
+		}
 	}
 
 	return nil

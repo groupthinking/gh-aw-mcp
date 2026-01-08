@@ -11,25 +11,34 @@ import (
 	"github.com/githubnext/gh-aw-mcpg/internal/config"
 	"github.com/githubnext/gh-aw-mcpg/internal/logger"
 	"github.com/githubnext/gh-aw-mcpg/internal/mcp"
+	"github.com/githubnext/gh-aw-mcpg/internal/tty"
 )
 
 var logLauncher = logger.New("launcher:launcher")
 
 // Launcher manages backend MCP server connections
 type Launcher struct {
-	ctx         context.Context
-	config      *config.Config
-	connections map[string]*mcp.Connection
-	mu          sync.RWMutex
+	ctx                context.Context
+	config             *config.Config
+	connections        map[string]*mcp.Connection
+	mu                 sync.RWMutex
+	runningInContainer bool
 }
 
 // New creates a new Launcher
 func New(ctx context.Context, cfg *config.Config) *Launcher {
 	logLauncher.Printf("Creating new launcher with %d configured servers", len(cfg.Servers))
+
+	inContainer := tty.IsRunningInContainer()
+	if inContainer {
+		log.Println("[LAUNCHER] Detected running inside a container")
+	}
+
 	return &Launcher{
-		ctx:         ctx,
-		config:      cfg,
-		connections: make(map[string]*mcp.Connection),
+		ctx:                ctx,
+		config:             cfg,
+		connections:        make(map[string]*mcp.Connection),
+		runningInContainer: inContainer,
 	}
 }
 
@@ -62,11 +71,20 @@ func GetOrLaunch(l *Launcher, serverID string) (*mcp.Connection, error) {
 		return nil, fmt.Errorf("server '%s' not found in config", serverID)
 	}
 
+	// Warn if using direct command in a container
+	isDirectCommand := serverCfg.Command != "docker"
+	if l.runningInContainer && isDirectCommand {
+		log.Printf("[LAUNCHER] ⚠️  WARNING: Server '%s' uses direct command execution inside a container", serverID)
+		log.Printf("[LAUNCHER] ⚠️  Security Notice: Command '%s' will execute with the same privileges as the gateway", serverCfg.Command)
+		log.Printf("[LAUNCHER] ⚠️  Consider using 'container' field instead for better isolation")
+	}
+
 	// Log the command being executed
 	log.Printf("[LAUNCHER] Starting MCP server: %s", serverID)
 	log.Printf("[LAUNCHER] Command: %s", serverCfg.Command)
 	log.Printf("[LAUNCHER] Args: %v", serverCfg.Args)
-	logLauncher.Printf("Launching new server: serverID=%s, command=%s", serverID, serverCfg.Command)
+	logLauncher.Printf("Launching new server: serverID=%s, command=%s, inContainer=%v, isDirectCommand=%v",
+		serverID, serverCfg.Command, l.runningInContainer, isDirectCommand)
 
 	// Check for environment variable passthrough (only check args after -e flags)
 	for i := 0; i < len(serverCfg.Args); i++ {
@@ -98,6 +116,28 @@ func GetOrLaunch(l *Launcher, serverID string) (*mcp.Connection, error) {
 	// Create connection
 	conn, err := mcp.NewConnection(l.ctx, serverCfg.Command, serverCfg.Args, serverCfg.Env)
 	if err != nil {
+		// Enhanced error logging for command-based servers
+		log.Printf("[LAUNCHER] ❌ FAILED to launch server '%s'", serverID)
+		log.Printf("[LAUNCHER] Error: %v", err)
+		log.Printf("[LAUNCHER] Debug Information:")
+		log.Printf("[LAUNCHER]   - Command: %s", serverCfg.Command)
+		log.Printf("[LAUNCHER]   - Args: %v", serverCfg.Args)
+		log.Printf("[LAUNCHER]   - Env vars: %v", serverCfg.Env)
+		log.Printf("[LAUNCHER]   - Running in container: %v", l.runningInContainer)
+		log.Printf("[LAUNCHER]   - Is direct command: %v", isDirectCommand)
+
+		if isDirectCommand && l.runningInContainer {
+			log.Printf("[LAUNCHER] ⚠️  Possible causes:")
+			log.Printf("[LAUNCHER]   - Command '%s' may not be installed in the gateway container", serverCfg.Command)
+			log.Printf("[LAUNCHER]   - Consider using 'container' config instead of 'command'")
+			log.Printf("[LAUNCHER]   - Or add '%s' to the gateway's Dockerfile", serverCfg.Command)
+		} else if isDirectCommand {
+			log.Printf("[LAUNCHER] ⚠️  Possible causes:")
+			log.Printf("[LAUNCHER]   - Command '%s' may not be in PATH", serverCfg.Command)
+			log.Printf("[LAUNCHER]   - Check if '%s' is installed: which %s", serverCfg.Command, serverCfg.Command)
+			log.Printf("[LAUNCHER]   - Verify file permissions and execute bit")
+		}
+
 		return nil, fmt.Errorf("failed to create connection: %w", err)
 	}
 

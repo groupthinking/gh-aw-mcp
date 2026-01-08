@@ -92,7 +92,7 @@ func TestTransparentProxy_RoutedMode(t *testing.T) {
 	us.toolsMu.Unlock()
 
 	// Create HTTP server in routed mode
-	httpServer := CreateHTTPServerForRoutedMode("127.0.0.1:0", us)
+	httpServer := CreateHTTPServerForRoutedMode("127.0.0.1:0", us, "")
 
 	// Start server in background using httptest
 	ts := httptest.NewServer(httpServer.Handler)
@@ -374,7 +374,7 @@ func TestTransparentProxy_MultipleBackends(t *testing.T) {
 
 	// Test that routes are registered for each backend
 	t.Run("RoutesRegistered", func(t *testing.T) {
-		httpServer := CreateHTTPServerForRoutedMode("127.0.0.1:0", us)
+		httpServer := CreateHTTPServerForRoutedMode("127.0.0.1:0", us, "")
 		ts := httptest.NewServer(httpServer.Handler)
 		defer ts.Close()
 
@@ -465,7 +465,7 @@ func TestProxyDoesNotModifyRequests(t *testing.T) {
 	}
 	us.toolsMu.Unlock()
 
-	httpServer := CreateHTTPServerForRoutedMode("127.0.0.1:0", us)
+	httpServer := CreateHTTPServerForRoutedMode("127.0.0.1:0", us, "")
 	ts := httptest.NewServer(httpServer.Handler)
 	defer ts.Close()
 

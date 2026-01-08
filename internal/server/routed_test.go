@@ -134,7 +134,7 @@ func TestCreateHTTPServerForRoutedMode_ServerIDs(t *testing.T) {
 	defer us.Close()
 
 	// Create routed mode server
-	httpServer := CreateHTTPServerForRoutedMode("127.0.0.1:8000", us)
+	httpServer := CreateHTTPServerForRoutedMode("127.0.0.1:8000", us, "")
 	if httpServer == nil {
 		t.Fatal("CreateHTTPServerForRoutedMode() returned nil")
 	}

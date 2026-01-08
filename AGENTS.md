@@ -17,15 +17,16 @@ Quick reference for AI agents working with MCP Gateway (Go-based MCP proxy serve
 ## Project Structure
 
 - `internal/cmd/` - CLI (Cobra)
-- `internal/config/` - Config parsing (TOML/JSON)
+- `internal/config/` - Config parsing (TOML/JSON) with validation
+  - `validation.go` - Variable expansion and fail-fast validation
+  - `validation_test.go` - 21 comprehensive validation tests
 - `internal/server/` - HTTP server (routed/unified modes)
-- `internal/mcp/` - MCP protocol types
+- `internal/mcp/` - MCP protocol types with enhanced error logging
 - `internal/launcher/` - Backend process management
 - `internal/difc/` - Security labels (not enabled)
 - `internal/guard/` - Security guards (NoopGuard active)
 - `internal/logger/` - Debug logging framework (micro logger)
 - `internal/timeutil/` - Time formatting utilities
-- `internal/tty/` - Terminal detection utilities
 
 ## Key Tech
 
@@ -33,8 +34,12 @@ Quick reference for AI agents working with MCP Gateway (Go-based MCP proxy serve
 - **Protocol**: JSON-RPC 2.0 over stdio
 - **Routing**: `/mcp/{serverID}` (routed) or `/mcp` (unified)
 - **Docker**: Launches MCP servers as containers
+- **Validation**: Spec-compliant with fail-fast error handling
+- **Variable Expansion**: `${VAR_NAME}` syntax for environment variables
 
 ## Config Examples
+
+**Configuration Spec**: See **[MCP Gateway Configuration Reference](https://github.com/githubnext/gh-aw/blob/main/docs/src/content/docs/reference/mcp-gateway.md)** for complete specification.
 
 **TOML** (`config.toml`):
 ```toml
@@ -45,8 +50,28 @@ args = ["run", "--rm", "-e", "GITHUB_PERSONAL_ACCESS_TOKEN", "-i", "ghcr.io/gith
 
 **JSON** (stdin):
 ```json
-{"mcpServers": {"github": {"type": "local", "container": "ghcr.io/github/github-mcp-server:latest", "env": {"GITHUB_PERSONAL_ACCESS_TOKEN": ""}}}}
+{
+  "mcpServers": {
+    "github": {
+      "type": "stdio",
+      "container": "ghcr.io/github/github-mcp-server:latest",
+      "env": {
+        "GITHUB_PERSONAL_ACCESS_TOKEN": "",
+        "CONFIG_PATH": "${GITHUB_CONFIG_DIR}"
+      }
+    }
+  }
+}
 ```
+
+**Supported Types**: `"stdio"`, `"http"` (not implemented), `"local"` (alias for stdio)
+
+**Validation Features**:
+- Environment variable expansion: `${VAR_NAME}` (fails if undefined)
+- Required fields: `container` for stdio, `url` for http
+- **Note**: The `command` field is not supported - stdio servers must use `container`
+- Port range validation: 1-65535
+- Timeout validation: positive integers only
 
 ## Go Conventions
 
@@ -157,12 +182,25 @@ DEBUG_COLORS=0 DEBUG=* ./awmg --config config.toml
 - `GITHUB_PERSONAL_ACCESS_TOKEN` - GitHub auth
 - `DOCKER_API_VERSION` - 1.43 (arm64) or 1.44 (amd64)
 - `PORT`, `HOST`, `MODE` - Server config (via run.sh)
+- `DEBUG` - Enable debug logging (e.g., `DEBUG=*`, `DEBUG=server:*,launcher:*`)
+- `DEBUG_COLORS` - Control colored output (0 to disable, auto-disabled when piping)
+
+## Error Debugging
+
+**Enhanced Error Context**: Command failures include:
+- Full command, args, and environment variables
+- Context-specific troubleshooting suggestions:
+  - Docker daemon connectivity checks
+  - Container image availability
+  - Network connectivity issues
+  - MCP protocol compatibility checks
 
 ## Security Notes
 
 - Auth: `Authorization: Bearer <token>` header
 - Sessions: `Mcp-Session-Id` header
 - DIFC: Implemented but disabled (NoopGuard active)
+- Stdio servers: Containerized execution only (no direct command support)
 
 ## Resources
 

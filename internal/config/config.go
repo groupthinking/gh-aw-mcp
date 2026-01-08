@@ -17,6 +17,16 @@ var logConfig = logger.New("config:config")
 type Config struct {
 	Servers    map[string]*ServerConfig `toml:"servers"`
 	EnableDIFC bool                     // When true, enables DIFC enforcement and requires sys___init call before tool access. Default is false for standard MCP client compatibility.
+	Gateway    *GatewayConfig           // Gateway configuration (port, API key, etc.)
+}
+
+// GatewayConfig represents gateway-level configuration
+type GatewayConfig struct {
+	Port           int
+	APIKey         string
+	Domain         string
+	StartupTimeout int // Seconds
+	ToolTimeout    int // Seconds
 }
 
 // ServerConfig represents a single MCP server configuration
@@ -35,18 +45,22 @@ type StdinConfig struct {
 
 // StdinServerConfig represents a single server from stdin JSON
 type StdinServerConfig struct {
-	Type           string            `json:"type"`
+	Type           string            `json:"type"` // "stdio" | "http" ("local" supported for backward compatibility)
 	Command        string            `json:"command,omitempty"`
 	Args           []string          `json:"args,omitempty"`
 	Env            map[string]string `json:"env,omitempty"`
 	Container      string            `json:"container,omitempty"`
 	EntrypointArgs []string          `json:"entrypointArgs,omitempty"`
+	URL            string            `json:"url,omitempty"` // For HTTP-based MCP servers
 }
 
 // StdinGatewayConfig represents gateway configuration from stdin JSON
 type StdinGatewayConfig struct {
-	Port   *int   `json:"port,omitempty"`
-	APIKey string `json:"apiKey,omitempty"`
+	Port           *int   `json:"port,omitempty"`
+	APIKey         string `json:"apiKey,omitempty"`
+	Domain         string `json:"domain,omitempty"`
+	StartupTimeout *int   `json:"startupTimeout,omitempty"` // Seconds to wait for backend startup
+	ToolTimeout    *int   `json:"toolTimeout,omitempty"`    // Seconds to wait for tool execution
 }
 
 // LoadFromFile loads configuration from a TOML file
@@ -69,6 +83,24 @@ func LoadFromStdin() (*Config, error) {
 	}
 
 	logConfig.Printf("Read %d bytes from stdin", len(data))
+
+	// First unmarshal into a generic map to detect unknown fields (spec 4.3.1)
+	var rawConfig map[string]interface{}
+	if err := json.Unmarshal(data, &rawConfig); err != nil {
+		return nil, fmt.Errorf("failed to parse JSON: %w", err)
+	}
+
+	// Check for unknown top-level fields
+	knownFields := map[string]bool{
+		"mcpServers": true,
+		"gateway":    true,
+	}
+	for field := range rawConfig {
+		if !knownFields[field] {
+			return nil, fmt.Errorf("configuration error: unrecognized field '%s' at top level. Please check the specification version. Known fields are: mcpServers, gateway", field)
+		}
+	}
+
 	var stdinCfg StdinConfig
 	if err := json.Unmarshal(data, &stdinCfg); err != nil {
 		return nil, fmt.Errorf("failed to parse JSON: %w", err)
@@ -76,11 +108,9 @@ func LoadFromStdin() (*Config, error) {
 
 	logConfig.Printf("Parsed stdin config with %d servers", len(stdinCfg.MCPServers))
 
-	// Log gateway configuration if present (reserved for future use)
-	if stdinCfg.Gateway != nil {
-		if stdinCfg.Gateway.Port != nil || stdinCfg.Gateway.APIKey != "" {
-			log.Println("Gateway configuration present but not yet implemented (reserved for future use)")
-		}
+	// Validate gateway configuration first (fail-fast)
+	if err := validateGatewayConfig(stdinCfg.Gateway); err != nil {
+		return nil, err
 	}
 
 	// Convert stdin config to internal format
@@ -88,57 +118,92 @@ func LoadFromStdin() (*Config, error) {
 		Servers: make(map[string]*ServerConfig),
 	}
 
+	// Store gateway config with defaults
+	if stdinCfg.Gateway != nil {
+		cfg.Gateway = &GatewayConfig{
+			Port:           3000,
+			APIKey:         stdinCfg.Gateway.APIKey,
+			Domain:         stdinCfg.Gateway.Domain,
+			StartupTimeout: 60,
+			ToolTimeout:    120,
+		}
+		if stdinCfg.Gateway.Port != nil {
+			cfg.Gateway.Port = *stdinCfg.Gateway.Port
+		}
+		if stdinCfg.Gateway.StartupTimeout != nil {
+			cfg.Gateway.StartupTimeout = *stdinCfg.Gateway.StartupTimeout
+		}
+		if stdinCfg.Gateway.ToolTimeout != nil {
+			cfg.Gateway.ToolTimeout = *stdinCfg.Gateway.ToolTimeout
+		}
+	}
+
 	for name, server := range stdinCfg.MCPServers {
-		// Only support "local" type for now
-		if server.Type != "local" {
-			log.Printf("Warning: skipping server '%s' with unsupported type '%s'", name, server.Type)
+		// Validate server configuration (fail-fast)
+		if err := validateStdioServer(name, server); err != nil {
+			return nil, err
+		}
+
+		// Expand variable expressions in env vars (fail-fast on undefined vars)
+		if len(server.Env) > 0 {
+			expandedEnv, err := expandEnvVariables(server.Env, name)
+			if err != nil {
+				return nil, err
+			}
+			server.Env = expandedEnv
+		}
+		// Normalize type: "local" is an alias for "stdio" (backward compatibility)
+		serverType := server.Type
+		if serverType == "" {
+			serverType = "stdio"
+		}
+		if serverType == "local" {
+			serverType = "stdio"
+		}
+
+		// HTTP servers are not yet implemented
+		if serverType == "http" {
+			log.Printf("Warning: skipping server '%s' with type 'http' (HTTP transport not yet implemented)", name)
 			continue
 		}
 
-		// For Docker containers
-		if server.Container != "" {
-			args := []string{
-				"run",
-				"--rm",
-				"-i",
-				// Standard environment variables for better Docker compatibility
-				"-e", "NO_COLOR=1",
-				"-e", "TERM=dumb",
-				"-e", "PYTHONUNBUFFERED=1",
-			}
+		// stdio/local servers only from this point
+		// All stdio servers use Docker containers
 
-			// Add user-specified environment variables
-			// Empty string "" means passthrough from host (just -e KEY)
-			// Non-empty string means explicit value (-e KEY=value)
-			for k, v := range server.Env {
-				args = append(args, "-e")
-				if v == "" {
-					// Passthrough from host environment
-					args = append(args, k)
-				} else {
-					// Explicit value
-					args = append(args, fmt.Sprintf("%s=%s", k, v))
-				}
-			}
+		args := []string{
+			"run",
+			"--rm",
+			"-i",
+			// Standard environment variables for better Docker compatibility
+			"-e", "NO_COLOR=1",
+			"-e", "TERM=dumb",
+			"-e", "PYTHONUNBUFFERED=1",
+		}
 
-			// Add container name
-			args = append(args, server.Container)
-
-			// Add entrypoint args
-			args = append(args, server.EntrypointArgs...)
-
-			cfg.Servers[name] = &ServerConfig{
-				Command: "docker",
-				Args:    args,
-				Env:     make(map[string]string),
+		// Add user-specified environment variables
+		// Empty string "" means passthrough from host (just -e KEY)
+		// Non-empty string means explicit value (-e KEY=value)
+		for k, v := range server.Env {
+			args = append(args, "-e")
+			if v == "" {
+				// Passthrough from host environment
+				args = append(args, k)
+			} else {
+				// Explicit value
+				args = append(args, fmt.Sprintf("%s=%s", k, v))
 			}
-		} else {
-			// Direct command execution
-			cfg.Servers[name] = &ServerConfig{
-				Command: server.Command,
-				Args:    server.Args,
-				Env:     server.Env,
-			}
+		}
+
+		// Add container name
+		args = append(args, server.Container)
+
+		// Add entrypoint args
+		args = append(args, server.EntrypointArgs...)
+
+		cfg.Servers[name] = &ServerConfig{
+			Command: "docker",
+			Args:    args,
+			Env:     make(map[string]string),
 		}
 	}
 
