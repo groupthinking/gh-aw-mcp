@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
@@ -174,13 +175,16 @@ func writeGatewayConfigToStdout(cfg *config.Config, listenAddr, mode string) err
 }
 
 func writeGatewayConfig(cfg *config.Config, listenAddr, mode string, w io.Writer) error {
-	// Parse listen address to extract host and port
+	// Parse listen address to extract host and port using net.SplitHostPort
+	// This properly handles both IPv4 and IPv6 addresses
 	host, port := "127.0.0.1", "3000"
-	if parts := strings.Split(listenAddr, ":"); len(parts) == 2 {
-		if parts[0] != "" {
-			host = parts[0]
+	if parsedHost, parsedPort, err := net.SplitHostPort(listenAddr); err == nil {
+		if parsedHost != "" {
+			host = parsedHost
 		}
-		port = parts[1]
+		if parsedPort != "" {
+			port = parsedPort
+		}
 	}
 
 	// Determine domain (use host from listen address)
