@@ -56,10 +56,17 @@ jobs:
       - name: Download Go modules
         run: go mod download
 
+      - name: Build binary
+        run: |
+          RELEASE_TAG="${GITHUB_REF#refs/tags/}"
+          echo "Building binary for tests..."
+          make build
+          echo "✓ Binary built successfully"
+
       - name: Run tests
         run: make test
 
-      - name: Build binary
+      - name: Build release binaries
         run: |
           RELEASE_TAG="${GITHUB_REF#refs/tags/}"
           echo "Building multi-platform binaries for: $RELEASE_TAG"
