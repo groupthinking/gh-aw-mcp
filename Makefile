@@ -50,7 +50,7 @@ test-integration:
 	fi
 	@go test -v ./test/integration/...
 
-# Run format, build, lint, and test (for agents before completion)
+# Run format, build, lint, and all tests (for agents before completion)
 agent-finished: clean
 	@echo "Running agent-finished checks..."
 	@echo ""
@@ -60,7 +60,7 @@ agent-finished: clean
 	@echo ""
 	@$(MAKE) lint
 	@echo ""
-	@$(MAKE) test
+	@$(MAKE) test-all
 	@echo ""
 	@echo "✓ All agent-finished checks passed!"
 
@@ -218,5 +218,5 @@ help:
 	@echo "  clean           - Clean build artifacts"
 	@echo "  install         - Install required toolchains and dependencies"
 	@echo "  release         - Create and push a release tag (usage: make release patch|minor|major)"
-	@echo "  agent-finished  - Run format, build, lint, and test (for agents before completion)"
+	@echo "  agent-finished  - Run format, build, lint, and all tests (for agents before completion)"
 	@echo "  help            - Display this help message"

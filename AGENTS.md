@@ -14,7 +14,7 @@ Quick reference for AI agents working with MCP Gateway (Go-based MCP proxy serve
 **Coverage**: `make coverage` (unit tests with coverage report)  
 **Format**: `make format` (auto-format code with gofmt)  
 **Clean**: `make clean` (remove build artifacts)  
-**Agent-Finished**: `make agent-finished` (run format, build, lint, test - ALWAYS run before completion)  
+**Agent-Finished**: `make agent-finished` (run format, build, lint, and all tests - ALWAYS run before completion)  
 **Run**: `./awmg --config config.toml`
 
 ## Project Structure
@@ -117,7 +117,7 @@ This command runs the complete verification pipeline:
 1. **Format** - Auto-formats all Go code with gofmt
 2. **Build** - Ensures the project compiles successfully
 3. **Lint** - Runs go vet and gofmt checks
-4. **Test** - Executes the full test suite
+4. **Test All** - Executes the full test suite (unit + integration tests)
 
 **Requirements:**
 - **ALL failures must be fixed** before completion
