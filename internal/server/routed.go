@@ -58,7 +58,7 @@ func CreateHTTPServerForRoutedMode(addr string, unifiedServer *UnifiedServer, ap
 				return nil
 			}
 
-			logger.LogInfo("client", "New MCP client connection, remote=%s, method=%s, path=%s, backend=%s, session=%s", 
+			logger.LogInfo("client", "New MCP client connection, remote=%s, method=%s, path=%s, backend=%s, session=%s",
 				r.RemoteAddr, r.Method, r.URL.Path, backendID, sessionID)
 			log.Printf("=== NEW SSE CONNECTION (ROUTED) ===")
 			log.Printf("[%s] %s %s", r.RemoteAddr, r.Method, r.URL.Path)

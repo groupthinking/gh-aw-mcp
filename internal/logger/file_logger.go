@@ -12,11 +12,11 @@ import (
 
 // FileLogger manages logging to a file with fallback to stdout
 type FileLogger struct {
-	logFile    *os.File
-	logger     *log.Logger
-	mu         sync.Mutex
-	logDir     string
-	fileName   string
+	logFile     *os.File
+	logger      *log.Logger
+	mu          sync.Mutex
+	logDir      string
+	fileName    string
 	useFallback bool
 }
 
@@ -101,7 +101,7 @@ func (fl *FileLogger) Log(level LogLevel, category, format string, args ...inter
 
 	timestamp := time.Now().UTC().Format(time.RFC3339)
 	message := fmt.Sprintf(format, args...)
-	
+
 	logLine := fmt.Sprintf("[%s] [%s] [%s] %s", timestamp, level, category, message)
 	fl.logger.Println(logLine)
 }
