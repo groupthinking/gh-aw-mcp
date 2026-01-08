@@ -13,6 +13,7 @@ GOLANGCI_LINT_VERSION=v2.2.0
 # Build the CLI binary
 build:
 	@echo "Building $(BINARY_NAME)..."
+	@go mod tidy
 	@go build -o $(BINARY_NAME) .
 	@echo "Build complete: $(BINARY_NAME)"
 
