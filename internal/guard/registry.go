@@ -4,7 +4,11 @@ import (
 	"fmt"
 	"log"
 	"sync"
+
+	"github.com/githubnext/gh-aw-mcpg/internal/logger"
 )
+
+var logRegistry = logger.New("guard:registry")
 
 // Registry manages guard instances for different MCP servers
 type Registry struct {
@@ -21,6 +25,7 @@ func NewRegistry() *Registry {
 
 // Register registers a guard for a specific server
 func (r *Registry) Register(serverID string, guard Guard) {
+	logRegistry.Printf("Registering guard: serverID=%s, guardName=%s", serverID, guard.Name())
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
@@ -34,10 +39,12 @@ func (r *Registry) Get(serverID string) Guard {
 	defer r.mu.RUnlock()
 
 	if guard, ok := r.guards[serverID]; ok {
+		logRegistry.Printf("Retrieved guard for server: serverID=%s, guardName=%s", serverID, guard.Name())
 		return guard
 	}
 
 	// Return noop guard as default
+	logRegistry.Printf("No guard found for server, using noop: serverID=%s", serverID)
 	log.Printf("[Guard] No guard registered for server '%s', using noop guard", serverID)
 	return NewNoopGuard()
 }
@@ -100,19 +107,23 @@ func RegisterGuardType(name string, factory GuardFactory) {
 
 // CreateGuard creates a guard instance by name using registered factories
 func CreateGuard(name string) (Guard, error) {
+	logRegistry.Printf("Creating guard instance: name=%s", name)
 	registeredGuardsMu.RLock()
 	defer registeredGuardsMu.RUnlock()
 
 	// Handle built-in guards
 	if name == "noop" || name == "" {
+		logRegistry.Print("Creating noop guard (default)")
 		return NewNoopGuard(), nil
 	}
 
 	// Try to find in registered factories
 	if factory, ok := registeredGuards[name]; ok {
+		logRegistry.Printf("Creating guard from registered factory: name=%s", name)
 		return factory()
 	}
 
+	logRegistry.Printf("Guard type not found: name=%s", name)
 	return nil, fmt.Errorf("unknown guard type: %s", name)
 }
 

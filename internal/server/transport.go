@@ -9,8 +9,11 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/githubnext/gh-aw-mcpg/internal/logger"
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 )
+
+var logTransport = logger.New("server:transport")
 
 // HTTPTransport wraps the SDK's HTTP transport
 type HTTPTransport struct {
@@ -19,6 +22,7 @@ type HTTPTransport struct {
 
 // Start implements sdk.Transport interface
 func (t *HTTPTransport) Start(ctx context.Context) error {
+	logTransport.Printf("Starting HTTP transport on address: %s", t.Addr)
 	// The SDK will handle the actual HTTP server setup
 	// We just need to provide the address
 	log.Printf("HTTP transport ready on %s", t.Addr)
@@ -72,6 +76,7 @@ func withResponseLogging(handler http.Handler) http.Handler {
 
 // CreateHTTPServerForMCP creates an HTTP server that handles MCP over SSE
 func CreateHTTPServerForMCP(addr string, unifiedServer *UnifiedServer) *http.Server {
+	logTransport.Printf("Creating HTTP server for MCP: addr=%s", addr)
 	mux := http.NewServeMux()
 
 	// OAuth discovery endpoint - return 404 since we don't use OAuth

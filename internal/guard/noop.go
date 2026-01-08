@@ -4,7 +4,10 @@ import (
 	"context"
 
 	"github.com/githubnext/gh-aw-mcpg/internal/difc"
+	"github.com/githubnext/gh-aw-mcpg/internal/logger"
 )
+
+var logNoop = logger.New("guard:noop")
 
 // NoopGuard is the default guard that performs no DIFC labeling
 // It allows all operations by returning empty labels (no restrictions)
@@ -23,6 +26,7 @@ func (g *NoopGuard) Name() string {
 // LabelResource returns an empty resource with no label requirements
 // Conservatively assumes all operations could be writes
 func (g *NoopGuard) LabelResource(ctx context.Context, toolName string, args interface{}, backend BackendCaller, caps *difc.Capabilities) (*difc.LabeledResource, difc.OperationType, error) {
+	logNoop.Printf("Labeling resource: toolName=%s, operation=write", toolName)
 	// Empty resource = no label requirements = all operations allowed
 	resource := &difc.LabeledResource{
 		Description: "noop resource (no restrictions)",
@@ -33,6 +37,7 @@ func (g *NoopGuard) LabelResource(ctx context.Context, toolName string, args int
 
 	// Conservatively treat as write to be safe
 	// (writes are more restrictive than reads in DIFC)
+	logNoop.Print("Returning empty labels (no restrictions)")
 	return resource, difc.OperationWrite, nil
 }
 

@@ -3,7 +3,11 @@ package difc
 import (
 	"fmt"
 	"strings"
+
+	"github.com/githubnext/gh-aw-mcpg/internal/logger"
 )
+
+var logEvaluator = logger.New("difc:evaluator")
 
 // OperationType indicates the nature of the resource access
 type OperationType int
@@ -74,6 +78,7 @@ func (e *Evaluator) Evaluate(
 	resource *LabeledResource,
 	operation OperationType,
 ) *EvaluationResult {
+	logEvaluator.Printf("Evaluating access: resource=%s, operation=%s", resource.Description, operation)
 	result := &EvaluationResult{
 		Decision:        AccessAllow,
 		SecrecyToAdd:    []Tag{},
@@ -82,22 +87,28 @@ func (e *Evaluator) Evaluate(
 
 	switch operation {
 	case OperationRead:
+		logEvaluator.Print("Evaluating read operation")
 		return e.evaluateRead(agentSecrecy, agentIntegrity, resource)
 
 	case OperationWrite:
+		logEvaluator.Print("Evaluating write operation")
 		return e.evaluateWrite(agentSecrecy, agentIntegrity, resource)
 
 	case OperationReadWrite:
+		logEvaluator.Print("Evaluating read-write operation")
 		// For read-write, must satisfy both read and write constraints
 		readResult := e.evaluateRead(agentSecrecy, agentIntegrity, resource)
 		if !readResult.IsAllowed() {
+			logEvaluator.Printf("Read access denied: %s", readResult.Reason)
 			return readResult
 		}
 
 		writeResult := e.evaluateWrite(agentSecrecy, agentIntegrity, resource)
 		if !writeResult.IsAllowed() {
+			logEvaluator.Printf("Write access denied: %s", writeResult.Reason)
 			return writeResult
 		}
+		logEvaluator.Print("Read-write access granted")
 	}
 
 	return result
@@ -109,6 +120,7 @@ func (e *Evaluator) evaluateRead(
 	agentIntegrity *IntegrityLabel,
 	resource *LabeledResource,
 ) *EvaluationResult {
+	logEvaluator.Printf("Checking read access: resource=%s", resource.Description)
 	result := &EvaluationResult{
 		Decision:        AccessAllow,
 		SecrecyToAdd:    []Tag{},
@@ -119,6 +131,7 @@ func (e *Evaluator) evaluateRead(
 	// Agent must trust the resource (resource has all integrity tags agent requires)
 	ok, missingTags := resource.Integrity.CheckFlow(agentIntegrity)
 	if !ok {
+		logEvaluator.Printf("Read denied - integrity check failed: missingTags=%v", missingTags)
 		result.Decision = AccessDeny
 		result.IntegrityToDrop = missingTags
 		result.Reason = fmt.Sprintf("Resource '%s' has lower integrity than agent requires. "+
@@ -131,6 +144,7 @@ func (e *Evaluator) evaluateRead(
 	// All resource secrecy tags must be present in agent secrecy
 	ok, extraTags := resource.Secrecy.CheckFlow(agentSecrecy)
 	if !ok {
+		logEvaluator.Printf("Read denied - secrecy check failed: extraTags=%v", extraTags)
 		result.Decision = AccessDeny
 		result.SecrecyToAdd = extraTags
 		result.Reason = fmt.Sprintf("Resource '%s' has secrecy requirements that agent doesn't meet. "+
@@ -139,6 +153,7 @@ func (e *Evaluator) evaluateRead(
 		return result
 	}
 
+	logEvaluator.Print("Read access granted")
 	return result
 }
 
