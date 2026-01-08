@@ -56,15 +56,24 @@ jobs:
       - name: Download Go modules
         run: go mod download
 
+      - name: Run unit tests
+        run: |
+          echo "Running unit tests (excluding integration tests)..."
+          go test -v $(go list ./... | grep -v /test/integration)
+          echo "✓ Unit tests passed"
+
       - name: Build binary
         run: |
           RELEASE_TAG="${GITHUB_REF#refs/tags/}"
-          echo "Building binary for tests..."
+          echo "Building binary for integration tests..."
           make build
           echo "✓ Binary built successfully"
 
-      - name: Run tests
-        run: make test
+      - name: Run integration tests
+        run: |
+          echo "Running integration tests with built binary..."
+          go test -v ./test/integration/...
+          echo "✓ Integration tests passed"
 
       - name: Build release binaries
         run: |
