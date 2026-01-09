@@ -33,13 +33,13 @@ func validateJSONSchema(data []byte) error {
 	// Compile the schema
 	compiler := jsonschema.NewCompiler()
 	compiler.Draft = jsonschema.Draft7
-	
+
 	// Add the schema with its $id
 	schemaURL := "https://docs.github.com/gh-aw/schemas/mcp-gateway-config.schema.json"
 	if err := compiler.AddResource(schemaURL, strings.NewReader(string(schemaJSON))); err != nil {
 		return fmt.Errorf("failed to add schema resource: %w", err)
 	}
-	
+
 	schema, err := compiler.Compile(schemaURL)
 	if err != nil {
 		return fmt.Errorf("failed to compile schema: %w", err)
@@ -69,18 +69,18 @@ func formatSchemaError(err error) error {
 	if ve, ok := err.(*jsonschema.ValidationError); ok {
 		var sb strings.Builder
 		sb.WriteString("Configuration validation error:\n")
-		
+
 		// Format the error with instance location and message
 		sb.WriteString(fmt.Sprintf("  at %s: %s", ve.InstanceLocation, ve.Message))
-		
+
 		// Add nested errors if present
 		for _, cause := range ve.Causes {
 			sb.WriteString(fmt.Sprintf("\n  at %s: %s", cause.InstanceLocation, cause.Message))
 		}
-		
+
 		sb.WriteString("\n\nPlease check your configuration against the MCP Gateway specification at:")
 		sb.WriteString("\nhttps://github.com/githubnext/gh-aw/blob/main/docs/src/content/docs/reference/mcp-gateway.md")
-		
+
 		return fmt.Errorf("%s", sb.String())
 	}
 
