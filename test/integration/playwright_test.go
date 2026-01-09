@@ -178,7 +178,7 @@ func TestPlaywrightMCPServer(t *testing.T) {
 			"jsonrpc": "2.0",
 			"method":  "notifications/initialized",
 		}
-		
+
 		// For notifications, we send without expecting a response
 		jsonData, _ := json.Marshal(initializedNotif)
 		req, _ := http.NewRequest("POST", serverURL+"/mcp", bytes.NewBuffer(jsonData))
@@ -189,7 +189,7 @@ func TestPlaywrightMCPServer(t *testing.T) {
 		if err == nil {
 			resp.Body.Close()
 		}
-		
+
 		// Give the server a moment to process the notification
 		time.Sleep(100 * time.Millisecond)
 		t.Log("✓ Sent initialized notification")
@@ -202,13 +202,13 @@ func TestPlaywrightMCPServer(t *testing.T) {
 		// The fact that the server started and we reached this point means
 		// the playwright tools with draft-07 schemas were processed without panicking
 		stderrStr := stderr.String()
-		
+
 		// Check that tools were registered
 		if !strings.Contains(stderrStr, "Registered 22 tools from playwright") &&
-		   !strings.Contains(stderrStr, "Registered tool: playwright___browser_close") {
+			!strings.Contains(stderrStr, "Registered tool: playwright___browser_close") {
 			t.Fatal("Expected playwright tools to be registered in server logs")
 		}
-		
+
 		t.Log("✓ Playwright tools registered successfully (draft-07 schemas handled correctly)")
 	})
 
