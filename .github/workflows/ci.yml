@@ -13,12 +13,12 @@ on:
   workflow_dispatch:
 
 jobs:
-  test:
+  unit-test:
     runs-on: ubuntu-latest
     permissions:
       contents: read
     concurrency:
-      group: ci-${{ github.ref }}-test
+      group: ci-${{ github.ref }}-unit-test
       cancel-in-progress: true
     steps:
       - name: Checkout code
@@ -96,12 +96,12 @@ jobs:
           version: v2.7.2
           args: --timeout=5m
 
-  build:
+  integration-test:
     runs-on: ubuntu-latest
     permissions:
       contents: read
     concurrency:
-      group: ci-${{ github.ref }}-build
+      group: ci-${{ github.ref }}-integration-test
       cancel-in-progress: true
     steps:
       - name: Checkout code

@@ -61,12 +61,16 @@ This creates the `awmg` binary in the project root.
 
 ### Testing
 
-Run the test suite:
+The test suite is split into two types:
+
+#### Unit Tests (No Build Required)
+Run unit tests that test code in isolation without needing the built binary:
 ```bash
-make test
+make test        # Alias for test-unit
+make test-unit   # Run only unit tests (./internal/... packages)
 ```
 
-Run tests with coverage:
+Run unit tests with coverage:
 ```bash
 make coverage
 ```
@@ -74,6 +78,18 @@ make coverage
 For CI environments with JSON output:
 ```bash
 make test-ci
+```
+
+#### Integration Tests (Build Required)
+Run binary integration tests that require a built binary:
+```bash
+make test-integration  # Automatically builds binary if needed
+```
+
+#### Run All Tests
+Run both unit and integration tests:
+```bash
+make test-all
 ```
 
 ### Linting
@@ -256,13 +272,34 @@ go mod tidy
 
 ## Testing
 
+### Test Structure
+
+The project has two types of tests:
+
+1. **Unit Tests** (in `internal/` packages)
+   - Test code in isolation without requiring a built binary
+   - Run quickly and don't need Docker or external dependencies
+   - Located in `*_test.go` files alongside source code
+
+2. **Integration Tests** (in `test/integration/`)
+   - Test the compiled `awmg` binary end-to-end
+   - Require building the binary first (`make build`)
+   - Test actual server behavior, command-line flags, and real process execution
+
 ### Running Tests
 
 ```bash
-# Run all tests
-make test
+# Run unit tests only (fast, no build needed)
+make test        # Alias for test-unit
+make test-unit
 
-# Run tests with coverage
+# Run integration tests (requires binary build)
+make test-integration
+
+# Run all tests (unit + integration)
+make test-all
+
+# Run unit tests with coverage
 make coverage
 
 # Run specific package tests
