@@ -334,4 +334,5 @@ func Execute() {
 func SetVersion(v string) {
 	version = v
 	rootCmd.Version = v
+	config.SetVersion(v)
 }
