@@ -529,3 +529,97 @@ func TestValidateStringPatterns(t *testing.T) {
 		})
 	}
 }
+
+// TestEnhancedErrorMessages verifies that validation errors include version and detailed context
+func TestEnhancedErrorMessages(t *testing.T) {
+	// Set a test version
+	SetVersion("v1.2.3-test")
+
+	tests := []struct {
+		name          string
+		config        string
+		expectInError []string
+	}{
+		{
+			name: "additional property error includes version and details",
+			config: `{
+"mcpServers": {
+"github": {
+"container": "ghcr.io/github/github-mcp-server:latest",
+"unknownField": "value"
+}
+},
+"gateway": {
+"port": 8080,
+"domain": "localhost",
+"apiKey": "test-key"
+}
+}`,
+			expectInError: []string{
+				"v1.2.3-test",
+				"Location:",
+				"Error:",
+				"Details:",
+				"https://github.com/githubnext/gh-aw/blob/main/docs/public/schemas/mcp-gateway-config.schema.json",
+			},
+		},
+		{
+			name: "missing required field error includes version and details",
+			config: `{
+"mcpServers": {
+"github": {
+"container": "ghcr.io/github/github-mcp-server:latest"
+}
+},
+"gateway": {
+"port": 8080,
+"domain": "localhost"
+}
+}`,
+			expectInError: []string{
+				"v1.2.3-test",
+				"Location:",
+				"Error:",
+				"Details:",
+			},
+		},
+		{
+			name: "invalid port value error includes version and details",
+			config: `{
+"mcpServers": {
+"github": {
+"container": "ghcr.io/github/github-mcp-server:latest"
+}
+},
+"gateway": {
+"port": 99999,
+"domain": "localhost",
+"apiKey": "test-key"
+}
+}`,
+			expectInError: []string{
+				"v1.2.3-test",
+				"Location:",
+				"Error:",
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := validateJSONSchema([]byte(tt.config))
+
+			if err == nil {
+				t.Errorf("Expected error but got none")
+				return
+			}
+
+			errStr := err.Error()
+			for _, expected := range tt.expectInError {
+				if !strings.Contains(errStr, expected) {
+					t.Errorf("Expected error to contain %q, but it didn't.\nFull error:\n%s", expected, errStr)
+				}
+			}
+		})
+	}
+}
