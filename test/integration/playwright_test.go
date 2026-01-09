@@ -37,7 +37,13 @@ func TestPlaywrightMCPServer(t *testing.T) {
 		pullCmd := exec.Command("docker", "pull", playwrightImage)
 		pullOutput, pullErr := pullCmd.CombinedOutput()
 		if pullErr != nil {
-			t.Fatalf("Failed to pull playwright MCP server image: %s. Error: %v. Output: %s", playwrightImage, pullErr, string(pullOutput))
+			// Check if it's an access/permission issue (image not publicly available)
+			outputStr := string(pullOutput)
+			if strings.Contains(outputStr, "denied") || strings.Contains(outputStr, "unauthorized") {
+				t.Skipf("Playwright MCP server image not accessible (may be private): %s. Output: %s", playwrightImage, outputStr)
+			}
+			// For other errors (network issues, etc.), fail the test
+			t.Fatalf("Failed to pull playwright MCP server image: %s. Error: %v. Output: %s", playwrightImage, pullErr, outputStr)
 		}
 		t.Logf("Successfully pulled image: %s", playwrightImage)
 	} else {
