@@ -19,7 +19,7 @@ var (
 	urlPattern       = regexp.MustCompile(`^https?://.+`)
 	mountPattern     = regexp.MustCompile(`^[^:]+:[^:]+:(ro|rw)$`)
 	domainVarPattern = regexp.MustCompile(`^\$\{[A-Z_][A-Z0-9_]*\}$`)
-	
+
 	// gatewayVersion stores the version string to include in error messages
 	gatewayVersion = "dev"
 )
@@ -96,7 +96,7 @@ func formatSchemaError(err error) error {
 // formatValidationErrorRecursive recursively formats validation errors with proper indentation
 func formatValidationErrorRecursive(ve *jsonschema.ValidationError, sb *strings.Builder, depth int) {
 	indent := strings.Repeat("  ", depth)
-	
+
 	// Format location and message
 	location := ve.InstanceLocation
 	if location == "" {
@@ -104,20 +104,20 @@ func formatValidationErrorRecursive(ve *jsonschema.ValidationError, sb *strings.
 	}
 	sb.WriteString(fmt.Sprintf("%sLocation: %s\n", indent, location))
 	sb.WriteString(fmt.Sprintf("%sError: %s\n", indent, ve.Message))
-	
+
 	// Add detailed context based on the error message
 	context := formatErrorContext(ve, indent)
 	if context != "" {
 		sb.WriteString(context)
 	}
-	
+
 	// Recursively process nested causes
 	if len(ve.Causes) > 0 {
 		for _, cause := range ve.Causes {
 			formatValidationErrorRecursive(cause, sb, depth+1)
 		}
 	}
-	
+
 	// Add spacing between sibling errors at the same level
 	if depth == 0 {
 		sb.WriteString("\n")
@@ -128,54 +128,54 @@ func formatValidationErrorRecursive(ve *jsonschema.ValidationError, sb *strings.
 func formatErrorContext(ve *jsonschema.ValidationError, prefix string) string {
 	var sb strings.Builder
 	msg := ve.Message
-	
+
 	// For additional properties errors, explain what's wrong
 	if strings.Contains(msg, "additionalProperties") || strings.Contains(msg, "additional property") {
 		sb.WriteString(fmt.Sprintf("%sDetails: Configuration contains field(s) that are not defined in the schema\n", prefix))
 		sb.WriteString(fmt.Sprintf("%s  → Check for typos in field names or remove unsupported fields\n", prefix))
 	}
-	
+
 	// For type errors, show the mismatch
 	if strings.Contains(msg, "expected") && (strings.Contains(msg, "but got") || strings.Contains(msg, "type")) {
 		sb.WriteString(fmt.Sprintf("%sDetails: Type mismatch - the value type doesn't match what's expected\n", prefix))
 		sb.WriteString(fmt.Sprintf("%s  → Verify the value is the correct type (string, number, boolean, object, array)\n", prefix))
 	}
-	
+
 	// For enum errors (invalid values from a set of allowed values)
 	if strings.Contains(msg, "value must be one of") || strings.Contains(msg, "must be") {
 		sb.WriteString(fmt.Sprintf("%sDetails: Invalid value - the field has a restricted set of allowed values\n", prefix))
 		sb.WriteString(fmt.Sprintf("%s  → Check the documentation for the list of valid values\n", prefix))
 	}
-	
+
 	// For missing required properties
 	if strings.Contains(msg, "missing properties") || strings.Contains(msg, "required") {
 		sb.WriteString(fmt.Sprintf("%sDetails: Required field(s) are missing\n", prefix))
 		sb.WriteString(fmt.Sprintf("%s  → Add the required field(s) to your configuration\n", prefix))
 	}
-	
+
 	// For pattern validation failures (regex patterns)
 	if strings.Contains(msg, "does not match pattern") || strings.Contains(msg, "pattern") {
 		sb.WriteString(fmt.Sprintf("%sDetails: Value format is incorrect\n", prefix))
 		sb.WriteString(fmt.Sprintf("%s  → The value must match a specific format or pattern\n", prefix))
 	}
-	
+
 	// For minimum/maximum constraint violations
 	if strings.Contains(msg, "must be >=") || strings.Contains(msg, "must be <=") || strings.Contains(msg, "minimum") || strings.Contains(msg, "maximum") {
 		sb.WriteString(fmt.Sprintf("%sDetails: Value is outside the allowed range\n", prefix))
 		sb.WriteString(fmt.Sprintf("%s  → Adjust the value to be within the valid range\n", prefix))
 	}
-	
+
 	// For oneOf errors (typically type selection issues)
 	if strings.Contains(msg, "doesn't validate with any of") || strings.Contains(msg, "oneOf") {
 		sb.WriteString(fmt.Sprintf("%sDetails: Configuration doesn't match any of the expected formats\n", prefix))
 		sb.WriteString(fmt.Sprintf("%s  → Review the structure and ensure it matches one of the valid configuration types\n", prefix))
 	}
-	
+
 	// Add keyword location if it provides useful context
 	if ve.KeywordLocation != "" && ve.KeywordLocation != ve.InstanceLocation {
 		sb.WriteString(fmt.Sprintf("%sSchema location: %s\n", prefix, ve.KeywordLocation))
 	}
-	
+
 	return sb.String()
 }
 
