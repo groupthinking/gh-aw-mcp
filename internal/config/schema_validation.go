@@ -18,7 +18,6 @@ var (
 	containerPattern = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9./_-]*(:([a-zA-Z0-9._-]+|latest))?$`)
 	urlPattern       = regexp.MustCompile(`^https?://.+`)
 	mountPattern     = regexp.MustCompile(`^[^:]+:[^:]+:(ro|rw)$`)
-	portVarPattern   = regexp.MustCompile(`^\$\{[A-Z_][A-Z0-9_]*\}$`)
 	domainVarPattern = regexp.MustCompile(`^\$\{[A-Z_][A-Z0-9_]*\}$`)
 )
 
@@ -84,7 +83,7 @@ func formatSchemaError(err error) error {
 		return fmt.Errorf("%s", sb.String())
 	}
 
-	return fmt.Errorf("Configuration validation error: %s", err.Error())
+	return fmt.Errorf("configuration validation error: %s", err.Error())
 }
 
 // validateStringPatterns validates string fields against regex patterns from the schema
