@@ -102,8 +102,8 @@ func formatValidationErrorRecursive(ve *jsonschema.ValidationError, sb *strings.
 	if location == "" {
 		location = "<root>"
 	}
-	sb.WriteString(fmt.Sprintf("%sLocation: %s\n", indent, location))
-	sb.WriteString(fmt.Sprintf("%sError: %s\n", indent, ve.Message))
+	fmt.Fprintf(sb, "%sLocation: %s\n", indent, location)
+	fmt.Fprintf(sb, "%sError: %s\n", indent, ve.Message)
 
 	// Add detailed context based on the error message
 	context := formatErrorContext(ve, indent)
