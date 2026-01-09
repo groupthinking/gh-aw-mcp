@@ -26,7 +26,7 @@ func TestPlaywrightMCPServer(t *testing.T) {
 	}
 
 	// Check if playwright MCP server image is available or can be pulled
-	playwrightImage := "ghcr.io/github/mcp-server-playwright:latest"
+	playwrightImage := "ghcr.io/microsoft/playwright-mcp:latest"
 	t.Logf("Checking for playwright MCP server image: %s", playwrightImage)
 
 	// Check if the image exists locally
