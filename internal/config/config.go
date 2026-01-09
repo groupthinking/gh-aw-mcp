@@ -86,21 +86,16 @@ func LoadFromStdin() (*Config, error) {
 
 	logConfig.Printf("Read %d bytes from stdin", len(data))
 
-	// First unmarshal into a generic map to detect unknown fields (spec 4.3.1)
-	var rawConfig map[string]interface{}
-	if err := json.Unmarshal(data, &rawConfig); err != nil {
-		return nil, fmt.Errorf("failed to parse JSON: %w", err)
+	// Pre-process: normalize "local" type to "stdio" for backward compatibility
+	// This must happen before schema validation since schema only accepts "stdio" or "http"
+	data, err = normalizeLocalType(data)
+	if err != nil {
+		return nil, fmt.Errorf("failed to normalize configuration: %w", err)
 	}
 
-	// Check for unknown top-level fields
-	knownFields := map[string]bool{
-		"mcpServers": true,
-		"gateway":    true,
-	}
-	for field := range rawConfig {
-		if !knownFields[field] {
-			return nil, fmt.Errorf("configuration error: unrecognized field '%s' at top level. Please check the specification version. Known fields are: mcpServers, gateway", field)
-		}
+	// Validate against JSON schema first (fail-fast, spec-compliant)
+	if err := validateJSONSchema(data); err != nil {
+		return nil, err
 	}
 
 	var stdinCfg StdinConfig
@@ -110,7 +105,12 @@ func LoadFromStdin() (*Config, error) {
 
 	logConfig.Printf("Parsed stdin config with %d servers", len(stdinCfg.MCPServers))
 
-	// Validate gateway configuration first (fail-fast)
+	// Validate string patterns from schema (regex constraints)
+	if err := validateStringPatterns(&stdinCfg); err != nil {
+		return nil, err
+	}
+
+	// Validate gateway configuration (additional checks)
 	if err := validateGatewayConfig(stdinCfg.Gateway); err != nil {
 		return nil, err
 	}
@@ -221,4 +221,47 @@ func LoadFromStdin() (*Config, error) {
 
 	logConfig.Printf("Converted stdin config to internal format with %d servers", len(cfg.Servers))
 	return cfg, nil
+}
+
+// normalizeLocalType normalizes "local" type to "stdio" for backward compatibility
+// This allows the configuration to pass schema validation which only accepts "stdio" or "http"
+func normalizeLocalType(data []byte) ([]byte, error) {
+	var rawConfig map[string]interface{}
+	if err := json.Unmarshal(data, &rawConfig); err != nil {
+		return nil, err
+	}
+
+	// Check if mcpServers exists
+	mcpServers, ok := rawConfig["mcpServers"]
+	if !ok {
+		return data, nil // No mcpServers, return as is
+	}
+
+	servers, ok := mcpServers.(map[string]interface{})
+	if !ok {
+		return data, nil // mcpServers is not a map, return as is
+	}
+
+	// Iterate through servers and normalize "local" to "stdio"
+	modified := false
+	for _, serverConfig := range servers {
+		server, ok := serverConfig.(map[string]interface{})
+		if !ok {
+			continue
+		}
+
+		if typeVal, exists := server["type"]; exists {
+			if typeStr, ok := typeVal.(string); ok && typeStr == "local" {
+				server["type"] = "stdio"
+				modified = true
+			}
+		}
+	}
+
+	// If we modified anything, re-marshal the data
+	if modified {
+		return json.Marshal(rawConfig)
+	}
+
+	return data, nil
 }
