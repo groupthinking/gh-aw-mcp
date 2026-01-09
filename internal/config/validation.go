@@ -209,20 +209,20 @@ func validateGatewayConfig(gateway *StdinGatewayConfig) error {
 		}
 	}
 
-	// Validate timeout values
-	if gateway.StartupTimeout != nil && *gateway.StartupTimeout < 0 {
+	// Validate timeout values (minimum 1 per schema)
+	if gateway.StartupTimeout != nil && *gateway.StartupTimeout < 1 {
 		return &ValidationError{
 			Field:      "startupTimeout",
-			Message:    fmt.Sprintf("startupTimeout must be non-negative, got %d", *gateway.StartupTimeout),
+			Message:    fmt.Sprintf("startupTimeout must be at least 1, got %d", *gateway.StartupTimeout),
 			JSONPath:   "gateway.startupTimeout",
 			Suggestion: "Use a positive number of seconds (e.g., 30)",
 		}
 	}
 
-	if gateway.ToolTimeout != nil && *gateway.ToolTimeout < 0 {
+	if gateway.ToolTimeout != nil && *gateway.ToolTimeout < 1 {
 		return &ValidationError{
 			Field:      "toolTimeout",
-			Message:    fmt.Sprintf("toolTimeout must be non-negative, got %d", *gateway.ToolTimeout),
+			Message:    fmt.Sprintf("toolTimeout must be at least 1, got %d", *gateway.ToolTimeout),
 			JSONPath:   "gateway.toolTimeout",
 			Suggestion: "Use a positive number of seconds (e.g., 60)",
 		}

@@ -1,0 +1,531 @@
+package config
+
+import (
+	"strings"
+	"testing"
+)
+
+func TestValidateJSONSchema(t *testing.T) {
+	tests := []struct {
+		name      string
+		config    string
+		shouldErr bool
+		errorMsg  string
+	}{
+		{
+			name: "valid minimal config",
+			config: `{
+				"mcpServers": {
+					"github": {
+						"container": "ghcr.io/github/github-mcp-server:latest"
+					}
+				},
+				"gateway": {
+					"port": 8080,
+					"domain": "localhost",
+					"apiKey": "test-key"
+				}
+			}`,
+			shouldErr: false,
+		},
+		{
+			name: "valid config with all fields",
+			config: `{
+				"mcpServers": {
+					"github": {
+						"type": "stdio",
+						"container": "ghcr.io/github/github-mcp-server:latest",
+						"entrypoint": "/bin/bash",
+						"entrypointArgs": ["--verbose"],
+						"mounts": ["/host:/container:ro"],
+						"env": {"TOKEN": "value"},
+						"args": ["--flag"]
+					}
+				},
+				"gateway": {
+					"port": 8080,
+					"domain": "localhost",
+					"apiKey": "test-key",
+					"startupTimeout": 30,
+					"toolTimeout": 60
+				}
+			}`,
+			shouldErr: false,
+		},
+		{
+			name: "valid http server config",
+			config: `{
+				"mcpServers": {
+					"remote": {
+						"type": "http",
+						"url": "https://api.example.com/mcp",
+						"headers": {"Authorization": "Bearer token"}
+					}
+				},
+				"gateway": {
+					"port": 8080,
+					"domain": "localhost",
+					"apiKey": "test-key"
+				}
+			}`,
+			shouldErr: false,
+		},
+		{
+			name: "missing required field - mcpServers",
+			config: `{
+				"gateway": {
+					"port": 8080,
+					"domain": "localhost",
+					"apiKey": "test-key"
+				}
+			}`,
+			shouldErr: true,
+			errorMsg:  "validation error",
+		},
+		{
+			name: "missing required field - gateway",
+			config: `{
+				"mcpServers": {
+					"github": {
+						"container": "ghcr.io/github/github-mcp-server:latest"
+					}
+				}
+			}`,
+			shouldErr: true,
+			errorMsg:  "validation error",
+		},
+		{
+			name: "missing required field - gateway.port",
+			config: `{
+				"mcpServers": {
+					"github": {
+						"container": "ghcr.io/github/github-mcp-server:latest"
+					}
+				},
+				"gateway": {
+					"domain": "localhost",
+					"apiKey": "test-key"
+				}
+			}`,
+			shouldErr: true,
+			errorMsg:  "validation error",
+		},
+		{
+			name: "missing required field - gateway.domain",
+			config: `{
+				"mcpServers": {
+					"github": {
+						"container": "ghcr.io/github/github-mcp-server:latest"
+					}
+				},
+				"gateway": {
+					"port": 8080,
+					"apiKey": "test-key"
+				}
+			}`,
+			shouldErr: true,
+			errorMsg:  "validation error",
+		},
+		{
+			name: "missing required field - gateway.apiKey",
+			config: `{
+				"mcpServers": {
+					"github": {
+						"container": "ghcr.io/github/github-mcp-server:latest"
+					}
+				},
+				"gateway": {
+					"port": 8080,
+					"domain": "localhost"
+				}
+			}`,
+			shouldErr: true,
+			errorMsg:  "validation error",
+		},
+		{
+			name: "missing required field - stdio server container",
+			config: `{
+				"mcpServers": {
+					"github": {
+						"type": "stdio"
+					}
+				},
+				"gateway": {
+					"port": 8080,
+					"domain": "localhost",
+					"apiKey": "test-key"
+				}
+			}`,
+			shouldErr: true,
+			errorMsg:  "validation error",
+		},
+		{
+			name: "missing required field - http server url",
+			config: `{
+				"mcpServers": {
+					"remote": {
+						"type": "http"
+					}
+				},
+				"gateway": {
+					"port": 8080,
+					"domain": "localhost",
+					"apiKey": "test-key"
+				}
+			}`,
+			shouldErr: true,
+			errorMsg:  "validation error",
+		},
+		{
+			name: "invalid port - too high",
+			config: `{
+				"mcpServers": {
+					"github": {
+						"container": "ghcr.io/github/github-mcp-server:latest"
+					}
+				},
+				"gateway": {
+					"port": 99999,
+					"domain": "localhost",
+					"apiKey": "test-key"
+				}
+			}`,
+			shouldErr: true,
+			errorMsg:  "validation error",
+		},
+		{
+			name: "invalid port - zero",
+			config: `{
+				"mcpServers": {
+					"github": {
+						"container": "ghcr.io/github/github-mcp-server:latest"
+					}
+				},
+				"gateway": {
+					"port": 0,
+					"domain": "localhost",
+					"apiKey": "test-key"
+				}
+			}`,
+			shouldErr: true,
+			errorMsg:  "validation error",
+		},
+		{
+			name: "invalid timeout - zero",
+			config: `{
+				"mcpServers": {
+					"github": {
+						"container": "ghcr.io/github/github-mcp-server:latest"
+					}
+				},
+				"gateway": {
+					"port": 8080,
+					"domain": "localhost",
+					"apiKey": "test-key",
+					"startupTimeout": 0
+				}
+			}`,
+			shouldErr: true,
+			errorMsg:  "validation error",
+		},
+		{
+			name: "additional properties not allowed at root",
+			config: `{
+				"mcpServers": {
+					"github": {
+						"container": "ghcr.io/github/github-mcp-server:latest"
+					}
+				},
+				"gateway": {
+					"port": 8080,
+					"domain": "localhost",
+					"apiKey": "test-key"
+				},
+				"unknownField": "value"
+			}`,
+			shouldErr: true,
+			errorMsg:  "validation error",
+		},
+		{
+			name: "additional properties not allowed in stdio server",
+			config: `{
+				"mcpServers": {
+					"github": {
+						"container": "ghcr.io/github/github-mcp-server:latest",
+						"unknownField": "value"
+					}
+				},
+				"gateway": {
+					"port": 8080,
+					"domain": "localhost",
+					"apiKey": "test-key"
+				}
+			}`,
+			shouldErr: true,
+			errorMsg:  "validation error",
+		},
+		{
+			name: "additional properties not allowed in http server",
+			config: `{
+				"mcpServers": {
+					"remote": {
+						"type": "http",
+						"url": "https://api.example.com/mcp",
+						"unknownField": "value"
+					}
+				},
+				"gateway": {
+					"port": 8080,
+					"domain": "localhost",
+					"apiKey": "test-key"
+				}
+			}`,
+			shouldErr: true,
+			errorMsg:  "validation error",
+		},
+		{
+			name: "additional properties not allowed in gateway",
+			config: `{
+				"mcpServers": {
+					"github": {
+						"container": "ghcr.io/github/github-mcp-server:latest"
+					}
+				},
+				"gateway": {
+					"port": 8080,
+					"domain": "localhost",
+					"apiKey": "test-key",
+					"unknownField": "value"
+				}
+			}`,
+			shouldErr: true,
+			errorMsg:  "validation error",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := validateJSONSchema([]byte(tt.config))
+
+			if tt.shouldErr {
+				if err == nil {
+					t.Errorf("Expected error but got none")
+				} else if tt.errorMsg != "" && !strings.Contains(err.Error(), tt.errorMsg) {
+					t.Errorf("Expected error containing %q, got: %v", tt.errorMsg, err)
+				}
+			} else {
+				if err != nil {
+					t.Errorf("Unexpected error: %v", err)
+				}
+			}
+		})
+	}
+}
+
+func TestValidateStringPatterns(t *testing.T) {
+	tests := []struct {
+		name      string
+		config    *StdinConfig
+		shouldErr bool
+		errorMsg  string
+	}{
+		{
+			name: "valid container pattern",
+			config: &StdinConfig{
+				MCPServers: map[string]*StdinServerConfig{
+					"test": {
+						Type:      "stdio",
+						Container: "ghcr.io/owner/image:latest",
+					},
+				},
+			},
+			shouldErr: false,
+		},
+		{
+			name: "valid container pattern - no tag",
+			config: &StdinConfig{
+				MCPServers: map[string]*StdinServerConfig{
+					"test": {
+						Type:      "stdio",
+						Container: "ghcr.io/owner/image",
+					},
+				},
+			},
+			shouldErr: false,
+		},
+		{
+			name: "valid container pattern - version tag",
+			config: &StdinConfig{
+				MCPServers: map[string]*StdinServerConfig{
+					"test": {
+						Type:      "stdio",
+						Container: "ghcr.io/owner/image:v1.2.3",
+					},
+				},
+			},
+			shouldErr: false,
+		},
+		{
+			name: "invalid container pattern - starts with special char",
+			config: &StdinConfig{
+				MCPServers: map[string]*StdinServerConfig{
+					"test": {
+						Type:      "stdio",
+						Container: "/invalid/image:latest",
+					},
+				},
+			},
+			shouldErr: true,
+			errorMsg:  "does not match required pattern",
+		},
+		{
+			name: "valid mount pattern",
+			config: &StdinConfig{
+				MCPServers: map[string]*StdinServerConfig{
+					"test": {
+						Type:      "stdio",
+						Container: "test:latest",
+						Mounts:    []string{"/host/path:/container/path:ro"},
+					},
+				},
+			},
+			shouldErr: false,
+		},
+		{
+			name: "invalid mount pattern - missing mode",
+			config: &StdinConfig{
+				MCPServers: map[string]*StdinServerConfig{
+					"test": {
+						Type:      "stdio",
+						Container: "test:latest",
+						Mounts:    []string{"/host/path:/container/path"},
+					},
+				},
+			},
+			shouldErr: true,
+			errorMsg:  "does not match required pattern",
+		},
+		{
+			name: "valid http url pattern",
+			config: &StdinConfig{
+				MCPServers: map[string]*StdinServerConfig{
+					"test": {
+						Type: "http",
+						URL:  "https://api.example.com/mcp",
+					},
+				},
+			},
+			shouldErr: false,
+		},
+		{
+			name: "valid http url pattern - http scheme",
+			config: &StdinConfig{
+				MCPServers: map[string]*StdinServerConfig{
+					"test": {
+						Type: "http",
+						URL:  "http://localhost:8080/mcp",
+					},
+				},
+			},
+			shouldErr: false,
+		},
+		{
+			name: "invalid url pattern - no scheme",
+			config: &StdinConfig{
+				MCPServers: map[string]*StdinServerConfig{
+					"test": {
+						Type: "http",
+						URL:  "api.example.com/mcp",
+					},
+				},
+			},
+			shouldErr: true,
+			errorMsg:  "does not match required pattern",
+		},
+		{
+			name: "valid domain - localhost",
+			config: &StdinConfig{
+				Gateway: &StdinGatewayConfig{
+					Port:   intPtr(8080),
+					Domain: "localhost",
+				},
+			},
+			shouldErr: false,
+		},
+		{
+			name: "valid domain - host.docker.internal",
+			config: &StdinConfig{
+				Gateway: &StdinGatewayConfig{
+					Port:   intPtr(8080),
+					Domain: "host.docker.internal",
+				},
+			},
+			shouldErr: false,
+		},
+		{
+			name: "valid domain - variable expression",
+			config: &StdinConfig{
+				Gateway: &StdinGatewayConfig{
+					Port:   intPtr(8080),
+					Domain: "${MCP_GATEWAY_DOMAIN}",
+				},
+			},
+			shouldErr: false,
+		},
+		{
+			name: "invalid domain - other string",
+			config: &StdinConfig{
+				Gateway: &StdinGatewayConfig{
+					Port:   intPtr(8080),
+					Domain: "example.com",
+				},
+			},
+			shouldErr: true,
+			errorMsg:  "must be 'localhost', 'host.docker.internal', or a variable expression",
+		},
+		{
+			name: "valid timeout values",
+			config: &StdinConfig{
+				Gateway: &StdinGatewayConfig{
+					Port:           intPtr(8080),
+					Domain:         "localhost",
+					StartupTimeout: intPtr(30),
+					ToolTimeout:    intPtr(60),
+				},
+			},
+			shouldErr: false,
+		},
+		{
+			name: "invalid entrypoint - empty string",
+			config: &StdinConfig{
+				MCPServers: map[string]*StdinServerConfig{
+					"test": {
+						Type:       "stdio",
+						Container:  "test:latest",
+						Entrypoint: "   ",
+					},
+				},
+			},
+			shouldErr: true,
+			errorMsg:  "entrypoint cannot be empty or whitespace only",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := validateStringPatterns(tt.config)
+
+			if tt.shouldErr {
+				if err == nil {
+					t.Errorf("Expected error but got none")
+				} else if tt.errorMsg != "" && !strings.Contains(err.Error(), tt.errorMsg) {
+					t.Errorf("Expected error containing %q, got: %v", tt.errorMsg, err)
+				}
+			} else {
+				if err != nil {
+					t.Errorf("Unexpected error: %v", err)
+				}
+			}
+		})
+	}
+}

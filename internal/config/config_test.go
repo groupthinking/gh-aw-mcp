@@ -20,6 +20,11 @@ func TestLoadFromStdin_ValidJSON(t *testing.T) {
 					"PASSTHROUGH_VAR": ""
 				}
 			}
+		},
+		"gateway": {
+			"port": 8080,
+			"domain": "localhost",
+			"apiKey": "test-key"
 		}
 	}`
 
@@ -120,6 +125,7 @@ func TestLoadFromStdin_WithGateway(t *testing.T) {
 		},
 		"gateway": {
 			"port": 8080,
+			"domain": "localhost",
 			"apiKey": "test-key"
 		}
 	}`
@@ -165,6 +171,11 @@ func TestLoadFromStdin_UnsupportedType(t *testing.T) {
 				"type": "stdio",
 				"container": "test/server:latest"
 			}
+		},
+		"gateway": {
+			"port": 8080,
+			"domain": "localhost",
+			"apiKey": "test-key"
 		}
 	}`
 
@@ -185,7 +196,7 @@ func TestLoadFromStdin_UnsupportedType(t *testing.T) {
 	}
 
 	// Error should mention validation issue
-	if !strings.Contains(err.Error(), "remote") && !strings.Contains(err.Error(), "required") {
+	if !strings.Contains(err.Error(), "validation error") {
 		t.Errorf("Expected validation error, got: %v", err)
 	}
 
@@ -206,6 +217,11 @@ func TestLoadFromStdin_DirectCommand(t *testing.T) {
 					"NODE_ENV": "production"
 				}
 			}
+		},
+		"gateway": {
+			"port": 8080,
+			"domain": "localhost",
+			"apiKey": "test-key"
 		}
 	}`
 
@@ -225,8 +241,8 @@ func TestLoadFromStdin_DirectCommand(t *testing.T) {
 		t.Fatal("Expected error for deprecated 'command' field, got nil")
 	}
 
-	if !strings.Contains(err.Error(), "command") && !strings.Contains(err.Error(), "container") {
-		t.Errorf("Expected validation error about command/container field, got: %v", err)
+	if !strings.Contains(err.Error(), "validation error") {
+		t.Errorf("Expected validation error, got: %v", err)
 	}
 
 	// Config should be nil on validation error
@@ -253,8 +269,9 @@ func TestLoadFromStdin_InvalidJSON(t *testing.T) {
 		t.Error("Expected error for invalid JSON, got nil")
 	}
 
-	if !strings.Contains(err.Error(), "parse JSON") {
-		t.Errorf("Expected 'parse JSON' error, got: %v", err)
+	// JSON parsing error happens before schema validation
+	if !strings.Contains(err.Error(), "invalid character") && !strings.Contains(err.Error(), "JSON") {
+		t.Errorf("Expected JSON parsing error, got: %v", err)
 	}
 }
 
@@ -269,6 +286,11 @@ func TestLoadFromStdin_StdioType(t *testing.T) {
 					"NODE_ENV": "test"
 				}
 			}
+		},
+		"gateway": {
+			"port": 8080,
+			"domain": "localhost",
+			"apiKey": "test-key"
 		}
 	}`
 
@@ -335,6 +357,11 @@ func TestLoadFromStdin_HttpType(t *testing.T) {
 				"container": "test/server:latest",
 				"entrypointArgs": ["server.js"]
 			}
+		},
+		"gateway": {
+			"port": 8080,
+			"domain": "localhost",
+			"apiKey": "test-key"
 		}
 	}`
 
@@ -375,6 +402,11 @@ func TestLoadFromStdin_LocalTypeBackwardCompatibility(t *testing.T) {
 				"container": "test/server:latest",
 				"entrypointArgs": ["server.js"]
 			}
+		},
+		"gateway": {
+			"port": 8080,
+			"domain": "localhost",
+			"apiKey": "test-key"
 		}
 	}`
 
@@ -427,7 +459,7 @@ func TestLoadFromStdin_GatewayWithAllFields(t *testing.T) {
 		"gateway": {
 			"port": 8080,
 			"apiKey": "test-key-123",
-			"domain": "example.com",
+			"domain": "localhost",
 			"startupTimeout": 30,
 			"toolTimeout": 60
 		}
@@ -464,8 +496,8 @@ func TestLoadFromStdin_GatewayWithAllFields(t *testing.T) {
 		t.Errorf("Expected gateway API key 'test-key-123', got '%s'", stdinCfg.Gateway.APIKey)
 	}
 
-	if stdinCfg.Gateway.Domain != "example.com" {
-		t.Errorf("Expected gateway domain 'example.com', got '%s'", stdinCfg.Gateway.Domain)
+	if stdinCfg.Gateway.Domain != "localhost" {
+		t.Errorf("Expected gateway domain 'localhost', got '%s'", stdinCfg.Gateway.Domain)
 	}
 
 	if stdinCfg.Gateway.StartupTimeout == nil || *stdinCfg.Gateway.StartupTimeout != startupTimeout {
@@ -484,6 +516,11 @@ func TestLoadFromStdin_ServerWithURL(t *testing.T) {
 				"type": "http",
 				"url": "https://example.com/mcp"
 			}
+		},
+		"gateway": {
+			"port": 8080,
+			"domain": "localhost",
+			"apiKey": "test-key"
 		}
 	}`
 
@@ -535,6 +572,11 @@ func TestLoadFromStdin_MixedServerTypes(t *testing.T) {
 				"type": "http",
 				"url": "https://example.com/mcp"
 			}
+		},
+		"gateway": {
+			"port": 8080,
+			"domain": "localhost",
+			"apiKey": "test-key"
 		}
 	}`
 
@@ -588,6 +630,11 @@ func TestLoadFromStdin_ContainerWithStdioType(t *testing.T) {
 					"TOKEN": ""
 				}
 			}
+		},
+		"gateway": {
+			"port": 8080,
+			"domain": "localhost",
+			"apiKey": "test-key"
 		}
 	}`
 
@@ -667,6 +714,11 @@ func TestLoadFromStdin_WithEntrypoint(t *testing.T) {
 				"entrypoint": "/custom/entrypoint.sh",
 				"entrypointArgs": ["--verbose"]
 			}
+		},
+		"gateway": {
+			"port": 8080,
+			"domain": "localhost",
+			"apiKey": "test-key"
 		}
 	}`
 
@@ -721,6 +773,11 @@ func TestLoadFromStdin_WithMounts(t *testing.T) {
 					"/host/data:/app/data:rw"
 				]
 			}
+		},
+		"gateway": {
+			"port": 8080,
+			"domain": "localhost",
+			"apiKey": "test-key"
 		}
 	}`
 
@@ -773,6 +830,11 @@ func TestLoadFromStdin_WithAllNewFields(t *testing.T) {
 					"DEBUG": "true"
 				}
 			}
+		},
+		"gateway": {
+			"port": 8080,
+			"domain": "localhost",
+			"apiKey": "test-key"
 		}
 	}`
 
@@ -857,22 +919,22 @@ func TestLoadFromStdin_InvalidMountFormat(t *testing.T) {
 		{
 			name:     "missing mode",
 			mounts:   `["/host:/container"]`,
-			errorMsg: "invalid mount format",
+			errorMsg: "validation error",
 		},
 		{
 			name:     "invalid mode",
 			mounts:   `["/host:/container:invalid"]`,
-			errorMsg: "invalid mount mode",
+			errorMsg: "validation error",
 		},
 		{
 			name:     "empty source",
 			mounts:   `[":/container:ro"]`,
-			errorMsg: "mount source cannot be empty",
+			errorMsg: "validation error",
 		},
 		{
 			name:     "empty destination",
 			mounts:   `["/host::ro"]`,
-			errorMsg: "mount destination cannot be empty",
+			errorMsg: "validation error",
 		},
 	}
 
@@ -885,6 +947,11 @@ func TestLoadFromStdin_InvalidMountFormat(t *testing.T) {
 						"container": "test:latest",
 						"mounts": %s
 					}
+				},
+				"gateway": {
+					"port": 8080,
+					"domain": "localhost",
+					"apiKey": "test-key"
 				}
 			}`, tt.mounts)
 

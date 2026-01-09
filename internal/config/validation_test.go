@@ -408,7 +408,15 @@ func TestValidateGatewayConfig(t *testing.T) {
 				StartupTimeout: intPtr(-1),
 			},
 			shouldErr: true,
-			errorMsg:  "startupTimeout must be non-negative",
+			errorMsg:  "startupTimeout must be at least 1",
+		},
+		{
+			name: "zero startupTimeout",
+			gateway: &StdinGatewayConfig{
+				StartupTimeout: intPtr(0),
+			},
+			shouldErr: true,
+			errorMsg:  "startupTimeout must be at least 1",
 		},
 		{
 			name: "negative toolTimeout",
@@ -416,7 +424,15 @@ func TestValidateGatewayConfig(t *testing.T) {
 				ToolTimeout: intPtr(-1),
 			},
 			shouldErr: true,
-			errorMsg:  "toolTimeout must be non-negative",
+			errorMsg:  "toolTimeout must be at least 1",
+		},
+		{
+			name: "zero toolTimeout",
+			gateway: &StdinGatewayConfig{
+				ToolTimeout: intPtr(0),
+			},
+			shouldErr: true,
+			errorMsg:  "toolTimeout must be at least 1",
 		},
 	}
 
@@ -453,6 +469,11 @@ func TestLoadFromStdin_WithVariableExpansion(t *testing.T) {
 					"LITERAL": "static-value"
 				}
 			}
+		},
+		"gateway": {
+			"port": 8080,
+			"domain": "localhost",
+			"apiKey": "test-key"
 		}
 	}`
 
@@ -488,6 +509,11 @@ func TestLoadFromStdin_UndefinedVariable(t *testing.T) {
 					"TOKEN": "${UNDEFINED_GITHUB_TOKEN}"
 				}
 			}
+		},
+		"gateway": {
+			"port": 8080,
+			"domain": "localhost",
+			"apiKey": "test-key"
 		}
 	}`
 
@@ -528,10 +554,15 @@ func TestLoadFromStdin_ValidationErrors(t *testing.T) {
 					"test": {
 						"type": "stdio"
 					}
+				},
+				"gateway": {
+					"port": 8080,
+					"domain": "localhost",
+					"apiKey": "test-key"
 				}
 			}`,
 			shouldErr: true,
-			errorMsg:  "'container' is required",
+			errorMsg:  "validation error",
 		},
 		{
 			name: "command field not supported",
@@ -542,10 +573,15 @@ func TestLoadFromStdin_ValidationErrors(t *testing.T) {
 						"command": "node",
 						"container": "test:latest"
 					}
+				},
+				"gateway": {
+					"port": 8080,
+					"domain": "localhost",
+					"apiKey": "test-key"
 				}
 			}`,
 			shouldErr: true,
-			errorMsg:  "'command' field is not supported",
+			errorMsg:  "validation error",
 		},
 		{
 			name: "invalid gateway port",
@@ -557,11 +593,13 @@ func TestLoadFromStdin_ValidationErrors(t *testing.T) {
 					}
 				},
 				"gateway": {
-					"port": 99999
+					"port": 99999,
+					"domain": "localhost",
+					"apiKey": "test-key"
 				}
 			}`,
 			shouldErr: true,
-			errorMsg:  "port must be between",
+			errorMsg:  "validation error",
 		},
 	}
 
