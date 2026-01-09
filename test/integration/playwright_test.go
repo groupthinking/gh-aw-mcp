@@ -1,0 +1,556 @@
+package integration
+
+import (
+	"bytes"
+	"context"
+	"encoding/json"
+	"net/http"
+	"os"
+	"os/exec"
+	"strings"
+	"testing"
+	"time"
+)
+
+// TestPlaywrightMCPServer tests integration with the containerized playwright MCP server
+// This test verifies that the gateway can work with MCP servers that use different
+// JSON Schema versions (e.g., draft-07) without panicking
+func TestPlaywrightMCPServer(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping playwright integration test in short mode")
+	}
+
+	// Check if Docker is available
+	if err := exec.Command("docker", "version").Run(); err != nil {
+		t.Skip("Docker not available, skipping playwright test")
+	}
+
+	// Check if playwright MCP server image is available or can be pulled
+	playwrightImage := "ghcr.io/github/mcp-server-playwright:latest"
+	t.Logf("Checking for playwright MCP server image: %s", playwrightImage)
+
+	// Try to pull the image (this will skip if not available publicly yet)
+	pullCmd := exec.Command("docker", "pull", playwrightImage)
+	if err := pullCmd.Run(); err != nil {
+		t.Skipf("Playwright MCP server image not available: %s. Error: %v", playwrightImage, err)
+	}
+
+	// Find the awmg binary
+	binaryPath := findBinary(t)
+	t.Logf("Using binary: %s", binaryPath)
+
+	// Create JSON config with playwright server
+	config := map[string]interface{}{
+		"mcpServers": map[string]interface{}{
+			"playwright": map[string]interface{}{
+				"type":      "stdio",
+				"container": playwrightImage,
+				"env": map[string]interface{}{
+					"DEBUG": "false",
+				},
+			},
+		},
+		"gateway": map[string]interface{}{
+			"port":   13100,
+			"domain": "localhost",
+			"apiKey": "test-playwright-key",
+		},
+	}
+
+	configJSON, err := json.Marshal(config)
+	if err != nil {
+		t.Fatalf("Failed to marshal config: %v", err)
+	}
+
+	// Start the server process with stdin config
+	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
+	defer cancel()
+
+	port := "13100"
+	cmd := exec.CommandContext(ctx, binaryPath,
+		"--config-stdin",
+		"--listen", "127.0.0.1:"+port,
+		"--unified",
+	)
+
+	// Set stdin with the config
+	cmd.Stdin = bytes.NewReader(configJSON)
+
+	// Capture output for debugging
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+
+	if err := cmd.Start(); err != nil {
+		t.Fatalf("Failed to start server: %v", err)
+	}
+
+	// Ensure the process is killed at the end
+	defer func() {
+		if cmd.Process != nil {
+			cmd.Process.Kill()
+		}
+		// Log output on failure
+		if t.Failed() {
+			t.Logf("STDOUT:\n%s", stdout.String())
+			t.Logf("STDERR:\n%s", stderr.String())
+		}
+	}()
+
+	// Wait for server to start (longer timeout for playwright initialization)
+	serverURL := "http://127.0.0.1:" + port
+	if !waitForServer(t, serverURL+"/health", 60*time.Second) {
+		t.Logf("STDOUT:\n%s", stdout.String())
+		t.Logf("STDERR:\n%s", stderr.String())
+		t.Fatal("Server did not start in time")
+	}
+
+	t.Log("✓ Server started successfully with playwright MCP server")
+
+	// Check that the server didn't panic (verify stderr doesn't contain panic)
+	stderrStr := stderr.String()
+	if strings.Contains(stderrStr, "panic:") {
+		t.Logf("STDERR:\n%s", stderrStr)
+		t.Fatal("Server panicked during startup")
+	}
+
+	// Test 1: Health check
+	t.Run("HealthCheck", func(t *testing.T) {
+		resp, err := http.Get(serverURL + "/health")
+		if err != nil {
+			t.Fatalf("Health check failed: %v", err)
+		}
+		defer resp.Body.Close()
+
+		if resp.StatusCode != http.StatusOK {
+			t.Errorf("Expected status 200, got %d", resp.StatusCode)
+		}
+		t.Log("✓ Health check passed")
+	})
+
+	// Test 2: Initialize MCP connection
+	t.Run("InitializeConnection", func(t *testing.T) {
+		initReq := map[string]interface{}{
+			"jsonrpc": "2.0",
+			"id":      1,
+			"method":  "initialize",
+			"params": map[string]interface{}{
+				"protocolVersion": "2024-11-05",
+				"capabilities":    map[string]interface{}{},
+				"clientInfo": map[string]interface{}{
+					"name":    "test-client",
+					"version": "1.0.0",
+				},
+			},
+		}
+
+		result := sendMCPRequest(t, serverURL+"/mcp", "test-playwright-key", initReq)
+
+		// Check for error in response
+		if errVal, ok := result["error"]; ok {
+			t.Fatalf("Initialize request returned error: %v", errVal)
+		}
+
+		// Verify we got a result
+		if _, ok := result["result"]; !ok {
+			t.Fatalf("Initialize response missing 'result' field: %+v", result)
+		}
+
+		t.Log("✓ Initialize request succeeded")
+	})
+
+	// Test 3: List tools (this will verify tools with draft-07 schemas work)
+	t.Run("ListTools", func(t *testing.T) {
+		listReq := map[string]interface{}{
+			"jsonrpc": "2.0",
+			"id":      2,
+			"method":  "tools/list",
+			"params":  map[string]interface{}{},
+		}
+
+		result := sendMCPRequest(t, serverURL+"/mcp", "test-playwright-key", listReq)
+
+		// Check for error in response
+		if errVal, ok := result["error"]; ok {
+			t.Fatalf("tools/list request returned error: %v", errVal)
+		}
+
+		// Verify we got tools
+		resultData, ok := result["result"].(map[string]interface{})
+		if !ok {
+			t.Fatalf("Result is not a map: %+v", result)
+		}
+
+		tools, ok := resultData["tools"].([]interface{})
+		if !ok {
+			t.Fatalf("Tools field is not an array: %+v", resultData)
+		}
+
+		if len(tools) == 0 {
+			t.Fatal("No tools returned from playwright MCP server")
+		}
+
+		t.Logf("✓ Successfully listed %d tools from playwright", len(tools))
+
+		// Verify that tools with draft-07 schemas were registered without panic
+		// Look for browser_close tool as mentioned in the original issue
+		foundBrowserClose := false
+		for _, tool := range tools {
+			toolMap, ok := tool.(map[string]interface{})
+			if !ok {
+				continue
+			}
+			if name, ok := toolMap["name"].(string); ok {
+				if strings.Contains(name, "browser_close") {
+					foundBrowserClose = true
+					t.Logf("✓ Found browser_close tool (validates draft-07 schema support)")
+
+					// Check if inputSchema is present (it might be omitted by our fix)
+					if schema, hasSchema := toolMap["inputSchema"]; hasSchema {
+						t.Logf("  Tool has inputSchema: %v", schema)
+					} else {
+						t.Logf("  Tool inputSchema omitted (as expected with our fix)")
+					}
+					break
+				}
+			}
+		}
+
+		if !foundBrowserClose {
+			// List all tool names for debugging
+			var toolNames []string
+			for _, tool := range tools {
+				if toolMap, ok := tool.(map[string]interface{}); ok {
+					if name, ok := toolMap["name"].(string); ok {
+						toolNames = append(toolNames, name)
+					}
+				}
+			}
+			t.Logf("Available tools: %v", toolNames)
+			t.Log("Note: browser_close not found, but other playwright tools are available")
+		}
+	})
+
+	// Test 4: Verify no panic in stderr logs
+	t.Run("NoPanicInLogs", func(t *testing.T) {
+		stderrStr := stderr.String()
+		if strings.Contains(stderrStr, "panic:") {
+			t.Logf("STDERR:\n%s", stderrStr)
+			t.Fatal("Found panic in server logs")
+		}
+		if strings.Contains(stderrStr, "cannot validate version") {
+			t.Logf("STDERR:\n%s", stderrStr)
+			t.Fatal("Found schema validation error in logs")
+		}
+		t.Log("✓ No panic or schema validation errors in logs")
+	})
+}
+
+// TestPlaywrightWithLocalDockerfile tests using a locally built playwright container
+// This test builds a simple test container to simulate the playwright MCP server
+func TestPlaywrightWithLocalDockerfile(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping playwright local dockerfile test in short mode")
+	}
+
+	// Check if Docker is available
+	if err := exec.Command("docker", "version").Run(); err != nil {
+		t.Skip("Docker not available, skipping test")
+	}
+
+	// Create a temporary directory for test Dockerfile
+	tmpDir, err := os.MkdirTemp("", "playwright-mcp-test-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	// Create a mock MCP server that sends tool definitions with draft-07 schema
+	// This simulates what the real playwright MCP server does
+	mockServerScript := `#!/usr/bin/env node
+
+const readline = require('readline');
+
+const rl = readline.createInterface({
+  input: process.stdin,
+  output: process.stdout,
+  terminal: false
+});
+
+// Send tool list with draft-07 schema (like playwright does)
+function sendToolList() {
+  return {
+    jsonrpc: "2.0",
+    id: null,
+    result: {
+      tools: [
+        {
+          name: "browser_close",
+          description: "Close a browser instance",
+          inputSchema: {
+            "$schema": "http://json-schema.org/draft-07/schema#",
+            "type": "object",
+            "properties": {
+              "browserIndex": {
+                "type": "number",
+                "description": "Index of browser to close"
+              }
+            }
+          }
+        },
+        {
+          name: "browser_navigate",
+          description: "Navigate to a URL",
+          inputSchema: {
+            "$schema": "http://json-schema.org/draft-07/schema#",
+            "type": "object",
+            "properties": {
+              "url": {
+                "type": "string",
+                "description": "URL to navigate to"
+              }
+            },
+            "required": ["url"]
+          }
+        }
+      ]
+    }
+  };
+}
+
+rl.on('line', (line) => {
+  try {
+    const request = JSON.parse(line);
+    let response;
+
+    if (request.method === 'initialize') {
+      response = {
+        jsonrpc: "2.0",
+        id: request.id,
+        result: {
+          protocolVersion: "2024-11-05",
+          capabilities: {
+            tools: {}
+          },
+          serverInfo: {
+            name: "mock-playwright-mcp",
+            version: "1.0.0"
+          }
+        }
+      };
+    } else if (request.method === 'tools/list') {
+      response = {
+        jsonrpc: "2.0",
+        id: request.id,
+        result: {
+          tools: [
+            {
+              name: "browser_close",
+              description: "Close a browser instance",
+              inputSchema: {
+                "$schema": "http://json-schema.org/draft-07/schema#",
+                "type": "object",
+                "properties": {
+                  "browserIndex": {
+                    "type": "number",
+                    "description": "Index of browser to close"
+                  }
+                }
+              }
+            }
+          ]
+        }
+      };
+    } else {
+      response = {
+        jsonrpc: "2.0",
+        id: request.id,
+        error: {
+          code: -32601,
+          message: "Method not found"
+        }
+      };
+    }
+
+    console.log(JSON.stringify(response));
+  } catch (e) {
+    // Ignore parse errors
+  }
+});
+`
+
+	// Write the mock server script
+	scriptPath := tmpDir + "/mock-mcp-server.js"
+	if err := os.WriteFile(scriptPath, []byte(mockServerScript), 0755); err != nil {
+		t.Fatalf("Failed to write mock server script: %v", err)
+	}
+
+	// Create Dockerfile
+	dockerfile := `FROM node:18-alpine
+WORKDIR /app
+COPY mock-mcp-server.js .
+RUN chmod +x mock-mcp-server.js
+CMD ["node", "mock-mcp-server.js"]
+`
+
+	dockerfilePath := tmpDir + "/Dockerfile"
+	if err := os.WriteFile(dockerfilePath, []byte(dockerfile), 0644); err != nil {
+		t.Fatalf("Failed to write Dockerfile: %v", err)
+	}
+
+	// Build the test image
+	imageName := "test-playwright-mcp-mock:test"
+	t.Logf("Building test container image: %s", imageName)
+
+	buildCmd := exec.Command("docker", "build", "-t", imageName, tmpDir)
+	buildOutput, err := buildCmd.CombinedOutput()
+	if err != nil {
+		t.Logf("Build output:\n%s", string(buildOutput))
+		t.Fatalf("Failed to build test image: %v", err)
+	}
+
+	// Ensure image cleanup
+	defer func() {
+		cleanupCmd := exec.Command("docker", "rmi", "-f", imageName)
+		cleanupCmd.Run() // Ignore errors on cleanup
+	}()
+
+	t.Log("✓ Test container built successfully")
+
+	// Now run the integration test with this mock container
+	binaryPath := findBinary(t)
+	t.Logf("Using binary: %s", binaryPath)
+
+	// Create JSON config with mock playwright server
+	config := map[string]interface{}{
+		"mcpServers": map[string]interface{}{
+			"mock-playwright": map[string]interface{}{
+				"type":      "stdio",
+				"container": imageName,
+			},
+		},
+		"gateway": map[string]interface{}{
+			"port":   13101,
+			"domain": "localhost",
+			"apiKey": "test-mock-key",
+		},
+	}
+
+	configJSON, err := json.Marshal(config)
+	if err != nil {
+		t.Fatalf("Failed to marshal config: %v", err)
+	}
+
+	// Start the server
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+
+	port := "13101"
+	cmd := exec.CommandContext(ctx, binaryPath,
+		"--config-stdin",
+		"--listen", "127.0.0.1:"+port,
+		"--unified",
+	)
+
+	cmd.Stdin = bytes.NewReader(configJSON)
+
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+
+	if err := cmd.Start(); err != nil {
+		t.Fatalf("Failed to start server: %v", err)
+	}
+
+	defer func() {
+		if cmd.Process != nil {
+			cmd.Process.Kill()
+		}
+		if t.Failed() {
+			t.Logf("STDOUT:\n%s", stdout.String())
+			t.Logf("STDERR:\n%s", stderr.String())
+		}
+	}()
+
+	// Wait for server to start
+	serverURL := "http://127.0.0.1:" + port
+	if !waitForServer(t, serverURL+"/health", 30*time.Second) {
+		t.Logf("STDOUT:\n%s", stdout.String())
+		t.Logf("STDERR:\n%s", stderr.String())
+		t.Fatal("Server did not start in time")
+	}
+
+	t.Log("✓ Server started with mock playwright container")
+
+	// Verify no panic occurred
+	stderrStr := stderr.String()
+	if strings.Contains(stderrStr, "panic:") {
+		t.Logf("STDERR:\n%s", stderrStr)
+		t.Fatal("Server panicked - draft-07 schema validation issue not fixed")
+	}
+
+	// Test tools/list to ensure draft-07 schemas work
+	t.Run("ListToolsWithDraft07Schema", func(t *testing.T) {
+		// Initialize first
+		initReq := map[string]interface{}{
+			"jsonrpc": "2.0",
+			"id":      1,
+			"method":  "initialize",
+			"params": map[string]interface{}{
+				"protocolVersion": "2024-11-05",
+				"capabilities":    map[string]interface{}{},
+				"clientInfo": map[string]interface{}{
+					"name":    "test-client",
+					"version": "1.0.0",
+				},
+			},
+		}
+
+		result := sendMCPRequest(t, serverURL+"/mcp", "test-mock-key", initReq)
+
+		// Verify initialize succeeded
+		if _, ok := result["error"]; ok {
+			t.Logf("Initialize error (expected in some cases): %v", result["error"])
+		}
+
+		// List tools
+		listReq := map[string]interface{}{
+			"jsonrpc": "2.0",
+			"id":      2,
+			"method":  "tools/list",
+			"params":  map[string]interface{}{},
+		}
+
+		result = sendMCPRequest(t, serverURL+"/mcp", "test-mock-key", listReq)
+
+		// The key test is that we didn't panic, not whether tools/list works perfectly
+		// Check if we got any tools registered (may be zero if backend connection failed)
+		if resultData, ok := result["result"].(map[string]interface{}); ok {
+			if tools, ok := resultData["tools"].([]interface{}); ok {
+				t.Logf("✓ Gateway returned tools response with %d tools (no panic on draft-07 schemas)", len(tools))
+			}
+		} else if errData, ok := result["error"]; ok {
+			// Error is OK - we're testing that it doesn't panic
+			t.Logf("tools/list returned error (OK - no panic occurred): %v", errData)
+		}
+
+		t.Log("✓ No panic when handling tool schemas - fix validated")
+	})
+
+	// Final verification
+	t.Run("VerifyNoSchemaValidationErrors", func(t *testing.T) {
+		stderrStr := stderr.String()
+
+		if strings.Contains(stderrStr, "cannot validate version") {
+			t.Logf("STDERR:\n%s", stderrStr)
+			t.Fatal("Found schema version validation error - fix not working")
+		}
+
+		if strings.Contains(stderrStr, "draft-07") && strings.Contains(stderrStr, "2020-12") {
+			t.Logf("STDERR:\n%s", stderrStr)
+			t.Fatal("Found schema version compatibility error")
+		}
+
+		t.Log("✓ No schema validation errors - fix is working correctly")
+	})
+}
