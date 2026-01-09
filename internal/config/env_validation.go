@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"regexp"
 	"strconv"
 	"strings"
 )
@@ -15,6 +16,10 @@ var RequiredEnvVars = []string{
 	"MCP_GATEWAY_DOMAIN",
 	"MCP_GATEWAY_API_KEY",
 }
+
+// containerIDPattern validates that a container ID only contains valid characters (hex digits)
+// Container IDs are 64 character hex strings, but short form (12 chars) is also valid
+var containerIDPattern = regexp.MustCompile(`^[a-f0-9]{12,64}$`)
 
 // EnvValidationResult holds the result of environment validation
 type EnvValidationResult struct {
@@ -176,10 +181,22 @@ func checkRequiredEnvVars() []string {
 	return missing
 }
 
+// validateContainerID validates that the container ID is safe to use in commands
+// Container IDs should only contain lowercase hex characters (a-f, 0-9)
+func validateContainerID(containerID string) error {
+	if containerID == "" {
+		return fmt.Errorf("container ID is empty")
+	}
+	if !containerIDPattern.MatchString(containerID) {
+		return fmt.Errorf("container ID contains invalid characters: must be 12-64 hex characters")
+	}
+	return nil
+}
+
 // checkPortMapping uses docker inspect to verify that the specified port is mapped
 func checkPortMapping(containerID, port string) (bool, error) {
-	if containerID == "" {
-		return false, fmt.Errorf("container ID not provided")
+	if err := validateContainerID(containerID); err != nil {
+		return false, err
 	}
 
 	// Use docker inspect to get port bindings
@@ -200,7 +217,7 @@ func checkPortMapping(containerID, port string) (bool, error) {
 
 // checkStdinInteractive uses docker inspect to verify the container was started with -i flag
 func checkStdinInteractive(containerID string) bool {
-	if containerID == "" {
+	if err := validateContainerID(containerID); err != nil {
 		return false
 	}
 

@@ -23,12 +23,27 @@ log_error() {
     echo -e "${RED}[ERROR]${NC} $1"
 }
 
+# Validate container ID contains only hex characters (security check)
+validate_container_id() {
+    local cid="$1"
+    if [ -z "$cid" ]; then
+        return 1
+    fi
+    # Container IDs must be 12-64 hex characters only
+    if ! echo "$cid" | grep -qE '^[a-f0-9]{12,64}$'; then
+        log_warn "Invalid container ID format: $cid"
+        return 1
+    fi
+    return 0
+}
+
 # Detect container ID from /proc/self/cgroup
 get_container_id() {
     if [ -f /proc/self/cgroup ]; then
         # Try to extract container ID from cgroup v1 or v2 paths
-        local cid=$(cat /proc/self/cgroup | grep -oE '[0-9a-f]{12,64}' | head -1)
-        if [ -n "$cid" ]; then
+        # Use grep directly on the file instead of cat | grep
+        local cid=$(grep -oE '[0-9a-f]{12,64}' /proc/self/cgroup | head -1)
+        if validate_container_id "$cid"; then
             echo "$cid"
             return 0
         fi
@@ -36,8 +51,11 @@ get_container_id() {
     
     # Fallback: check hostname (often set to container ID)
     if [ -f /.dockerenv ]; then
-        hostname
-        return 0
+        local host_id=$(hostname)
+        if validate_container_id "$host_id"; then
+            echo "$host_id"
+            return 0
+        fi
     fi
     
     return 1
@@ -108,8 +126,8 @@ validate_port_mapping() {
     local container_id="$1"
     local port="$MCP_GATEWAY_PORT"
     
-    if [ -z "$container_id" ]; then
-        log_warn "Cannot validate port mapping: container ID unknown"
+    if ! validate_container_id "$container_id"; then
+        log_warn "Cannot validate port mapping: container ID invalid or unknown"
         return 0
     fi
     
@@ -134,8 +152,8 @@ validate_port_mapping() {
 validate_stdin_interactive() {
     local container_id="$1"
     
-    if [ -z "$container_id" ]; then
-        log_warn "Cannot validate stdin: container ID unknown"
+    if ! validate_container_id "$container_id"; then
+        log_warn "Cannot validate stdin: container ID invalid or unknown"
         return 0
     fi
     
@@ -155,8 +173,8 @@ validate_stdin_interactive() {
 validate_container_config() {
     local container_id="$1"
     
-    if [ -z "$container_id" ]; then
-        log_warn "Cannot validate container config: container ID unknown"
+    if ! validate_container_id "$container_id"; then
+        log_warn "Cannot validate container config: container ID invalid or unknown"
         return 0
     fi
     

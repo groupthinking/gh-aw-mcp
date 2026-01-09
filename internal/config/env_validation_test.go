@@ -5,6 +5,80 @@ import (
 	"testing"
 )
 
+func TestValidateContainerID(t *testing.T) {
+	tests := []struct {
+		name        string
+		containerID string
+		shouldError bool
+	}{
+		{
+			name:        "valid 64-char hex",
+			containerID: "abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890",
+			shouldError: false,
+		},
+		{
+			name:        "valid 12-char hex (short form)",
+			containerID: "abcdef123456",
+			shouldError: false,
+		},
+		{
+			name:        "valid with all hex digits",
+			containerID: "0123456789abcdef",
+			shouldError: false,
+		},
+		{
+			name:        "empty string",
+			containerID: "",
+			shouldError: true,
+		},
+		{
+			name:        "too short (11 chars)",
+			containerID: "abcdef12345",
+			shouldError: true,
+		},
+		{
+			name:        "too long (65 chars)",
+			containerID: "abcdef1234567890abcdef1234567890abcdef1234567890abcdef12345678901",
+			shouldError: true,
+		},
+		{
+			name:        "invalid chars - uppercase",
+			containerID: "ABCDEF123456",
+			shouldError: true,
+		},
+		{
+			name:        "invalid chars - special",
+			containerID: "abc;def123456",
+			shouldError: true,
+		},
+		{
+			name:        "command injection attempt",
+			containerID: "abcdef123456; rm -rf /",
+			shouldError: true,
+		},
+		{
+			name:        "path injection attempt",
+			containerID: "../../../etc/passwd",
+			shouldError: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := validateContainerID(tt.containerID)
+			if tt.shouldError {
+				if err == nil {
+					t.Error("Expected error but got none")
+				}
+			} else {
+				if err != nil {
+					t.Errorf("Unexpected error: %v", err)
+				}
+			}
+		})
+	}
+}
+
 func TestDetectContainerized(t *testing.T) {
 	// This test verifies the function doesn't panic and returns consistent results
 	isContainerized, containerID := detectContainerized()
