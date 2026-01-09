@@ -31,13 +31,37 @@ For detailed setup instructions, building from source, and local development, se
    docker pull ghcr.io/githubnext/gh-aw-mcpg:latest
    ```
 
-2. **Run the container**:
+2. **Create a configuration file** (`config.json`):
+   ```json
+   {
+     "mcpServers": {
+       "github": {
+         "type": "stdio",
+         "container": "ghcr.io/github/github-mcp-server:latest",
+         "env": {
+           "GITHUB_PERSONAL_ACCESS_TOKEN": ""
+         }
+       }
+     }
+   }
+   ```
+
+3. **Run the container**:
    ```bash
-   docker run --rm -v $(pwd)/.env:/app/.env \
+   docker run --rm -i \
+     -e MCP_GATEWAY_PORT=8000 \
+     -e MCP_GATEWAY_DOMAIN=localhost \
+     -e MCP_GATEWAY_API_KEY=your-secret-key \
      -v /var/run/docker.sock:/var/run/docker.sock \
      -p 8000:8000 \
-     ghcr.io/githubnext/gh-aw-mcpg:latest
+     ghcr.io/githubnext/gh-aw-mcpg:latest < config.json
    ```
+
+**Required flags:**
+- `-i`: Enables stdin for passing JSON configuration
+- `-e MCP_GATEWAY_*`: Required environment variables
+- `-v /var/run/docker.sock`: Required for spawning backend MCP servers
+- `-p 8000:8000`: Port mapping must match `MCP_GATEWAY_PORT`
 
 MCPG will start in routed mode on `http://127.0.0.1:8000`, proxying MCP requests to your configured backend servers.
 
@@ -164,12 +188,105 @@ Usage:
 Flags:
   -c, --config string   Path to config file (default "config.toml")
       --config-stdin    Read MCP server configuration from stdin (JSON format). When enabled, overrides --config
+      --enable-difc     Enable DIFC enforcement and session requirement (requires sys___init call before tool access)
       --env string      Path to .env file to load environment variables
   -h, --help            help for awmg
   -l, --listen string   HTTP server listen address (default "127.0.0.1:3000")
       --log-dir string  Directory for log files (falls back to stdout if directory cannot be created) (default "/tmp/gh-aw/sandbox/mcp")
       --routed          Run in routed mode (each backend at /mcp/<server>)
       --unified         Run in unified mode (all backends at /mcp)
+      --validate-env    Validate execution environment (Docker, env vars) before starting
+```
+
+## Environment Variables
+
+The following environment variables are used by the MCP Gateway:
+
+### Required for Production (Containerized Mode)
+
+When running in a container (`run_containerized.sh`), these variables **must** be set:
+
+| Variable | Description | Example |
+|----------|-------------|---------|
+| `MCP_GATEWAY_PORT` | The port the gateway listens on | `8080` |
+| `MCP_GATEWAY_DOMAIN` | The domain name for the gateway | `localhost` |
+| `MCP_GATEWAY_API_KEY` | API key for authentication | `your-secret-key` |
+
+### Optional (Non-Containerized Mode)
+
+When running locally (`run.sh`), these variables are optional (warnings shown if missing):
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `MCP_GATEWAY_PORT` | Gateway listening port | `8000` |
+| `MCP_GATEWAY_DOMAIN` | Gateway domain | `localhost` |
+| `MCP_GATEWAY_API_KEY` | API authentication key | (disabled) |
+| `MCP_GATEWAY_HOST` | Gateway bind address | `0.0.0.0` |
+| `MCP_GATEWAY_MODE` | Gateway mode | `--routed` |
+
+### Docker Configuration
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `DOCKER_HOST` | Docker daemon socket path | `/var/run/docker.sock` |
+| `DOCKER_API_VERSION` | Docker API version | Auto-detected (1.43 for arm64, 1.44 for amd64) |
+
+## Containerized Mode
+
+### Running in Docker
+
+For production deployments in Docker containers, use `run_containerized.sh` which:
+
+1. **Validates the container environment** before starting
+2. **Requires** all essential environment variables
+3. **Requires** stdin input (`-i` flag) for JSON configuration
+4. **Validates** Docker socket accessibility
+5. **Validates** port mapping configuration
+
+```bash
+# Correct way to run the gateway in a container:
+docker run -i \
+  -e MCP_GATEWAY_PORT=8080 \
+  -e MCP_GATEWAY_DOMAIN=localhost \
+  -e MCP_GATEWAY_API_KEY=your-key \
+  -v /var/run/docker.sock:/var/run/docker.sock \
+  -p 8080:8080 \
+  ghcr.io/githubnext/gh-aw-mcpg:latest < config.json
+```
+
+**Important flags:**
+- `-i`: Required for passing configuration via stdin
+- `-v /var/run/docker.sock:/var/run/docker.sock`: Required for spawning backend MCP servers
+- `-p <host>:<container>`: Port mapping must match `MCP_GATEWAY_PORT`
+
+### Validation Checks
+
+The containerized startup script performs these validations:
+
+| Check | Description | Action on Failure |
+|-------|-------------|-------------------|
+| Docker Socket | Verifies Docker daemon is accessible | Exit with error |
+| Environment Variables | Checks required env vars are set | Exit with error |
+| Port Mapping | Verifies container port is mapped to host | Exit with error |
+| Stdin Interactive | Ensures `-i` flag was used | Exit with error |
+
+### Non-Containerized Mode
+
+For local development, use `run.sh` which:
+
+1. **Warns** about missing environment variables (but continues)
+2. **Provides** default configuration if no config file specified
+3. **Auto-detects** containerized environments and redirects to `run_containerized.sh`
+
+```bash
+# Run locally with defaults:
+./run.sh
+
+# Run with custom config:
+CONFIG=my-config.toml ./run.sh
+
+# Run with environment variables:
+MCP_GATEWAY_PORT=3000 ./run.sh
 ```
 
 ## Logging

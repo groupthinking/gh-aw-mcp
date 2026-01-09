@@ -113,10 +113,15 @@ func (us *UnifiedServer) registerAllTools() error {
 	log.Println("Registering tools from all backends...")
 	logUnified.Printf("Starting tool registration for %d backends", len(us.launcher.ServerIDs()))
 
-	// Register sys tools first
-	log.Println("Registering sys tools...")
-	if err := us.registerSysTools(); err != nil {
-		log.Printf("Warning: failed to register sys tools: %v", err)
+	// Only register sys tools if DIFC is enabled
+	// When DIFC is disabled (default), sys tools are not needed
+	if us.enableDIFC {
+		log.Println("DIFC enabled: registering sys tools...")
+		if err := us.registerSysTools(); err != nil {
+			log.Printf("Warning: failed to register sys tools: %v", err)
+		}
+	} else {
+		log.Println("DIFC disabled: skipping sys tools registration")
 	}
 
 	// Register tools from each backend server
