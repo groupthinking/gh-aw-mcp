@@ -32,23 +32,7 @@ tools:
   github:
     toolsets: [default]
   web-fetch:
-  bash:
-    - "git log --oneline --max-count=20"
-    - "git --no-pager diff HEAD~10..HEAD"
-    - "git --no-pager show HEAD:*"
-    - "find internal -name '*.go' -type f"
-    - "find . -name 'config*.go' -o -name 'validation*.go'"
-    - "cat internal/**/*.go"
-    - "cat *.go"
-    - "cat README.md"
-    - "cat AGENTS.md"
-    - "cat docs/**/*.md"
-    - "grep -r 'TODO' internal --include='*.go'"
-    - "grep -r 'FIXME' internal --include='*.go'"
-    - "go build -o awmg"
-    - "go test ./..."
-    - "make test"
-    - "make lint"
+  bash: ["*"]
   edit:
   cache-memory:
 
