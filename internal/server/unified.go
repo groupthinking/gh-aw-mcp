@@ -219,10 +219,12 @@ func (us *UnifiedServer) registerToolsFromBackend(serverID string) error {
 		us.toolsMu.Unlock()
 
 		// Register the tool with the SDK
+		// Note: InputSchema is intentionally omitted to avoid validation errors
+		// when backend MCP servers use different JSON Schema versions (e.g., draft-07)
+		// than what the SDK supports (draft-2020-12)
 		sdk.AddTool(us.server, &sdk.Tool{
 			Name:        prefixedName,
 			Description: toolDesc,
-			InputSchema: tool.InputSchema,
 		}, handler)
 
 		log.Printf("Registered tool: %s", prefixedName)
