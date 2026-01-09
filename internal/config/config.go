@@ -164,7 +164,7 @@ func LoadFromStdin() (*Config, error) {
 	for name, server := range stdinCfg.MCPServers {
 		logConfig.Printf("Processing server config: %s", name)
 		logger.LogDebug("startup", "Processing server configuration: %s, type: %s", name, server.Type)
-		
+
 		// Validate server configuration (fail-fast)
 		if err := validateStdioServer(name, server); err != nil {
 			logger.LogError("startup", "Server validation failed for %s: %v", name, err)

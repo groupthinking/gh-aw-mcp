@@ -196,7 +196,7 @@ func validateStdioServer(name string, server *StdinServerConfig) error {
 				return err
 			}
 		}
-		
+
 		logger.LogDebug("startup", "Server validation passed: %s (type: %s, container: %s)", name, server.Type, server.Container)
 	}
 

@@ -87,7 +87,7 @@ func run(cmd *cobra.Command, args []string) error {
 	defer logger.CloseGlobalLogger()
 
 	logger.LogInfo("startup", "Starting MCPG with config: %s, listen: %s, log-dir: %s", configFile, listenAddr, logDir)
-	debugLog.Printf("Starting MCPG with config: %s, listen: %s, routed: %v, unified: %v, enableDIFC: %v", 
+	debugLog.Printf("Starting MCPG with config: %s, listen: %s, routed: %v, unified: %v, enableDIFC: %v",
 		configFile, listenAddr, routedMode, unifiedMode, enableDIFC)
 
 	// Load .env file if specified

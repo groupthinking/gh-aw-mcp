@@ -70,7 +70,7 @@ type UnifiedServer struct {
 func NewUnified(ctx context.Context, cfg *config.Config) (*UnifiedServer, error) {
 	logUnified.Printf("Creating new unified server: enableDIFC=%v, servers=%d", cfg.EnableDIFC, len(cfg.Servers))
 	logger.LogInfo("startup", "Creating unified server with %d backend servers, DIFC=%v", len(cfg.Servers), cfg.EnableDIFC)
-	
+
 	l := launcher.New(ctx, cfg)
 
 	us := &UnifiedServer{
