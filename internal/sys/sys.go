@@ -3,7 +3,11 @@ package sys
 import (
 	"encoding/json"
 	"fmt"
+	
+	"github.com/githubnext/gh-aw-mcpg/internal/logger"
 )
+
+var logSys = logger.New("sys:sys")
 
 // SysServer implements the MCPG system tools
 type SysServer struct {
@@ -19,6 +23,7 @@ func NewSysServer(serverIDs []string) *SysServer {
 
 // HandleRequest processes MCP requests for system tools
 func (s *SysServer) HandleRequest(method string, params json.RawMessage) (interface{}, error) {
+	logSys.Printf("Handling system request: method=%s", method)
 	switch method {
 	case "tools/list":
 		return s.listTools()
@@ -28,15 +33,19 @@ func (s *SysServer) HandleRequest(method string, params json.RawMessage) (interf
 			Arguments map[string]interface{} `json:"arguments"`
 		}
 		if err := json.Unmarshal(params, &callParams); err != nil {
+			logSys.Printf("Failed to parse call params: error=%v", err)
 			return nil, fmt.Errorf("invalid params: %w", err)
 		}
+		logSys.Printf("Calling system tool: name=%s", callParams.Name)
 		return s.callTool(callParams.Name, callParams.Arguments)
 	default:
+		logSys.Printf("Unsupported method: %s", method)
 		return nil, fmt.Errorf("unsupported method: %s", method)
 	}
 }
 
 func (s *SysServer) listTools() (interface{}, error) {
+	logSys.Print("Listing system tools")
 	return map[string]interface{}{
 		"tools": []map[string]interface{}{
 			{
@@ -60,17 +69,20 @@ func (s *SysServer) listTools() (interface{}, error) {
 }
 
 func (s *SysServer) callTool(name string, args map[string]interface{}) (interface{}, error) {
+	logSys.Printf("Calling tool: name=%s", name)
 	switch name {
 	case "sys_init":
 		return s.sysInit()
 	case "sys_list_servers":
 		return s.listServers()
 	default:
+		logSys.Printf("Unknown tool requested: %s", name)
 		return nil, fmt.Errorf("unknown tool: %s", name)
 	}
 }
 
 func (s *SysServer) sysInit() (interface{}, error) {
+	logSys.Printf("Initializing system with %d servers", len(s.serverIDs))
 	return map[string]interface{}{
 		"content": []map[string]interface{}{
 			{

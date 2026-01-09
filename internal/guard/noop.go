@@ -4,7 +4,10 @@ import (
 	"context"
 
 	"github.com/githubnext/gh-aw-mcpg/internal/difc"
+	"github.com/githubnext/gh-aw-mcpg/internal/logger"
 )
+
+var logGuard = logger.New("guard:noop")
 
 // NoopGuard is the default guard that performs no DIFC labeling
 // It allows all operations by returning empty labels (no restrictions)
@@ -23,6 +26,7 @@ func (g *NoopGuard) Name() string {
 // LabelResource returns an empty resource with no label requirements
 // Conservatively assumes all operations could be writes
 func (g *NoopGuard) LabelResource(ctx context.Context, toolName string, args interface{}, backend BackendCaller, caps *difc.Capabilities) (*difc.LabeledResource, difc.OperationType, error) {
+	logGuard.Printf("Labeling resource for tool: toolName=%s", toolName)
 	// Empty resource = no label requirements = all operations allowed
 	resource := &difc.LabeledResource{
 		Description: "noop resource (no restrictions)",
@@ -33,12 +37,14 @@ func (g *NoopGuard) LabelResource(ctx context.Context, toolName string, args int
 
 	// Conservatively treat as write to be safe
 	// (writes are more restrictive than reads in DIFC)
+	logGuard.Printf("Resource labeled as write operation: toolName=%s", toolName)
 	return resource, difc.OperationWrite, nil
 }
 
 // LabelResponse returns nil, indicating no fine-grained labeling
 // The reference monitor will use the resource labels for the entire response
 func (g *NoopGuard) LabelResponse(ctx context.Context, toolName string, result interface{}, backend BackendCaller, caps *difc.Capabilities) (difc.LabeledData, error) {
+	logGuard.Printf("Labeling response for tool: toolName=%s", toolName)
 	// No fine-grained labeling - return nil
 	// Reference monitor will use LabelResource result for entire response
 	return nil, nil

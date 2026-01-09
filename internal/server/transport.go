@@ -13,6 +13,8 @@ import (
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
+var logTransport = logger.New("server:transport")
+
 // HTTPTransport wraps the SDK's HTTP transport
 type HTTPTransport struct {
 	Addr string
@@ -20,6 +22,7 @@ type HTTPTransport struct {
 
 // Start implements sdk.Transport interface
 func (t *HTTPTransport) Start(ctx context.Context) error {
+	logTransport.Printf("Starting HTTP transport: addr=%s", t.Addr)
 	// The SDK will handle the actual HTTP server setup
 	// We just need to provide the address
 	log.Printf("HTTP transport ready on %s", t.Addr)
@@ -63,9 +66,11 @@ func (w *loggingResponseWriter) Write(b []byte) (int, error) {
 // withResponseLogging wraps an http.Handler to log response bodies
 func withResponseLogging(handler http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		logTransport.Printf("Request received: method=%s, path=%s, remoteAddr=%s", r.Method, r.URL.Path, r.RemoteAddr)
 		lw := &loggingResponseWriter{ResponseWriter: w, body: []byte{}, statusCode: http.StatusOK}
 		handler.ServeHTTP(lw, r)
 		if len(lw.body) > 0 {
+			logTransport.Printf("Response sent: status=%d, bodyLen=%d", lw.statusCode, len(lw.body))
 			log.Printf("[%s] %s %s - Status: %d, Response: %s", r.RemoteAddr, r.Method, r.URL.Path, lw.statusCode, string(lw.body))
 		}
 	})
@@ -74,6 +79,7 @@ func withResponseLogging(handler http.Handler) http.Handler {
 // CreateHTTPServerForMCP creates an HTTP server that handles MCP over SSE
 // If apiKey is provided, all requests except /health require authentication (spec 7.1)
 func CreateHTTPServerForMCP(addr string, unifiedServer *UnifiedServer, apiKey string) *http.Server {
+	logTransport.Printf("Creating HTTP server for unified mode: addr=%s, authEnabled=%v", addr, apiKey != "")
 	mux := http.NewServeMux()
 
 	// OAuth discovery endpoint - return 404 since we don't use OAuth
@@ -102,6 +108,7 @@ func CreateHTTPServerForMCP(addr string, unifiedServer *UnifiedServer, apiKey st
 
 		// Reject requests without valid Bearer token
 		if sessionID == "" {
+			logTransport.Printf("Rejecting connection: no Bearer token, remoteAddr=%s, path=%s", r.RemoteAddr, r.URL.Path)
 			logger.LogError("client", "MCP connection rejected: no Bearer token, remote=%s, path=%s", r.RemoteAddr, r.URL.Path)
 			log.Printf("[%s] %s %s - REJECTED: No Bearer token", r.RemoteAddr, r.Method, r.URL.Path)
 			// Return nil to reject the connection
