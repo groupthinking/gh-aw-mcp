@@ -68,50 +68,71 @@ type StdinGatewayConfig struct {
 // LoadFromFile loads configuration from a TOML file
 func LoadFromFile(path string) (*Config, error) {
 	logConfig.Printf("Loading configuration from file: path=%s", path)
+	logger.LogInfo("startup", "Reading TOML configuration file: %s", path)
 	var cfg Config
 	if _, err := toml.DecodeFile(path, &cfg); err != nil {
+		logger.LogError("startup", "Failed to decode TOML configuration: %v", err)
 		return nil, fmt.Errorf("failed to decode TOML: %w", err)
 	}
 	logConfig.Printf("Successfully loaded %d servers from TOML file", len(cfg.Servers))
+	logger.LogInfo("startup", "TOML configuration parsed successfully: %d servers found", len(cfg.Servers))
 	return &cfg, nil
 }
 
 // LoadFromStdin loads configuration from stdin JSON
 func LoadFromStdin() (*Config, error) {
 	logConfig.Print("Loading configuration from stdin JSON")
+	logger.LogInfo("startup", "Reading JSON configuration from stdin")
 	data, err := io.ReadAll(os.Stdin)
 	if err != nil {
+		logger.LogError("startup", "Failed to read from stdin: %v", err)
 		return nil, fmt.Errorf("failed to read stdin: %w", err)
 	}
 
 	logConfig.Printf("Read %d bytes from stdin", len(data))
+	logger.LogDebug("startup", "Read %d bytes from stdin", len(data))
 
 	// Pre-process: normalize "local" type to "stdio" for backward compatibility
 	// This must happen before schema validation since schema only accepts "stdio" or "http"
 	data, err = normalizeLocalType(data)
 	if err != nil {
+		logger.LogError("startup", "Failed to normalize configuration: %v", err)
 		return nil, fmt.Errorf("failed to normalize configuration: %w", err)
 	}
 
 	// Validate against JSON schema first (fail-fast, spec-compliant)
+	logConfig.Print("Validating JSON schema")
+	logger.LogDebug("startup", "Validating configuration against JSON schema")
 	if err := validateJSONSchema(data); err != nil {
+		logger.LogError("startup", "JSON schema validation failed: %v", err)
 		return nil, err
 	}
+	logger.LogDebug("startup", "JSON schema validation passed")
 
 	var stdinCfg StdinConfig
 	if err := json.Unmarshal(data, &stdinCfg); err != nil {
+		logger.LogError("startup", "Failed to parse JSON configuration: %v", err)
 		return nil, fmt.Errorf("failed to parse JSON: %w", err)
 	}
 
 	logConfig.Printf("Parsed stdin config with %d servers", len(stdinCfg.MCPServers))
+	logger.LogInfo("startup", "JSON configuration parsed: %d servers found", len(stdinCfg.MCPServers))
 
 	// Validate string patterns from schema (regex constraints)
+	logConfig.Print("Validating string patterns")
+	logger.LogDebug("startup", "Validating string patterns and constraints")
 	if err := validateStringPatterns(&stdinCfg); err != nil {
+		logger.LogError("startup", "String pattern validation failed: %v", err)
 		return nil, err
 	}
 
 	// Validate gateway configuration (additional checks)
+	if stdinCfg.Gateway != nil {
+		logConfig.Print("Validating gateway configuration")
+		logger.LogDebug("startup", "Validating gateway configuration")
+	}
 	if err := validateGatewayConfig(stdinCfg.Gateway); err != nil {
+		logger.LogError("startup", "Gateway configuration validation failed: %v", err)
 		return nil, err
 	}
 
@@ -141,15 +162,22 @@ func LoadFromStdin() (*Config, error) {
 	}
 
 	for name, server := range stdinCfg.MCPServers {
+		logConfig.Printf("Processing server config: %s", name)
+		logger.LogDebug("startup", "Processing server configuration: %s, type: %s", name, server.Type)
+		
 		// Validate server configuration (fail-fast)
 		if err := validateStdioServer(name, server); err != nil {
+			logger.LogError("startup", "Server validation failed for %s: %v", name, err)
 			return nil, err
 		}
 
 		// Expand variable expressions in env vars (fail-fast on undefined vars)
 		if len(server.Env) > 0 {
+			logConfig.Printf("Expanding %d environment variables for server: %s", len(server.Env), name)
+			logger.LogDebug("startup", "Expanding environment variables for server: %s", name)
 			expandedEnv, err := expandEnvVariables(server.Env, name)
 			if err != nil {
+				logger.LogError("startup", "Environment variable expansion failed for %s: %v", name, err)
 				return nil, err
 			}
 			server.Env = expandedEnv
@@ -166,11 +194,14 @@ func LoadFromStdin() (*Config, error) {
 		// HTTP servers are not yet implemented
 		if serverType == "http" {
 			log.Printf("Warning: skipping server '%s' with type 'http' (HTTP transport not yet implemented)", name)
+			logger.LogWarn("startup", "Skipping server '%s': HTTP transport not yet implemented", name)
 			continue
 		}
 
 		// stdio/local servers only from this point
 		// All stdio servers use Docker containers
+		logConfig.Printf("Building Docker command for server: %s, container: %s", name, server.Container)
+		logger.LogDebug("startup", "Building Docker command for server: %s, container: %s", name, server.Container)
 
 		args := []string{
 			"run",
@@ -217,9 +248,11 @@ func LoadFromStdin() (*Config, error) {
 			Args:    args,
 			Env:     make(map[string]string),
 		}
+		logger.LogInfo("startup", "Configured server: %s (container: %s)", name, server.Container)
 	}
 
 	logConfig.Printf("Converted stdin config to internal format with %d servers", len(cfg.Servers))
+	logger.LogInfo("startup", "Configuration conversion complete: %d servers ready for initialization", len(cfg.Servers))
 	return cfg, nil
 }
 

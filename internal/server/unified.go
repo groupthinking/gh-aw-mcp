@@ -69,6 +69,8 @@ type UnifiedServer struct {
 // NewUnified creates a new unified MCP server
 func NewUnified(ctx context.Context, cfg *config.Config) (*UnifiedServer, error) {
 	logUnified.Printf("Creating new unified server: enableDIFC=%v, servers=%d", cfg.EnableDIFC, len(cfg.Servers))
+	logger.LogInfo("startup", "Creating unified server with %d backend servers, DIFC=%v", len(cfg.Servers), cfg.EnableDIFC)
+	
 	l := launcher.New(ctx, cfg)
 
 	us := &UnifiedServer{
@@ -86,6 +88,8 @@ func NewUnified(ctx context.Context, cfg *config.Config) (*UnifiedServer, error)
 		enableDIFC:    cfg.EnableDIFC,
 	}
 
+	logger.LogDebug("startup", "Initialized DIFC components")
+
 	// Create MCP server
 	server := sdk.NewServer(&sdk.Implementation{
 		Name:    "awmg-unified",
@@ -93,18 +97,23 @@ func NewUnified(ctx context.Context, cfg *config.Config) (*UnifiedServer, error)
 	}, nil)
 
 	us.server = server
+	logger.LogDebug("startup", "Created MCP SDK server instance")
 
 	// Register guards for all backends
+	logger.LogInfo("startup", "Registering security guards for %d backends", len(l.ServerIDs()))
 	for _, serverID := range l.ServerIDs() {
 		us.registerGuard(serverID)
 	}
 
 	// Register aggregated tools from all backends
+	logger.LogInfo("startup", "Starting tool registration from all backends")
 	if err := us.registerAllTools(); err != nil {
+		logger.LogError("startup", "Failed to register tools: %v", err)
 		return nil, fmt.Errorf("failed to register tools: %w", err)
 	}
 
 	logUnified.Printf("Unified server created successfully with %d tools", len(us.tools))
+	logger.LogInfo("startup", "Unified server created successfully with %d tools registered", len(us.tools))
 	return us, nil
 }
 
@@ -112,39 +121,49 @@ func NewUnified(ctx context.Context, cfg *config.Config) (*UnifiedServer, error)
 func (us *UnifiedServer) registerAllTools() error {
 	log.Println("Registering tools from all backends...")
 	logUnified.Printf("Starting tool registration for %d backends", len(us.launcher.ServerIDs()))
+	logger.LogInfo("startup", "Beginning tool registration from %d backend servers", len(us.launcher.ServerIDs()))
 
 	// Register sys tools first
 	log.Println("Registering sys tools...")
+	logger.LogDebug("startup", "Registering built-in sys tools")
 	if err := us.registerSysTools(); err != nil {
 		log.Printf("Warning: failed to register sys tools: %v", err)
+		logger.LogWarn("startup", "Failed to register sys tools: %v", err)
 	}
 
 	// Register tools from each backend server
 	for _, serverID := range us.launcher.ServerIDs() {
 		logUnified.Printf("Registering tools from backend: %s", serverID)
+		logger.LogInfo("startup", "Fetching and registering tools from backend: %s", serverID)
 		if err := us.registerToolsFromBackend(serverID); err != nil {
 			log.Printf("Warning: failed to register tools from %s: %v", serverID, err)
+			logger.LogWarn("startup", "Failed to register tools from backend %s: %v", serverID, err)
 			// Continue with other backends
 		}
 	}
 
 	logUnified.Printf("Tool registration complete: total tools=%d", len(us.tools))
+	logger.LogInfo("startup", "Tool registration complete: %d tools available", len(us.tools))
 	return nil
 }
 
 // registerToolsFromBackend registers tools from a specific backend with <server>___<tool> naming
 func (us *UnifiedServer) registerToolsFromBackend(serverID string) error {
 	log.Printf("Registering tools from backend: %s", serverID)
+	logger.LogDebug("startup", "Connecting to backend server: %s", serverID)
 
 	// Get connection to backend
 	conn, err := launcher.GetOrLaunch(us.launcher, serverID)
 	if err != nil {
+		logger.LogError("startup", "Failed to connect to backend %s: %v", serverID, err)
 		return fmt.Errorf("failed to connect: %w", err)
 	}
 
+	logger.LogDebug("startup", "Listing tools from backend: %s", serverID)
 	// List tools from backend
 	result, err := conn.SendRequest("tools/list", nil)
 	if err != nil {
+		logger.LogError("startup", "Failed to list tools from backend %s: %v", serverID, err)
 		return fmt.Errorf("failed to list tools: %w", err)
 	}
 
@@ -158,8 +177,11 @@ func (us *UnifiedServer) registerToolsFromBackend(serverID string) error {
 	}
 
 	if err := json.Unmarshal(result.Result, &listResult); err != nil {
+		logger.LogError("startup", "Failed to parse tool list from backend %s: %v", serverID, err)
 		return fmt.Errorf("failed to parse tools: %w", err)
 	}
+
+	logger.LogInfo("startup", "Found %d tools from backend: %s", len(listResult.Tools), serverID)
 
 	// Register each tool with prefixed name
 	toolNames := []string{}
@@ -221,9 +243,11 @@ func (us *UnifiedServer) registerToolsFromBackend(serverID string) error {
 		}, handler)
 
 		log.Printf("Registered tool: %s", prefixedName)
+		logger.LogDebug("startup", "Registered tool: %s from backend: %s", prefixedName, serverID)
 	}
 
 	log.Printf("Registered %d tools from %s: %v", len(listResult.Tools), serverID, toolNames)
+	logger.LogInfo("startup", "Successfully registered %d tools from backend: %s", len(listResult.Tools), serverID)
 	return nil
 }
 

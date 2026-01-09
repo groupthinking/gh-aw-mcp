@@ -5,7 +5,11 @@ import (
 	"os"
 	"regexp"
 	"strings"
+
+	"github.com/githubnext/gh-aw-mcpg/internal/logger"
 )
+
+var logValidation = logger.New("config:validation")
 
 // ValidationError represents a configuration validation error with context
 type ValidationError struct {
@@ -37,6 +41,8 @@ func expandVariables(value, jsonPath string) (string, error) {
 		varName := match[2 : len(match)-1]
 
 		if envValue, exists := os.LookupEnv(varName); exists {
+			logValidation.Printf("Expanded variable: %s=%s (masked) at %s", varName, maskValue(envValue), jsonPath)
+			logger.LogDebug("startup", "Expanded environment variable: %s at %s", varName, jsonPath)
 			return envValue
 		}
 
@@ -46,6 +52,7 @@ func expandVariables(value, jsonPath string) (string, error) {
 	})
 
 	if len(undefinedVars) > 0 {
+		logger.LogError("startup", "Undefined environment variable: %s at %s", undefinedVars[0], jsonPath)
 		return "", &ValidationError{
 			Field:      "env variable",
 			Message:    fmt.Sprintf("undefined environment variable referenced: %s", undefinedVars[0]),
@@ -57,9 +64,18 @@ func expandVariables(value, jsonPath string) (string, error) {
 	return result, nil
 }
 
+// maskValue returns a masked version of the value for logging
+func maskValue(value string) string {
+	if len(value) <= 4 {
+		return "***"
+	}
+	return value[:2] + "..." + value[len(value)-2:]
+}
+
 // expandEnvVariables expands all variable expressions in an env map
 func expandEnvVariables(env map[string]string, serverName string) (map[string]string, error) {
 	result := make(map[string]string, len(env))
+	logValidation.Printf("Expanding environment variables for server: %s (%d variables)", serverName, len(env))
 
 	for key, value := range env {
 		jsonPath := fmt.Sprintf("mcpServers.%s.env.%s", serverName, key)
@@ -72,6 +88,7 @@ func expandEnvVariables(env map[string]string, serverName string) (map[string]st
 		result[key] = expanded
 	}
 
+	logValidation.Printf("Successfully expanded %d environment variables for server: %s", len(result), serverName)
 	return result, nil
 }
 
@@ -126,6 +143,7 @@ func validateMounts(mounts []string, jsonPath string) error {
 // validateStdioServer validates a stdio server configuration
 func validateStdioServer(name string, server *StdinServerConfig) error {
 	jsonPath := fmt.Sprintf("mcpServers.%s", name)
+	logValidation.Printf("Validating server configuration: %s", name)
 
 	// Validate type (empty defaults to stdio)
 	if server.Type == "" {
@@ -139,6 +157,7 @@ func validateStdioServer(name string, server *StdinServerConfig) error {
 
 	// Validate known types
 	if server.Type != "stdio" && server.Type != "http" {
+		logger.LogError("startup", "Invalid server type '%s' for server: %s", server.Type, name)
 		return &ValidationError{
 			Field:      "type",
 			Message:    fmt.Sprintf("unsupported server type '%s'", server.Type),
@@ -150,6 +169,7 @@ func validateStdioServer(name string, server *StdinServerConfig) error {
 	// For stdio servers, container is required
 	if server.Type == "stdio" || server.Type == "local" {
 		if server.Container == "" {
+			logger.LogError("startup", "Missing required 'container' field for server: %s", name)
 			return &ValidationError{
 				Field:      "container",
 				Message:    "'container' is required for stdio servers",
@@ -160,6 +180,7 @@ func validateStdioServer(name string, server *StdinServerConfig) error {
 
 		// Reject unsupported 'command' field
 		if server.Command != "" {
+			logger.LogError("startup", "Unsupported 'command' field found for server: %s", name)
 			return &ValidationError{
 				Field:      "command",
 				Message:    "'command' field is not supported (stdio servers must use 'container')",
@@ -170,15 +191,19 @@ func validateStdioServer(name string, server *StdinServerConfig) error {
 
 		// Validate mounts if provided
 		if len(server.Mounts) > 0 {
+			logValidation.Printf("Validating %d mount(s) for server: %s", len(server.Mounts), name)
 			if err := validateMounts(server.Mounts, jsonPath); err != nil {
 				return err
 			}
 		}
+		
+		logger.LogDebug("startup", "Server validation passed: %s (type: %s, container: %s)", name, server.Type, server.Container)
 	}
 
 	// For HTTP servers, url is required
 	if server.Type == "http" {
 		if server.URL == "" {
+			logger.LogError("startup", "Missing required 'url' field for HTTP server: %s", name)
 			return &ValidationError{
 				Field:      "url",
 				Message:    "'url' is required for HTTP servers",

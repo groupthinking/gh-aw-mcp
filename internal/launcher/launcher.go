@@ -28,10 +28,19 @@ type Launcher struct {
 // New creates a new Launcher
 func New(ctx context.Context, cfg *config.Config) *Launcher {
 	logLauncher.Printf("Creating new launcher with %d configured servers", len(cfg.Servers))
+	logger.LogInfo("startup", "Initializing launcher with %d backend servers", len(cfg.Servers))
 
 	inContainer := tty.IsRunningInContainer()
 	if inContainer {
 		log.Println("[LAUNCHER] Detected running inside a container")
+		logger.LogInfo("startup", "Launcher running inside a container")
+	} else {
+		logger.LogInfo("startup", "Launcher running on host system")
+	}
+
+	// Log server configurations
+	for serverID, serverCfg := range cfg.Servers {
+		logger.LogDebug("startup", "Backend server configured: %s (command: %s)", serverID, serverCfg.Command)
 	}
 
 	return &Launcher{
