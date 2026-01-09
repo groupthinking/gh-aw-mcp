@@ -189,6 +189,28 @@ validate_container_config() {
     fi
 }
 
+# Validate log directory is mounted for persistent logging
+validate_log_directory_mount() {
+    local container_id="$1"
+    local log_dir="${MCP_GATEWAY_LOG_DIR:-/tmp/gh-aw/sandbox/mcp}"
+    
+    if ! validate_container_id "$container_id"; then
+        log_warn "Cannot validate log directory mount: container ID invalid or unknown"
+        return 0
+    fi
+    
+    # Check if log directory is a mount point
+    local mounts=$(docker inspect --format '{{json .Mounts}}' "$container_id" 2>/dev/null || echo "[]")
+    
+    if ! echo "$mounts" | grep -q "$log_dir"; then
+        log_warn "Log directory $log_dir is not mounted"
+        log_warn "Gateway logs will not persist outside the container"
+        log_warn "Add mount: -v /path/on/host:$log_dir"
+    else
+        log_info "Log directory $log_dir is mounted"
+    fi
+}
+
 # Set DOCKER_API_VERSION based on architecture
 set_docker_api_version() {
     local arch=$(uname -m)
@@ -205,14 +227,18 @@ build_command_args() {
     local host="${MCP_GATEWAY_HOST:-0.0.0.0}"
     local port="$MCP_GATEWAY_PORT"
     local mode="${MCP_GATEWAY_MODE:---routed}"
+    local log_dir="${MCP_GATEWAY_LOG_DIR:-/tmp/gh-aw/sandbox/mcp}"
     
-    local flags="$mode --listen ${host}:${port} --config-stdin"
+    local flags="$mode --listen ${host}:${port} --config-stdin --log-dir ${log_dir}"
     
     # Add env file if specified and exists
     if [ -n "$ENV_FILE" ] && [ -f "$ENV_FILE" ]; then
         flags="$flags --env $ENV_FILE"
         log_info "Using environment file: $ENV_FILE"
     fi
+    
+    log_info "Gateway will listen on ${host}:${port}"
+    log_info "Log directory: ${log_dir}"
     
     echo "$flags"
 }
@@ -242,6 +268,7 @@ main() {
         validate_port_mapping "$CONTAINER_ID"
         validate_stdin_interactive "$CONTAINER_ID"
         validate_container_config "$CONTAINER_ID"
+        validate_log_directory_mount "$CONTAINER_ID"
     fi
     
     # Build command

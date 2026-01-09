@@ -29,6 +29,7 @@ type EnvValidationResult struct {
 	MissingEnvVars     []string
 	PortMapped         bool
 	StdinInteractive   bool
+	LogDirMounted      bool
 	ValidationErrors   []string
 	ValidationWarnings []string
 }
@@ -103,6 +104,17 @@ func ValidateContainerizedEnvironment(containerID string) *EnvValidationResult {
 	if !result.StdinInteractive {
 		result.ValidationErrors = append(result.ValidationErrors,
 			"Container was not started with -i flag. Stdin is required for configuration input.")
+	}
+
+	// Check if log directory is mounted (warning only)
+	logDir := os.Getenv("MCP_GATEWAY_LOG_DIR")
+	if logDir == "" {
+		logDir = "/tmp/gh-aw/sandbox/mcp"
+	}
+	result.LogDirMounted = checkLogDirMounted(containerID, logDir)
+	if !result.LogDirMounted {
+		result.ValidationWarnings = append(result.ValidationWarnings,
+			fmt.Sprintf("Log directory %s is not mounted. Logs will not persist outside the container. Use: -v /path/on/host:%s", logDir, logDir))
 	}
 
 	return result
@@ -229,6 +241,23 @@ func checkStdinInteractive(containerID string) bool {
 	}
 
 	return strings.TrimSpace(string(output)) == "true"
+}
+
+// checkLogDirMounted uses docker inspect to verify the log directory is mounted
+func checkLogDirMounted(containerID, logDir string) bool {
+	if err := validateContainerID(containerID); err != nil {
+		return false
+	}
+
+	// Use docker inspect to get mounts
+	cmd := exec.Command("docker", "inspect", "--format", "{{json .Mounts}}", containerID)
+	output, err := cmd.Output()
+	if err != nil {
+		return false
+	}
+
+	// Check if the log directory is in the mounts
+	return strings.Contains(string(output), logDir)
 }
 
 // GetGatewayPortFromEnv returns the MCP_GATEWAY_PORT value, parsed as int

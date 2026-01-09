@@ -53,6 +53,7 @@ For detailed setup instructions, building from source, and local development, se
      -e MCP_GATEWAY_DOMAIN=localhost \
      -e MCP_GATEWAY_API_KEY=your-secret-key \
      -v /var/run/docker.sock:/var/run/docker.sock \
+     -v /path/to/logs:/tmp/gh-aw/sandbox/mcp \
      -p 8000:8000 \
      ghcr.io/githubnext/gh-aw-mcpg:latest < config.json
    ```
@@ -61,9 +62,10 @@ For detailed setup instructions, building from source, and local development, se
 - `-i`: Enables stdin for passing JSON configuration
 - `-e MCP_GATEWAY_*`: Required environment variables
 - `-v /var/run/docker.sock`: Required for spawning backend MCP servers
+- `-v /path/to/logs:/tmp/gh-aw/sandbox/mcp`: Mount for persistent gateway logs
 - `-p 8000:8000`: Port mapping must match `MCP_GATEWAY_PORT`
 
-MCPG will start in routed mode on `http://127.0.0.1:8000`, proxying MCP requests to your configured backend servers.
+MCPG will start in routed mode on `http://0.0.0.0:8000` (using `MCP_GATEWAY_PORT`), proxying MCP requests to your configured backend servers.
 
 ## Configuration
 
@@ -208,7 +210,7 @@ When running in a container (`run_containerized.sh`), these variables **must** b
 
 | Variable | Description | Example |
 |----------|-------------|---------|
-| `MCP_GATEWAY_PORT` | The port the gateway listens on | `8080` |
+| `MCP_GATEWAY_PORT` | The port the gateway listens on (used for `--listen` address) | `8080` |
 | `MCP_GATEWAY_DOMAIN` | The domain name for the gateway | `localhost` |
 | `MCP_GATEWAY_API_KEY` | API key for authentication | `your-secret-key` |
 
@@ -223,6 +225,7 @@ When running locally (`run.sh`), these variables are optional (warnings shown if
 | `MCP_GATEWAY_API_KEY` | API authentication key | (disabled) |
 | `MCP_GATEWAY_HOST` | Gateway bind address | `0.0.0.0` |
 | `MCP_GATEWAY_MODE` | Gateway mode | `--routed` |
+| `MCP_GATEWAY_LOG_DIR` | Log file directory | `/tmp/gh-aw/sandbox/mcp` |
 
 ### Docker Configuration
 
@@ -269,6 +272,7 @@ The containerized startup script performs these validations:
 | Environment Variables | Checks required env vars are set | Exit with error |
 | Port Mapping | Verifies container port is mapped to host | Exit with error |
 | Stdin Interactive | Ensures `-i` flag was used | Exit with error |
+| Log Directory Mount | Verifies log directory is mounted to host | Warning (logs won't persist) |
 
 ### Non-Containerized Mode
 
@@ -295,10 +299,15 @@ MCPG provides comprehensive logging of all gateway operations to help diagnose i
 
 ### Log File Location
 
-By default, logs are written to `/tmp/gh-aw/sandbox/mcp/mcp-gateway.log`. This location can be configured using the `--log-dir` flag:
+By default, logs are written to `/tmp/gh-aw/sandbox/mcp/mcp-gateway.log`. This location can be configured using the `--log-dir` flag or `MCP_GATEWAY_LOG_DIR` environment variable:
 
 ```bash
 ./awmg --config config.toml --log-dir /var/log/mcp-gateway
+```
+
+**Important for containerized mode:** Mount the log directory to persist logs outside the container:
+```bash
+docker run -v /path/on/host:/tmp/gh-aw/sandbox/mcp ...
 ```
 
 If the log directory cannot be created or accessed, MCPG automatically falls back to logging to stdout.
