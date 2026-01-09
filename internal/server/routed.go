@@ -142,10 +142,12 @@ func createFilteredServer(unifiedServer *UnifiedServer, backendID string) *sdk.S
 			continue
 		}
 
+		// Note: InputSchema is intentionally omitted to avoid validation errors
+		// when backend MCP servers use different JSON Schema versions (e.g., draft-07)
+		// than what the SDK supports (draft-2020-12)
 		sdk.AddTool(server, &sdk.Tool{
 			Name:        toolInfo.Name, // Without prefix for the client
 			Description: toolInfo.Description,
-			InputSchema: toolInfo.InputSchema,
 		}, func(ctx context.Context, req *sdk.CallToolRequest, args interface{}) (*sdk.CallToolResult, interface{}, error) {
 			// Call the unified server's handler directly
 			// This ensures we go through the same session and connection pool

@@ -19,7 +19,17 @@ var (
 	urlPattern       = regexp.MustCompile(`^https?://.+`)
 	mountPattern     = regexp.MustCompile(`^[^:]+:[^:]+:(ro|rw)$`)
 	domainVarPattern = regexp.MustCompile(`^\$\{[A-Z_][A-Z0-9_]*\}$`)
+
+	// gatewayVersion stores the version string to include in error messages
+	gatewayVersion = "dev"
 )
+
+// SetVersion sets the gateway version for error reporting
+func SetVersion(version string) {
+	if version != "" {
+		gatewayVersion = version
+	}
+}
 
 // validateJSONSchema validates the raw JSON configuration against the JSON schema
 func validateJSONSchema(data []byte) error {
@@ -34,7 +44,7 @@ func validateJSONSchema(data []byte) error {
 	compiler.Draft = jsonschema.Draft7
 
 	// Add the schema with its $id
-	schemaURL := "https://docs.github.com/gh-aw/schemas/mcp-gateway-config.schema.json"
+	schemaURL := "https://github.com/githubnext/gh-aw/blob/main/docs/public/schemas/mcp-gateway-config.schema.json"
 	if err := compiler.AddResource(schemaURL, strings.NewReader(string(schemaJSON))); err != nil {
 		return fmt.Errorf("failed to add schema resource: %w", err)
 	}
@@ -67,23 +77,106 @@ func formatSchemaError(err error) error {
 	// The jsonschema library returns a ValidationError type with detailed info
 	if ve, ok := err.(*jsonschema.ValidationError); ok {
 		var sb strings.Builder
-		sb.WriteString("Configuration validation error:\n")
+		sb.WriteString(fmt.Sprintf("Configuration validation error (MCP Gateway version: %s):\n\n", gatewayVersion))
 
-		// Format the error with instance location and message
-		sb.WriteString(fmt.Sprintf("  at %s: %s", ve.InstanceLocation, ve.Message))
-
-		// Add nested errors if present
-		for _, cause := range ve.Causes {
-			sb.WriteString(fmt.Sprintf("\n  at %s: %s", cause.InstanceLocation, cause.Message))
-		}
+		// Recursively format all errors
+		formatValidationErrorRecursive(ve, &sb, 0)
 
 		sb.WriteString("\n\nPlease check your configuration against the MCP Gateway specification at:")
 		sb.WriteString("\nhttps://github.com/githubnext/gh-aw/blob/main/docs/src/content/docs/reference/mcp-gateway.md")
+		sb.WriteString("\n\nJSON Schema reference:")
+		sb.WriteString("\nhttps://github.com/githubnext/gh-aw/blob/main/docs/public/schemas/mcp-gateway-config.schema.json")
 
 		return fmt.Errorf("%s", sb.String())
 	}
 
-	return fmt.Errorf("configuration validation error: %s", err.Error())
+	return fmt.Errorf("configuration validation error (version: %s): %s", gatewayVersion, err.Error())
+}
+
+// formatValidationErrorRecursive recursively formats validation errors with proper indentation
+func formatValidationErrorRecursive(ve *jsonschema.ValidationError, sb *strings.Builder, depth int) {
+	indent := strings.Repeat("  ", depth)
+
+	// Format location and message
+	location := ve.InstanceLocation
+	if location == "" {
+		location = "<root>"
+	}
+	fmt.Fprintf(sb, "%sLocation: %s\n", indent, location)
+	fmt.Fprintf(sb, "%sError: %s\n", indent, ve.Message)
+
+	// Add detailed context based on the error message
+	context := formatErrorContext(ve, indent)
+	if context != "" {
+		sb.WriteString(context)
+	}
+
+	// Recursively process nested causes
+	if len(ve.Causes) > 0 {
+		for _, cause := range ve.Causes {
+			formatValidationErrorRecursive(cause, sb, depth+1)
+		}
+	}
+
+	// Add spacing between sibling errors at the same level
+	if depth == 0 {
+		sb.WriteString("\n")
+	}
+}
+
+// formatErrorContext provides additional context about what caused the validation error
+func formatErrorContext(ve *jsonschema.ValidationError, prefix string) string {
+	var sb strings.Builder
+	msg := ve.Message
+
+	// For additional properties errors, explain what's wrong
+	if strings.Contains(msg, "additionalProperties") || strings.Contains(msg, "additional property") {
+		sb.WriteString(fmt.Sprintf("%sDetails: Configuration contains field(s) that are not defined in the schema\n", prefix))
+		sb.WriteString(fmt.Sprintf("%s  → Check for typos in field names or remove unsupported fields\n", prefix))
+	}
+
+	// For type errors, show the mismatch
+	if strings.Contains(msg, "expected") && (strings.Contains(msg, "but got") || strings.Contains(msg, "type")) {
+		sb.WriteString(fmt.Sprintf("%sDetails: Type mismatch - the value type doesn't match what's expected\n", prefix))
+		sb.WriteString(fmt.Sprintf("%s  → Verify the value is the correct type (string, number, boolean, object, array)\n", prefix))
+	}
+
+	// For enum errors (invalid values from a set of allowed values)
+	if strings.Contains(msg, "value must be one of") || strings.Contains(msg, "must be") {
+		sb.WriteString(fmt.Sprintf("%sDetails: Invalid value - the field has a restricted set of allowed values\n", prefix))
+		sb.WriteString(fmt.Sprintf("%s  → Check the documentation for the list of valid values\n", prefix))
+	}
+
+	// For missing required properties
+	if strings.Contains(msg, "missing properties") || strings.Contains(msg, "required") {
+		sb.WriteString(fmt.Sprintf("%sDetails: Required field(s) are missing\n", prefix))
+		sb.WriteString(fmt.Sprintf("%s  → Add the required field(s) to your configuration\n", prefix))
+	}
+
+	// For pattern validation failures (regex patterns)
+	if strings.Contains(msg, "does not match pattern") || strings.Contains(msg, "pattern") {
+		sb.WriteString(fmt.Sprintf("%sDetails: Value format is incorrect\n", prefix))
+		sb.WriteString(fmt.Sprintf("%s  → The value must match a specific format or pattern\n", prefix))
+	}
+
+	// For minimum/maximum constraint violations
+	if strings.Contains(msg, "must be >=") || strings.Contains(msg, "must be <=") || strings.Contains(msg, "minimum") || strings.Contains(msg, "maximum") {
+		sb.WriteString(fmt.Sprintf("%sDetails: Value is outside the allowed range\n", prefix))
+		sb.WriteString(fmt.Sprintf("%s  → Adjust the value to be within the valid range\n", prefix))
+	}
+
+	// For oneOf errors (typically type selection issues)
+	if strings.Contains(msg, "doesn't validate with any of") || strings.Contains(msg, "oneOf") {
+		sb.WriteString(fmt.Sprintf("%sDetails: Configuration doesn't match any of the expected formats\n", prefix))
+		sb.WriteString(fmt.Sprintf("%s  → Review the structure and ensure it matches one of the valid configuration types\n", prefix))
+	}
+
+	// Add keyword location if it provides useful context
+	if ve.KeywordLocation != "" && ve.KeywordLocation != ve.InstanceLocation {
+		sb.WriteString(fmt.Sprintf("%sSchema location: %s\n", prefix, ve.KeywordLocation))
+	}
+
+	return sb.String()
 }
 
 // validateStringPatterns validates string fields against regex patterns from the schema
