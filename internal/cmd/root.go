@@ -20,6 +20,22 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// Default values for command-line flags.
+const (
+	defaultConfigFile  = "config.toml"
+	defaultConfigStdin = false
+	// DefaultListenIPv4 is the default interface used by the HTTP server.
+	DefaultListenIPv4 = "127.0.0.1"
+	// DefaultListenPort is the default port used by the HTTP server.
+	DefaultListenPort  = "3000"
+	defaultListenAddr  = DefaultListenIPv4 + ":" + DefaultListenPort
+	defaultRoutedMode  = false
+	defaultUnifiedMode = false
+	defaultEnvFile     = ""
+	defaultEnableDIFC  = false
+	defaultLogDir      = "/tmp/gh-aw/sandbox/mcp"
+)
+
 var (
 	configFile  string
 	configStdin bool
@@ -43,14 +59,14 @@ It provides routing, aggregation, and management of multiple MCP backend servers
 }
 
 func init() {
-	rootCmd.Flags().StringVarP(&configFile, "config", "c", "config.toml", "Path to config file")
-	rootCmd.Flags().BoolVar(&configStdin, "config-stdin", false, "Read MCP server configuration from stdin (JSON format). When enabled, overrides --config")
-	rootCmd.Flags().StringVarP(&listenAddr, "listen", "l", "127.0.0.1:3000", "HTTP server listen address")
-	rootCmd.Flags().BoolVar(&routedMode, "routed", false, "Run in routed mode (each backend at /mcp/<server>)")
-	rootCmd.Flags().BoolVar(&unifiedMode, "unified", false, "Run in unified mode (all backends at /mcp)")
-	rootCmd.Flags().StringVar(&envFile, "env", "", "Path to .env file to load environment variables")
-	rootCmd.Flags().BoolVar(&enableDIFC, "enable-difc", false, "Enable DIFC enforcement and session requirement (requires sys___init call before tool access)")
-	rootCmd.Flags().StringVar(&logDir, "log-dir", "/tmp/gh-aw/sandbox/mcp", "Directory for log files (falls back to stdout if directory cannot be created)")
+	rootCmd.Flags().StringVarP(&configFile, "config", "c", defaultConfigFile, "Path to config file")
+	rootCmd.Flags().BoolVar(&configStdin, "config-stdin", defaultConfigStdin, "Read MCP server configuration from stdin (JSON format). When enabled, overrides --config")
+	rootCmd.Flags().StringVarP(&listenAddr, "listen", "l", defaultListenAddr, "HTTP server listen address")
+	rootCmd.Flags().BoolVar(&routedMode, "routed", defaultRoutedMode, "Run in routed mode (each backend at /mcp/<server>)")
+	rootCmd.Flags().BoolVar(&unifiedMode, "unified", defaultUnifiedMode, "Run in unified mode (all backends at /mcp)")
+	rootCmd.Flags().StringVar(&envFile, "env", defaultEnvFile, "Path to .env file to load environment variables")
+	rootCmd.Flags().BoolVar(&enableDIFC, "enable-difc", defaultEnableDIFC, "Enable DIFC enforcement and session requirement (requires sys___init call before tool access)")
+	rootCmd.Flags().StringVar(&logDir, "log-dir", defaultLogDir, "Directory for log files (falls back to stdout if directory cannot be created)")
 
 	// Mark mutually exclusive flags
 	rootCmd.MarkFlagsMutuallyExclusive("routed", "unified")
@@ -188,7 +204,7 @@ func writeGatewayConfigToStdout(cfg *config.Config, listenAddr, mode string) err
 func writeGatewayConfig(cfg *config.Config, listenAddr, mode string, w io.Writer) error {
 	// Parse listen address to extract host and port
 	// Use net.SplitHostPort which properly handles both IPv4 and IPv6 addresses
-	host, port := "127.0.0.1", "3000"
+	host, port := DefaultListenIPv4, DefaultListenPort
 	if h, p, err := net.SplitHostPort(listenAddr); err == nil {
 		if h != "" {
 			host = h
