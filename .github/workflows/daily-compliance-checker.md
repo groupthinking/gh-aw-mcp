@@ -31,16 +31,9 @@ steps:
 tools:
   github:
     toolsets: [default]
-  web-fetch:
   bash: ["*"]
   edit:
   cache-memory:
-
-network:
-  allowed:
-    - "*.githubusercontent.com"
-    - "raw.githubusercontent.com"
-    - "github.com"
 
 timeout-minutes: 30
 strict: true
@@ -115,13 +108,18 @@ Use cache memory to avoid re-validating already-checked aspects:
 
 ## Step 3: Fetch Official Specification 📖
 
-Get the latest specification to check against:
+Get the latest specification to check against using the GitHub MCP:
 
-```bash
-# Use web-fetch to get the specification
+Use the GitHub MCP's `get_file_contents` tool to read the specification file:
+- **Owner**: `githubnext`
+- **Repo**: `gh-aw`
+- **Path**: `docs/src/content/docs/reference/mcp-gateway.md`
+- **Ref**: `main` (to get the latest version)
+
+Example:
 ```
-
-Fetch from: `https://raw.githubusercontent.com/githubnext/gh-aw/main/docs/src/content/docs/reference/mcp-gateway.md`
+Use github get_file_contents with owner=githubnext, repo=gh-aw, path=docs/src/content/docs/reference/mcp-gateway.md, ref=main
+```
 
 Parse the specification to extract:
 - Required features (marked with "MUST", "REQUIRED", "SHALL")
