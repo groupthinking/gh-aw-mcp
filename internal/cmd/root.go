@@ -45,6 +45,7 @@ var (
 	envFile     string
 	enableDIFC  bool
 	logDir      string
+	validateEnv bool
 	debugLog    = logger.New("cmd:root")
 	version     = "dev" // Default version, overridden by SetVersion
 )
@@ -67,6 +68,7 @@ func init() {
 	rootCmd.Flags().StringVar(&envFile, "env", defaultEnvFile, "Path to .env file to load environment variables")
 	rootCmd.Flags().BoolVar(&enableDIFC, "enable-difc", defaultEnableDIFC, "Enable DIFC enforcement and session requirement (requires sys___init call before tool access)")
 	rootCmd.Flags().StringVar(&logDir, "log-dir", defaultLogDir, "Directory for log files (falls back to stdout if directory cannot be created)")
+	rootCmd.Flags().BoolVar(&validateEnv, "validate-env", false, "Validate execution environment (Docker, env vars) before starting")
 
 	// Mark mutually exclusive flags
 	rootCmd.MarkFlagsMutuallyExclusive("routed", "unified")
@@ -94,6 +96,18 @@ func run(cmd *cobra.Command, args []string) error {
 		if err := loadEnvFile(envFile); err != nil {
 			return fmt.Errorf("failed to load .env file: %w", err)
 		}
+	}
+
+	// Validate execution environment if requested
+	if validateEnv {
+		debugLog.Printf("Validating execution environment...")
+		result := config.ValidateExecutionEnvironment()
+		if !result.IsValid() {
+			logger.LogError("startup", "Environment validation failed: %s", result.Error())
+			return fmt.Errorf("environment validation failed: %s", result.Error())
+		}
+		logger.LogInfo("startup", "Environment validation passed")
+		log.Println("Environment validation passed")
 	}
 
 	// Load configuration

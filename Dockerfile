@@ -25,12 +25,14 @@ WORKDIR /app
 # Copy binary from builder
 COPY --from=builder /app/awmg .
 
-# Copy run.sh script
+# Copy run scripts
 COPY run.sh .
-RUN chmod +x run.sh
+COPY run_containerized.sh .
+RUN chmod +x run.sh run_containerized.sh
 
 # Expose default HTTP port
 EXPOSE 8000
 
-# Use run.sh as entrypoint
-ENTRYPOINT ["/app/run.sh"]
+# Use run_containerized.sh as entrypoint for container deployments
+# This script requires stdin (-i flag) for JSON configuration
+ENTRYPOINT ["/app/run_containerized.sh"]
