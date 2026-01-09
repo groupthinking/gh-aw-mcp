@@ -29,10 +29,19 @@ func TestPlaywrightMCPServer(t *testing.T) {
 	playwrightImage := "ghcr.io/github/mcp-server-playwright:latest"
 	t.Logf("Checking for playwright MCP server image: %s", playwrightImage)
 
-	// Try to pull the image (this will skip if not available publicly yet)
-	pullCmd := exec.Command("docker", "pull", playwrightImage)
-	if err := pullCmd.Run(); err != nil {
-		t.Skipf("Playwright MCP server image not available: %s. Error: %v", playwrightImage, err)
+	// Check if the image exists locally
+	inspectCmd := exec.Command("docker", "image", "inspect", playwrightImage)
+	if err := inspectCmd.Run(); err != nil {
+		// Image not available locally, try to pull it
+		t.Logf("Image not found locally, attempting to pull: %s", playwrightImage)
+		pullCmd := exec.Command("docker", "pull", playwrightImage)
+		pullOutput, pullErr := pullCmd.CombinedOutput()
+		if pullErr != nil {
+			t.Fatalf("Failed to pull playwright MCP server image: %s. Error: %v. Output: %s", playwrightImage, pullErr, string(pullOutput))
+		}
+		t.Logf("Successfully pulled image: %s", playwrightImage)
+	} else {
+		t.Logf("Image already available locally: %s", playwrightImage)
 	}
 
 	// Find the awmg binary
