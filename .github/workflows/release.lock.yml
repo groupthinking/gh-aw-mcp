@@ -1261,7 +1261,7 @@ jobs:
       - name: Run unit tests
         run: |
           echo "Running unit tests (excluding integration tests)..."
-          go test -v $(go list ./... | grep -v /test/integration)
+          make test-unit
           echo "✓ Unit tests passed"
       - name: Build binary
         run: |
@@ -1272,7 +1272,7 @@ jobs:
       - name: Run integration tests
         run: |
           echo "Running integration tests with built binary..."
-          go test -v ./test/integration/...
+          make test-integration
           echo "✓ Integration tests passed"
       - name: Build release binaries
         run: |
