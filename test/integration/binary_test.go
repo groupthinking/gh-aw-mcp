@@ -227,6 +227,11 @@ func TestBinaryInvocation_ConfigStdin(t *testing.T) {
 				"container": "echo",
 			},
 		},
+		"gateway": map[string]interface{}{
+			"port":   13003,
+			"domain": "localhost",
+			"apiKey": "test-key",
+		},
 	}
 	configBytes, _ := json.Marshal(configJSON)
 
