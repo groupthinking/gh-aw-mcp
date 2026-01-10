@@ -331,4 +331,3 @@ func TestOutputConfigUnifiedMode(t *testing.T) {
 	t.Log("✓ All servers have correct auth headers in unified mode")
 	t.Logf("Server output:\nSTDOUT:\n%s\nSTDERR:\n%s", stdout.String(), stderr.String())
 }
-
