@@ -4,11 +4,25 @@
 
 set -e
 
-# Color output for better visibility
-RED='\033[0;31m'
-YELLOW='\033[1;33m'
-GREEN='\033[0;32m'
-NC='\033[0m' # No Color
+# Detect if stderr is a TTY and colors should be enabled
+# Respects NO_COLOR and DEBUG_COLORS environment variables
+USE_COLORS=false
+if [ -t 2 ] && [ -z "$NO_COLOR" ] && [ "${DEBUG_COLORS:-1}" != "0" ]; then
+    USE_COLORS=true
+fi
+
+# Color output for better visibility (only when USE_COLORS=true)
+if [ "$USE_COLORS" = true ]; then
+    RED='\033[0;31m'
+    YELLOW='\033[1;33m'
+    GREEN='\033[0;32m'
+    NC='\033[0m' # No Color
+else
+    RED=''
+    YELLOW=''
+    GREEN=''
+    NC=''
+fi
 
 log_info() {
     echo -e "${GREEN}[INFO]${NC} $1" >&2
