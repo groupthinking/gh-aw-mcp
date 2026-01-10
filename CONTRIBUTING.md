@@ -411,6 +411,13 @@ make release major
 
 ### Release Process
 
+> **Note:** The manual release workflow requires a Personal Access Token (PAT) with `repo` scope configured as a repository secret named `GH_AW_GITHUB_TOKEN`. This token is needed to trigger the automated release workflow when pushing tags. Without it, the workflow will fall back to using `GITHUB_TOKEN`, which cannot trigger other workflows due to GitHub security limitations.
+>
+> To configure the token:
+> 1. Create a PAT with `repo` scope at https://github.com/settings/tokens
+> 2. Add it as a repository secret at https://github.com/githubnext/gh-aw-mcpg/settings/secrets/actions
+> 3. Name the secret `GH_AW_GITHUB_TOKEN`
+
 1. **Run the release command** with the appropriate bump type:
    ```bash
    make release patch
