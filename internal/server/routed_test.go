@@ -2,12 +2,191 @@ package server
 
 import (
 	"context"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/githubnext/gh-aw-mcpg/internal/config"
 )
+
+// TestCloseEndpoint_Success tests the successful shutdown flow
+func TestCloseEndpoint_Success(t *testing.T) {
+	cfg := &config.Config{
+		Servers: map[string]*config.ServerConfig{
+			"github": {Command: "docker", Args: []string{}},
+			"fetch":  {Command: "docker", Args: []string{}},
+		},
+	}
+
+	ctx := context.Background()
+	us, err := NewUnified(ctx, cfg)
+	if err != nil {
+		t.Fatalf("NewUnified() failed: %v", err)
+	}
+	defer us.Close()
+
+	// Enable test mode to prevent os.Exit()
+	us.SetTestMode(true)
+
+	// Create routed mode server
+	httpServer := CreateHTTPServerForRoutedMode("127.0.0.1:0", us, "")
+
+	// Create test request
+	req := httptest.NewRequest(http.MethodPost, "/close", nil)
+	w := httptest.NewRecorder()
+
+	// Send request
+	httpServer.Handler.ServeHTTP(w, req)
+
+	// Verify response
+	if w.Code != http.StatusOK {
+		t.Errorf("Expected status 200, got %d", w.Code)
+	}
+
+	var response map[string]interface{}
+	if err := json.NewDecoder(w.Body).Decode(&response); err != nil {
+		t.Fatalf("Failed to decode response: %v", err)
+	}
+
+	// Check response fields
+	if status, ok := response["status"].(string); !ok || status != "closed" {
+		t.Errorf("Expected status 'closed', got %v", response["status"])
+	}
+
+	if msg, ok := response["message"].(string); !ok || msg != "Gateway shutdown initiated" {
+		t.Errorf("Expected message 'Gateway shutdown initiated', got %v", response["message"])
+	}
+
+	// Should report 2 servers terminated
+	if count, ok := response["serversTerminated"].(float64); !ok || count != 2 {
+		t.Errorf("Expected serversTerminated 2, got %v", response["serversTerminated"])
+	}
+
+	// Verify server is marked as shutdown
+	if !us.IsShutdown() {
+		t.Error("Expected server to be marked as shutdown")
+	}
+}
+
+// TestCloseEndpoint_Idempotency tests that subsequent calls return 410 Gone
+func TestCloseEndpoint_Idempotency(t *testing.T) {
+	cfg := &config.Config{
+		Servers: map[string]*config.ServerConfig{
+			"github": {Command: "docker", Args: []string{}},
+		},
+	}
+
+	ctx := context.Background()
+	us, err := NewUnified(ctx, cfg)
+	if err != nil {
+		t.Fatalf("NewUnified() failed: %v", err)
+	}
+	defer us.Close()
+
+	// Enable test mode to prevent os.Exit()
+	us.SetTestMode(true)
+
+	// Create routed mode server
+	httpServer := CreateHTTPServerForRoutedMode("127.0.0.1:0", us, "")
+
+	// First call
+	req1 := httptest.NewRequest(http.MethodPost, "/close", nil)
+	w1 := httptest.NewRecorder()
+	httpServer.Handler.ServeHTTP(w1, req1)
+
+	if w1.Code != http.StatusOK {
+		t.Errorf("First call: expected status 200, got %d", w1.Code)
+	}
+
+	// Second call (should be idempotent)
+	req2 := httptest.NewRequest(http.MethodPost, "/close", nil)
+	w2 := httptest.NewRecorder()
+	httpServer.Handler.ServeHTTP(w2, req2)
+
+	// Should return 410 Gone
+	if w2.Code != http.StatusGone {
+		t.Errorf("Second call: expected status 410 (Gone), got %d", w2.Code)
+	}
+
+	var response map[string]interface{}
+	if err := json.NewDecoder(w2.Body).Decode(&response); err != nil {
+		t.Fatalf("Failed to decode response: %v", err)
+	}
+
+	if errMsg, ok := response["error"].(string); !ok || errMsg != "Gateway has already been closed" {
+		t.Errorf("Expected error message 'Gateway has already been closed', got %v", response["error"])
+	}
+}
+
+// TestCloseEndpoint_MethodNotAllowed tests that non-POST requests are rejected
+func TestCloseEndpoint_MethodNotAllowed(t *testing.T) {
+	cfg := &config.Config{
+		Servers: map[string]*config.ServerConfig{},
+	}
+
+	ctx := context.Background()
+	us, err := NewUnified(ctx, cfg)
+	if err != nil {
+		t.Fatalf("NewUnified() failed: %v", err)
+	}
+	defer us.Close()
+
+	// Create routed mode server
+	httpServer := CreateHTTPServerForRoutedMode("127.0.0.1:0", us, "")
+
+	// Try GET request
+	req := httptest.NewRequest(http.MethodGet, "/close", nil)
+	w := httptest.NewRecorder()
+	httpServer.Handler.ServeHTTP(w, req)
+
+	if w.Code != http.StatusMethodNotAllowed {
+		t.Errorf("Expected status 405 (Method Not Allowed), got %d", w.Code)
+	}
+}
+
+// TestCloseEndpoint_RequiresAuth tests that authentication is enforced when configured
+func TestCloseEndpoint_RequiresAuth(t *testing.T) {
+	cfg := &config.Config{
+		Servers: map[string]*config.ServerConfig{},
+	}
+
+	ctx := context.Background()
+	us, err := NewUnified(ctx, cfg)
+	if err != nil {
+		t.Fatalf("NewUnified() failed: %v", err)
+	}
+	defer us.Close()
+
+	// Enable test mode to prevent os.Exit()
+	us.SetTestMode(true)
+
+	apiKey := "test-secret-key"
+
+	// Create routed mode server with API key
+	httpServer := CreateHTTPServerForRoutedMode("127.0.0.1:0", us, apiKey)
+
+	// Request without auth header
+	req := httptest.NewRequest(http.MethodPost, "/close", nil)
+	w := httptest.NewRecorder()
+	httpServer.Handler.ServeHTTP(w, req)
+
+	if w.Code != http.StatusUnauthorized {
+		t.Errorf("Expected status 401 (Unauthorized), got %d", w.Code)
+	}
+
+	// Request with correct auth header
+	req2 := httptest.NewRequest(http.MethodPost, "/close", nil)
+	req2.Header.Set("Authorization", apiKey)
+	w2 := httptest.NewRecorder()
+	httpServer.Handler.ServeHTTP(w2, req2)
+
+	if w2.Code != http.StatusOK {
+		t.Errorf("Expected status 200 with correct auth, got %d", w2.Code)
+	}
+}
 
 func TestCreateFilteredServer_ToolFiltering(t *testing.T) {
 	cfg := &config.Config{

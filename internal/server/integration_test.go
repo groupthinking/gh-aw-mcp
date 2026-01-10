@@ -499,3 +499,179 @@ func TestProxyDoesNotModifyRequests(t *testing.T) {
 	t.Log("✓ Tool handler registered and accessible")
 	t.Log("✓ Request data structure is preserved through the proxy layer")
 }
+
+// TestCloseEndpoint_Integration tests the /close endpoint in an integration scenario
+func TestCloseEndpoint_Integration(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping integration test in short mode")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	cfg := &config.Config{
+		Servers: map[string]*config.ServerConfig{
+			"testserver1": {Command: "docker", Args: []string{}},
+			"testserver2": {Command: "docker", Args: []string{}},
+		},
+	}
+
+	us, err := NewUnified(ctx, cfg)
+	if err != nil {
+		t.Fatalf("Failed to create unified server: %v", err)
+	}
+	defer us.Close()
+
+	// Enable test mode to prevent os.Exit
+	us.SetTestMode(true)
+
+	// Test with routed mode
+	t.Run("RoutedMode", func(t *testing.T) {
+		httpServer := CreateHTTPServerForRoutedMode("127.0.0.1:0", us, "")
+		ts := httptest.NewServer(httpServer.Handler)
+		defer ts.Close()
+
+		// First call should succeed
+		req, _ := http.NewRequest(http.MethodPost, ts.URL+"/close", nil)
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatalf("Failed to call /close: %v", err)
+		}
+		defer resp.Body.Close()
+
+		if resp.StatusCode != http.StatusOK {
+			t.Errorf("Expected status 200, got %d", resp.StatusCode)
+		}
+
+		var result map[string]interface{}
+		if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+			t.Fatalf("Failed to decode response: %v", err)
+		}
+
+		// Verify response structure
+		if status, ok := result["status"].(string); !ok || status != "closed" {
+			t.Errorf("Expected status 'closed', got %v", result["status"])
+		}
+
+		if msg, ok := result["message"].(string); !ok || msg != "Gateway shutdown initiated" {
+			t.Errorf("Expected message 'Gateway shutdown initiated', got %v", result["message"])
+		}
+
+		// Should report 2 servers terminated
+		if count, ok := result["serversTerminated"].(float64); !ok || count != 2 {
+			t.Errorf("Expected serversTerminated 2, got %v", result["serversTerminated"])
+		}
+
+		t.Log("✓ Close endpoint returns correct success response")
+
+		// Second call should return 410 Gone
+		req2, _ := http.NewRequest(http.MethodPost, ts.URL+"/close", nil)
+		resp2, err := http.DefaultClient.Do(req2)
+		if err != nil {
+			t.Fatalf("Failed to call /close second time: %v", err)
+		}
+		defer resp2.Body.Close()
+
+		if resp2.StatusCode != http.StatusGone {
+			t.Errorf("Expected status 410 (Gone) on second call, got %d", resp2.StatusCode)
+		}
+
+		var result2 map[string]interface{}
+		if err := json.NewDecoder(resp2.Body).Decode(&result2); err != nil {
+			t.Fatalf("Failed to decode second response: %v", err)
+		}
+
+		if errMsg, ok := result2["error"].(string); !ok || errMsg != "Gateway has already been closed" {
+			t.Errorf("Expected error message about gateway already closed, got %v", result2["error"])
+		}
+
+		t.Log("✓ Close endpoint is idempotent (returns 410 on subsequent calls)")
+	})
+
+	// Test with unified mode (create new unified server for clean state)
+	ctx2, cancel2 := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel2()
+
+	us2, err := NewUnified(ctx2, cfg)
+	if err != nil {
+		t.Fatalf("Failed to create second unified server: %v", err)
+	}
+	defer us2.Close()
+	us2.SetTestMode(true)
+
+	t.Run("UnifiedMode", func(t *testing.T) {
+		httpServer := CreateHTTPServerForMCP("127.0.0.1:0", us2, "")
+		ts := httptest.NewServer(httpServer.Handler)
+		defer ts.Close()
+
+		// Call close endpoint
+		req, _ := http.NewRequest(http.MethodPost, ts.URL+"/close", nil)
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatalf("Failed to call /close: %v", err)
+		}
+		defer resp.Body.Close()
+
+		if resp.StatusCode != http.StatusOK {
+			t.Errorf("Expected status 200, got %d", resp.StatusCode)
+		}
+
+		var result map[string]interface{}
+		if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+			t.Fatalf("Failed to decode response: %v", err)
+		}
+
+		if status, ok := result["status"].(string); !ok || status != "closed" {
+			t.Errorf("Expected status 'closed', got %v", result["status"])
+		}
+
+		t.Log("✓ Close endpoint works in unified mode")
+	})
+
+	// Test authentication enforcement
+	ctx3, cancel3 := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel3()
+
+	us3, err := NewUnified(ctx3, cfg)
+	if err != nil {
+		t.Fatalf("Failed to create third unified server: %v", err)
+	}
+	defer us3.Close()
+	us3.SetTestMode(true)
+
+	t.Run("AuthenticationRequired", func(t *testing.T) {
+		apiKey := "test-api-key-12345"
+		httpServer := CreateHTTPServerForRoutedMode("127.0.0.1:0", us3, apiKey)
+		ts := httptest.NewServer(httpServer.Handler)
+		defer ts.Close()
+
+		// Request without auth should fail
+		req, _ := http.NewRequest(http.MethodPost, ts.URL+"/close", nil)
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatalf("Failed to call /close: %v", err)
+		}
+		defer resp.Body.Close()
+
+		if resp.StatusCode != http.StatusUnauthorized {
+			t.Errorf("Expected status 401 (Unauthorized), got %d", resp.StatusCode)
+		}
+
+		t.Log("✓ Close endpoint requires authentication when API key is configured")
+
+		// Request with auth should succeed
+		req2, _ := http.NewRequest(http.MethodPost, ts.URL+"/close", nil)
+		req2.Header.Set("Authorization", apiKey)
+		resp2, err := http.DefaultClient.Do(req2)
+		if err != nil {
+			t.Fatalf("Failed to call /close with auth: %v", err)
+		}
+		defer resp2.Body.Close()
+
+		if resp2.StatusCode != http.StatusOK {
+			t.Errorf("Expected status 200 with correct auth, got %d", resp2.StatusCode)
+		}
+
+		t.Log("✓ Close endpoint accepts requests with valid authentication")
+	})
+}
