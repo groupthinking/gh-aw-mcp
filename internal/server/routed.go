@@ -111,8 +111,9 @@ func CreateHTTPServerForRoutedMode(addr string, unifiedServer *UnifiedServer, ap
 
 	// Health check
 	healthHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		fmt.Fprintf(w, "OK\n")
+		json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
 	})
 	mux.Handle("/health", withResponseLogging(healthHandler))
 
