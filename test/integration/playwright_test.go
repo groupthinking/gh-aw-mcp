@@ -183,7 +183,7 @@ func TestPlaywrightMCPServer(t *testing.T) {
 		jsonData, _ := json.Marshal(initializedNotif)
 		req, _ := http.NewRequest("POST", serverURL+"/mcp", bytes.NewBuffer(jsonData))
 		req.Header.Set("Content-Type", "application/json")
-		req.Header.Set("Authorization", "Bearer test-playwright-key")
+		req.Header.Set("Authorization", "test-playwright-key") // Plain API key per spec 7.1
 		client := &http.Client{Timeout: 5 * time.Second}
 		resp, err := client.Do(req)
 		if err == nil {

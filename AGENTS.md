@@ -243,10 +243,10 @@ DEBUG_COLORS=0 DEBUG=* ./awmg --config config.toml
 
 ## Security Notes
 
-- Auth: `Authorization: Bearer <token>` header
-- Sessions: `Mcp-Session-Id` header
-- DIFC: Implemented but disabled (NoopGuard active)
-- Stdio servers: Containerized execution only (no direct command support)
+- **Auth**: `Authorization: <apiKey>` header (plain API key per spec 7.1, NOT Bearer scheme)
+- **Sessions**: Session ID extracted from Authorization header value
+- **DIFC**: Implemented but disabled (NoopGuard active)
+- **Stdio servers**: Containerized execution only (no direct command support)
 
 ## Resources
 

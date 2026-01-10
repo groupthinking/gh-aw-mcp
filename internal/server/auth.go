@@ -3,13 +3,13 @@ package server
 import (
 	"log"
 	"net/http"
-	"strings"
 	"time"
 
 	"github.com/githubnext/gh-aw-mcpg/internal/logger"
 )
 
 // authMiddleware implements API key authentication per spec section 7.1
+// Per spec: Authorization header MUST contain the API key directly (NOT Bearer scheme)
 func authMiddleware(apiKey string, next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		// Extract Authorization header
@@ -23,25 +23,10 @@ func authMiddleware(apiKey string, next http.HandlerFunc) http.HandlerFunc {
 			return
 		}
 
-		// Spec 7.1: Malformed header returns 400
-		var token string
-		if strings.HasPrefix(authHeader, "Bearer ") {
-			// Bearer token: extract the token after the prefix
-			token = strings.TrimPrefix(authHeader, "Bearer ")
-		} else if authHeader == apiKey {
-			// Plain API key: use the header value directly
-			token = authHeader
-		} else {
-			// Header is neither a Bearer token nor a valid plain API key
-			logger.LogError("auth", "Authentication failed: malformed Authorization header, remote=%s, path=%s", r.RemoteAddr, r.URL.Path)
-			logRuntimeError("authentication_failed", "malformed_auth_header", r, nil)
-			http.Error(w, "Bad Request: Authorization header must be 'Bearer <token>' or plain API key", http.StatusBadRequest)
-			return
-		}
-		// Spec 7.1: Invalid token returns 401
-		if token != apiKey {
+		// Spec 7.1: Authorization header must contain API key directly (not Bearer scheme)
+		if authHeader != apiKey {
 			logger.LogError("auth", "Authentication failed: invalid API key, remote=%s, path=%s", r.RemoteAddr, r.URL.Path)
-			logRuntimeError("authentication_failed", "invalid_token", r, nil)
+			logRuntimeError("authentication_failed", "invalid_api_key", r, nil)
 			http.Error(w, "Unauthorized: invalid API key", http.StatusUnauthorized)
 			return
 		}
