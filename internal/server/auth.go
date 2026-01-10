@@ -12,6 +12,15 @@ import (
 // authMiddleware implements API key authentication per MCP spec 2025-03-26 Authorization section
 // Spec requirement: Access tokens MUST use the Authorization header field in format "Bearer <token>"
 // For HTTP-based transports, implementations SHOULD conform to OAuth 2.1
+//
+// HTTP Status Codes per MCP Spec:
+// - 400 Bad Request: Malformed authorization request (wrong format, token in query string)
+// - 401 Unauthorized: Authorization required or token invalid/expired
+// - 403 Forbidden: Valid token but insufficient permissions/scopes (not yet implemented)
+//
+// Note: HTTP 403 is currently not used because this gateway uses simple API key validation
+// without scope-based permissions. When OAuth scopes are added in the future, 403 should be
+// returned when a valid token lacks the required scopes for the requested operation.
 func authMiddleware(apiKey string, next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		// MCP Spec: Access tokens MUST NOT be included in URI query strings
