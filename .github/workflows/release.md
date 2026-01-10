@@ -101,7 +101,7 @@ jobs:
 
   release:
     needs: ["activation", "create-tag"]
-    if: always() && (needs.create-tag.result == 'success' || needs.create-tag.result == 'skipped')
+    if: always() && needs.activation.result == 'success' && (needs.create-tag.result == 'success' || needs.create-tag.result == 'skipped')
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -127,7 +127,7 @@ jobs:
           else
             RELEASE_TAG="${GITHUB_REF#refs/tags/}"
           fi
-          echo "release_tag=$RELEASE_TAG" >> "$GITHUB_OUTPUT"
+          echo "RELEASE_TAG=$RELEASE_TAG" >> "$GITHUB_ENV"
           echo "Using release tag: $RELEASE_TAG"
           
       - name: Set up Go
@@ -147,8 +147,8 @@ jobs:
 
       - name: Build binary
         run: |
-          RELEASE_TAG="${{ steps.set_tag.outputs.release_tag }}"
           echo "Building binary for integration tests..."
+          echo "Release tag: $RELEASE_TAG"
           make build
           echo "✓ Binary built successfully"
 
@@ -160,7 +160,6 @@ jobs:
 
       - name: Build release binaries
         run: |
-          RELEASE_TAG="${{ steps.set_tag.outputs.release_tag }}"
           echo "Building multi-platform binaries for: $RELEASE_TAG"
           chmod +x scripts/build-release.sh
           ./scripts/build-release.sh "$RELEASE_TAG"
@@ -169,7 +168,6 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          RELEASE_TAG="${{ steps.set_tag.outputs.release_tag }}"
           echo "Creating release for tag: $RELEASE_TAG"
           
           # Create release with all binaries and checksums
@@ -185,7 +183,6 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          RELEASE_TAG="${{ steps.set_tag.outputs.release_tag }}"
           echo "Getting release ID for tag: $RELEASE_TAG"
           RELEASE_ID=$(gh release view "$RELEASE_TAG" --json databaseId --jq '.databaseId')
           echo "release_id=$RELEASE_ID" >> "$GITHUB_OUTPUT"
