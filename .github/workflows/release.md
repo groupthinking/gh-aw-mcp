@@ -111,7 +111,7 @@ jobs:
           echo "✓ Release Tag: $RELEASE_TAG"
 
   docker:
-    needs: ["release"]
+    needs: ["activation"]
     runs-on: ubuntu-latest
     permissions:
       contents: read
