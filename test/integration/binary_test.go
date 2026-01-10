@@ -596,7 +596,10 @@ func waitForServer(t *testing.T, url string, timeout time.Duration) bool {
 }
 
 // sendMCPRequest sends an MCP request and returns the response
-func sendMCPRequest(t *testing.T, url string, bearerToken string, payload map[string]interface{}) map[string]interface{} {
+// The authToken parameter can be:
+// - Plain API key when API key authentication is configured
+// - Session ID for session tracking (can include "Bearer " prefix for backward compatibility)
+func sendMCPRequest(t *testing.T, url string, authToken string, payload map[string]interface{}) map[string]interface{} {
 	t.Helper()
 
 	jsonData, err := json.Marshal(payload)
@@ -611,7 +614,9 @@ func sendMCPRequest(t *testing.T, url string, bearerToken string, payload map[st
 
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "application/json, text/event-stream")
-	req.Header.Set("Authorization", "Bearer "+bearerToken)
+	// Per spec 7.1: Authorization header contains value directly (not Bearer scheme)
+	// For session tracking without auth, Bearer prefix is optional
+	req.Header.Set("Authorization", authToken)
 
 	client := &http.Client{Timeout: 5 * time.Second}
 	resp, err := client.Do(req)

@@ -203,7 +203,7 @@ func TestPipeBasedLaunch(t *testing.T) {
 
 				req.Header.Set("Content-Type", "application/json")
 				req.Header.Set("Accept", "application/json, text/event-stream")
-				req.Header.Set("Authorization", "Bearer test-key") // Match the key in config
+				req.Header.Set("Authorization", "test-key") // Plain API key per spec 7.1
 
 				client := &http.Client{Timeout: 5 * time.Second}
 				resp, err := client.Do(req)

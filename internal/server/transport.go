@@ -91,22 +91,28 @@ func CreateHTTPServerForMCP(addr string, unifiedServer *UnifiedServer, apiKey st
 	streamableHandler := sdk.NewStreamableHTTPHandler(func(r *http.Request) *sdk.Server {
 		// With SSE, this callback fires ONCE per HTTP connection establishment
 		// All subsequent JSON-RPC messages come over the same persistent connection
-		// We use the Bearer token from Authorization header as the session ID
-		// This groups all routes from the same agent (same token) into one session
+		// We use the Authorization header value as the session ID
+		// This groups all requests from the same agent (same auth value) into one session
 
-		// Extract Bearer token from Authorization header
+		// Extract session ID from Authorization header
+		// Per spec 7.1: When API key is configured, Authorization contains plain API key
+		// When API key is not configured, supports Bearer token for backward compatibility
 		authHeader := r.Header.Get("Authorization")
 		var sessionID string
 
 		if strings.HasPrefix(authHeader, "Bearer ") {
+			// Bearer token format (for backward compatibility when no API key)
 			sessionID = strings.TrimPrefix(authHeader, "Bearer ")
 			sessionID = strings.TrimSpace(sessionID)
+		} else if authHeader != "" {
+			// Plain format (per spec 7.1 - API key is session ID)
+			sessionID = authHeader
 		}
 
-		// Reject requests without valid Bearer token
+		// Reject requests without Authorization header
 		if sessionID == "" {
-			logger.LogError("client", "MCP connection rejected: no Bearer token, remote=%s, path=%s", r.RemoteAddr, r.URL.Path)
-			log.Printf("[%s] %s %s - REJECTED: No Bearer token", r.RemoteAddr, r.Method, r.URL.Path)
+			logger.LogError("client", "MCP connection rejected: no Authorization header, remote=%s, path=%s", r.RemoteAddr, r.URL.Path)
+			log.Printf("[%s] %s %s - REJECTED: No Authorization header", r.RemoteAddr, r.Method, r.URL.Path)
 			// Return nil to reject the connection
 			// The SDK will handle sending an appropriate error response
 			return nil
@@ -115,7 +121,7 @@ func CreateHTTPServerForMCP(addr string, unifiedServer *UnifiedServer, apiKey st
 		logger.LogInfo("client", "MCP connection established, remote=%s, method=%s, path=%s, session=%s", r.RemoteAddr, r.Method, r.URL.Path, sessionID)
 		log.Printf("=== NEW SSE CONNECTION ===")
 		log.Printf("[%s] %s %s", r.RemoteAddr, r.Method, r.URL.Path)
-		log.Printf("Bearer Token (Session ID): %s", sessionID)
+		log.Printf("Authorization (Session ID): %s", sessionID)
 
 		log.Printf("DEBUG: About to check request body, Method=%s, Body!=nil: %v", r.Method, r.Body != nil)
 
