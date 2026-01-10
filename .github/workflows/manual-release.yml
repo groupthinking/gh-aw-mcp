@@ -16,7 +16,17 @@ permissions:
   contents: write
 
 jobs:
+  check-fork:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Fail if running on a fork
+        if: github.event.repository.fork == true
+        run: |
+          echo "::error::This workflow cannot be run on a forked repository"
+          exit 1
+
   check-permission:
+    needs: check-fork
     runs-on: ubuntu-latest
     outputs:
       has-permission: ${{ steps.check-admin.outputs.has-permission }}
