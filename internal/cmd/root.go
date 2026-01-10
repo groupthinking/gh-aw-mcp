@@ -263,10 +263,15 @@ func writeGatewayConfig(cfg *config.Config, listenAddr, mode string, w io.Writer
 		return fmt.Errorf("failed to encode configuration: %w", err)
 	}
 
-	// Flush stdout buffer if it's a file
+	// Flush stdout buffer if it's a regular file
+	// Note: Sync() fails on pipes and character devices like /dev/stdout,
+	// which is expected behavior. We only sync regular files.
 	if f, ok := w.(*os.File); ok {
-		if err := f.Sync(); err != nil {
-			return fmt.Errorf("failed to flush stdout: %w", err)
+		if info, err := f.Stat(); err == nil && info.Mode().IsRegular() {
+			if err := f.Sync(); err != nil {
+				// Log warning but don't fail - sync is best-effort
+				debugLog.Printf("Warning: failed to sync file: %v", err)
+			}
 		}
 	}
 
