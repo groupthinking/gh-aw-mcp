@@ -45,6 +45,7 @@ var (
 	envFile     string
 	enableDIFC  bool
 	logDir      string
+	validateEnv bool
 	debugLog    = logger.New("cmd:root")
 	version     = "dev" // Default version, overridden by SetVersion
 )
@@ -55,7 +56,8 @@ var rootCmd = &cobra.Command{
 	Version: version,
 	Long: `MCPG is a proxy server for Model Context Protocol (MCP) servers.
 It provides routing, aggregation, and management of multiple MCP backend servers.`,
-	RunE: run,
+	SilenceUsage: true, // Don't show help on runtime errors
+	RunE:         run,
 }
 
 func init() {
@@ -67,6 +69,7 @@ func init() {
 	rootCmd.Flags().StringVar(&envFile, "env", defaultEnvFile, "Path to .env file to load environment variables")
 	rootCmd.Flags().BoolVar(&enableDIFC, "enable-difc", defaultEnableDIFC, "Enable DIFC enforcement and session requirement (requires sys___init call before tool access)")
 	rootCmd.Flags().StringVar(&logDir, "log-dir", defaultLogDir, "Directory for log files (falls back to stdout if directory cannot be created)")
+	rootCmd.Flags().BoolVar(&validateEnv, "validate-env", false, "Validate execution environment (Docker, env vars) before starting")
 
 	// Mark mutually exclusive flags
 	rootCmd.MarkFlagsMutuallyExclusive("routed", "unified")
@@ -85,6 +88,7 @@ func run(cmd *cobra.Command, args []string) error {
 	}
 	defer logger.CloseGlobalLogger()
 
+	logger.LogInfo("startup", "MCPG Gateway version: %s", version)
 	logger.LogInfo("startup", "Starting MCPG with config: %s, listen: %s, log-dir: %s", configFile, listenAddr, logDir)
 	debugLog.Printf("Starting MCPG with config: %s, listen: %s", configFile, listenAddr)
 
@@ -94,6 +98,18 @@ func run(cmd *cobra.Command, args []string) error {
 		if err := loadEnvFile(envFile); err != nil {
 			return fmt.Errorf("failed to load .env file: %w", err)
 		}
+	}
+
+	// Validate execution environment if requested
+	if validateEnv {
+		debugLog.Printf("Validating execution environment...")
+		result := config.ValidateExecutionEnvironment()
+		if !result.IsValid() {
+			logger.LogError("startup", "Environment validation failed: %s", result.Error())
+			return fmt.Errorf("environment validation failed: %s", result.Error())
+		}
+		logger.LogInfo("startup", "Environment validation passed")
+		log.Println("Environment validation passed")
 	}
 
 	// Load configuration
@@ -249,10 +265,15 @@ func writeGatewayConfig(cfg *config.Config, listenAddr, mode string, w io.Writer
 		return fmt.Errorf("failed to encode configuration: %w", err)
 	}
 
-	// Flush stdout buffer if it's a file
+	// Flush stdout buffer if it's a regular file
+	// Note: Sync() fails on pipes and character devices like /dev/stdout,
+	// which is expected behavior. We only sync regular files.
 	if f, ok := w.(*os.File); ok {
-		if err := f.Sync(); err != nil {
-			return fmt.Errorf("failed to flush stdout: %w", err)
+		if info, err := f.Stat(); err == nil && info.Mode().IsRegular() {
+			if err := f.Sync(); err != nil {
+				// Log warning but don't fail - sync is best-effort
+				debugLog.Printf("Warning: failed to sync file: %v", err)
+			}
 		}
 	}
 
@@ -320,4 +341,5 @@ func Execute() {
 func SetVersion(v string) {
 	version = v
 	rootCmd.Version = v
+	config.SetVersion(v)
 }

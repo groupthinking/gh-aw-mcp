@@ -153,11 +153,13 @@ func TestCreateHTTPServerForRoutedMode_ServerIDs(t *testing.T) {
 	}
 }
 
-func TestRoutedMode_SysToolsBackend(t *testing.T) {
+func TestRoutedMode_SysToolsBackend_DIFCDisabled(t *testing.T) {
+	// When DIFC is disabled (default), sys tools should NOT be registered
 	cfg := &config.Config{
 		Servers: map[string]*config.ServerConfig{
 			"github": {Command: "docker", Args: []string{}},
 		},
+		EnableDIFC: false, // Explicitly disable DIFC (this is the default)
 	}
 
 	ctx := context.Background()
@@ -167,10 +169,33 @@ func TestRoutedMode_SysToolsBackend(t *testing.T) {
 	}
 	defer us.Close()
 
-	// Verify sys tools exist
+	// Verify sys tools are NOT registered when DIFC is disabled
+	sysTools := us.GetToolsForBackend("sys")
+	if len(sysTools) != 0 {
+		t.Errorf("Expected no sys tools when DIFC is disabled, got %d", len(sysTools))
+	}
+}
+
+func TestRoutedMode_SysToolsBackend_DIFCEnabled(t *testing.T) {
+	// When DIFC is enabled, sys tools SHOULD be registered
+	cfg := &config.Config{
+		Servers: map[string]*config.ServerConfig{
+			"github": {Command: "docker", Args: []string{}},
+		},
+		EnableDIFC: true, // Enable DIFC
+	}
+
+	ctx := context.Background()
+	us, err := NewUnified(ctx, cfg)
+	if err != nil {
+		t.Fatalf("NewUnified() failed: %v", err)
+	}
+	defer us.Close()
+
+	// Verify sys tools exist when DIFC is enabled
 	sysTools := us.GetToolsForBackend("sys")
 	if len(sysTools) == 0 {
-		t.Error("Expected sys tools to be registered, got none")
+		t.Error("Expected sys tools to be registered when DIFC is enabled, got none")
 	}
 
 	// Check for expected sys tools

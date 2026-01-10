@@ -113,10 +113,15 @@ func (us *UnifiedServer) registerAllTools() error {
 	log.Println("Registering tools from all backends...")
 	logUnified.Printf("Starting tool registration for %d backends", len(us.launcher.ServerIDs()))
 
-	// Register sys tools first
-	log.Println("Registering sys tools...")
-	if err := us.registerSysTools(); err != nil {
-		log.Printf("Warning: failed to register sys tools: %v", err)
+	// Only register sys tools if DIFC is enabled
+	// When DIFC is disabled (default), sys tools are not needed
+	if us.enableDIFC {
+		log.Println("DIFC enabled: registering sys tools...")
+		if err := us.registerSysTools(); err != nil {
+			log.Printf("Warning: failed to register sys tools: %v", err)
+		}
+	} else {
+		log.Println("DIFC disabled: skipping sys tools registration")
 	}
 
 	// Register tools from each backend server
@@ -214,10 +219,12 @@ func (us *UnifiedServer) registerToolsFromBackend(serverID string) error {
 		us.toolsMu.Unlock()
 
 		// Register the tool with the SDK
+		// Note: InputSchema is intentionally omitted to avoid validation errors
+		// when backend MCP servers use different JSON Schema versions (e.g., draft-07)
+		// than what the SDK supports (draft-2020-12)
 		sdk.AddTool(us.server, &sdk.Tool{
 			Name:        prefixedName,
 			Description: toolDesc,
-			InputSchema: tool.InputSchema,
 		}, handler)
 
 		log.Printf("Registered tool: %s", prefixedName)
