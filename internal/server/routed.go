@@ -44,8 +44,18 @@ func CreateHTTPServerForRoutedMode(addr string, unifiedServer *UnifiedServer, ap
 		route := fmt.Sprintf("/mcp/%s", backendID)
 
 		// Create StreamableHTTP handler for this route
+		//
+		// IMPORTANT: This callback is for SESSION IDENTIFICATION, not authentication.
+		// Authentication (token validation) happens in authMiddleware if API key is configured.
+		// This layer only extracts the Bearer token to use as a session ID for request routing.
+		//
+		// Two-layer architecture:
+		// 1. authMiddleware (below): Validates token == apiKey (if configured)
+		// 2. This callback: Extracts token → session ID (always required)
 		routeHandler := sdk.NewStreamableHTTPHandler(func(r *http.Request) *sdk.Server {
-			// Extract Bearer token from Authorization header
+			// Extract Bearer token from Authorization header (for session identification)
+			// NOTE: Token validation happens in authMiddleware if API key is configured.
+			// This layer accepts any non-empty Bearer token as a session ID.
 			authHeader := r.Header.Get("Authorization")
 			var sessionID string
 
@@ -54,7 +64,7 @@ func CreateHTTPServerForRoutedMode(addr string, unifiedServer *UnifiedServer, ap
 				sessionID = strings.TrimSpace(sessionID)
 			}
 
-			// Reject requests without valid Bearer token
+			// Reject requests without Bearer token (required for session management)
 			if sessionID == "" {
 				logger.LogError("client", "Rejected MCP client connection: no Bearer token, remote=%s, path=%s", r.RemoteAddr, r.URL.Path)
 				log.Printf("[%s] %s %s - REJECTED: No Bearer token", r.RemoteAddr, r.Method, r.URL.Path)
@@ -91,7 +101,8 @@ func CreateHTTPServerForRoutedMode(addr string, unifiedServer *UnifiedServer, ap
 			Stateless: false,
 		})
 
-		// Apply auth middleware if API key is configured (spec 7.1)
+		// Apply auth middleware if API key is configured (MCP spec 2025-03-26)
+		// This validates that the Bearer token matches the configured API key
 		var finalHandler http.Handler = routeHandler
 		if apiKey != "" {
 			finalHandler = authMiddleware(apiKey, routeHandler.ServeHTTP)
