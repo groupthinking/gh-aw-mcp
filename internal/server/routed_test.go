@@ -177,9 +177,9 @@ func TestCloseEndpoint_RequiresAuth(t *testing.T) {
 		t.Errorf("Expected status 401 (Unauthorized), got %d", w.Code)
 	}
 
-	// Request with correct auth header
+	// Request with correct auth header (using Bearer token format per MCP spec)
 	req2 := httptest.NewRequest(http.MethodPost, "/close", nil)
-	req2.Header.Set("Authorization", apiKey)
+	req2.Header.Set("Authorization", "Bearer "+apiKey)
 	w2 := httptest.NewRecorder()
 	httpServer.Handler.ServeHTTP(w2, req2)
 

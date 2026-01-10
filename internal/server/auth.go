@@ -9,36 +9,50 @@ import (
 	"github.com/githubnext/gh-aw-mcpg/internal/logger"
 )
 
-// authMiddleware implements API key authentication per spec section 7.1
+// authMiddleware implements API key authentication per MCP spec 2025-03-26 Authorization section
+// Spec requirement: Access tokens MUST use the Authorization header field in format "Bearer <token>"
+// For HTTP-based transports, implementations SHOULD conform to OAuth 2.1
 func authMiddleware(apiKey string, next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		// MCP Spec: Access tokens MUST NOT be included in URI query strings
+		if r.URL.Query().Get("token") != "" || r.URL.Query().Get("access_token") != "" || r.URL.Query().Get("apiKey") != "" {
+			logger.LogError("auth", "Authentication failed: token in query string, remote=%s, path=%s", r.RemoteAddr, r.URL.Path)
+			logRuntimeError("authentication_failed", "token_in_query_string", r, nil)
+			http.Error(w, "Bad Request: tokens must not be included in query string", http.StatusBadRequest)
+			return
+		}
+
 		// Extract Authorization header
 		authHeader := r.Header.Get("Authorization")
 
 		if authHeader == "" {
-			// Spec 7.1: Missing token returns 401
+			// MCP Spec: Missing token returns 401
 			logger.LogError("auth", "Authentication failed: missing Authorization header, remote=%s, path=%s", r.RemoteAddr, r.URL.Path)
 			logRuntimeError("authentication_failed", "missing_auth_header", r, nil)
 			http.Error(w, "Unauthorized: missing Authorization header", http.StatusUnauthorized)
 			return
 		}
 
-		// Spec 7.1: Malformed header returns 400
-		var token string
-		if strings.HasPrefix(authHeader, "Bearer ") {
-			// Bearer token: extract the token after the prefix
-			token = strings.TrimPrefix(authHeader, "Bearer ")
-		} else if authHeader == apiKey {
-			// Plain API key: use the header value directly
-			token = authHeader
-		} else {
-			// Header is neither a Bearer token nor a valid plain API key
-			logger.LogError("auth", "Authentication failed: malformed Authorization header, remote=%s, path=%s", r.RemoteAddr, r.URL.Path)
+		// MCP Spec: Authorization header MUST be in format "Bearer <token>"
+		if !strings.HasPrefix(authHeader, "Bearer ") {
+			logger.LogError("auth", "Authentication failed: malformed Authorization header (missing 'Bearer ' prefix), remote=%s, path=%s", r.RemoteAddr, r.URL.Path)
 			logRuntimeError("authentication_failed", "malformed_auth_header", r, nil)
-			http.Error(w, "Bad Request: Authorization header must be 'Bearer <token>' or plain API key", http.StatusBadRequest)
+			http.Error(w, "Bad Request: Authorization header must be 'Bearer <token>'", http.StatusBadRequest)
 			return
 		}
-		// Spec 7.1: Invalid token returns 401
+
+		// Extract token after "Bearer " prefix
+		token := strings.TrimSpace(strings.TrimPrefix(authHeader, "Bearer "))
+		
+		if token == "" {
+			// Empty token after Bearer prefix
+			logger.LogError("auth", "Authentication failed: empty token after Bearer prefix, remote=%s, path=%s", r.RemoteAddr, r.URL.Path)
+			logRuntimeError("authentication_failed", "empty_token", r, nil)
+			http.Error(w, "Bad Request: Bearer token cannot be empty", http.StatusBadRequest)
+			return
+		}
+
+		// MCP Spec: Invalid or expired tokens MUST receive HTTP 401
 		if token != apiKey {
 			logger.LogError("auth", "Authentication failed: invalid API key, remote=%s, path=%s", r.RemoteAddr, r.URL.Path)
 			logRuntimeError("authentication_failed", "invalid_token", r, nil)

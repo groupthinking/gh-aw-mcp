@@ -659,9 +659,9 @@ func TestCloseEndpoint_Integration(t *testing.T) {
 
 		t.Log("✓ Close endpoint requires authentication when API key is configured")
 
-		// Request with auth should succeed
+		// Request with auth should succeed (using Bearer token format per MCP spec)
 		req2, _ := http.NewRequest(http.MethodPost, ts.URL+"/close", nil)
-		req2.Header.Set("Authorization", apiKey)
+		req2.Header.Set("Authorization", "Bearer "+apiKey)
 		resp2, err := http.DefaultClient.Do(req2)
 		if err != nil {
 			t.Fatalf("Failed to call /close with auth: %v", err)
