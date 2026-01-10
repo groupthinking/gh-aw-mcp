@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
+	"syscall"
 	"time"
 )
 
@@ -18,6 +19,7 @@ type FileLogger struct {
 	logDir      string
 	fileName    string
 	useFallback bool
+	locked      bool // tracks if file is locked
 }
 
 var (
@@ -67,18 +69,38 @@ func InitFileLogger(logDir, fileName string) error {
 
 	fl.logFile = file
 	fl.logger = log.New(file, "", 0)
+	
+	// Apply a shared lock (LOCK_SH) to allow other processes to read the file
+	// This is non-blocking (LOCK_NB) so we don't hang if another process has an exclusive lock
+	if err := syscall.Flock(int(file.Fd()), syscall.LOCK_SH|syscall.LOCK_NB); err != nil {
+		// If we can't get a shared lock, log a warning but continue
+		// The file is still usable, just not with advisory locking guarantees
+		log.Printf("WARNING: Failed to acquire shared lock on log file %s: %v", logPath, err)
+		log.Printf("WARNING: Continuing without file lock - other processes may have limited access")
+	} else {
+		fl.locked = true
+	}
+	
 	log.Printf("Logging to file: %s", logPath)
 
 	globalFileLogger = fl
 	return nil
 }
 
-// Close closes the log file
+// Close closes the log file and releases any locks
 func (fl *FileLogger) Close() error {
 	fl.mu.Lock()
 	defer fl.mu.Unlock()
 
 	if fl.logFile != nil {
+		// Release the file lock before closing
+		if fl.locked {
+			if err := syscall.Flock(int(fl.logFile.Fd()), syscall.LOCK_UN); err != nil {
+				log.Printf("WARNING: Failed to release lock on log file: %v", err)
+				// Continue to close the file even if unlock fails
+			}
+			fl.locked = false
+		}
 		return fl.logFile.Close()
 	}
 	return nil
