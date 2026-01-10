@@ -64,6 +64,14 @@ type UnifiedServer struct {
 	capabilities  *difc.Capabilities
 	evaluator     *difc.Evaluator
 	enableDIFC    bool // When true, DIFC enforcement and session requirement are enabled
+
+	// Shutdown state tracking
+	isShutdown   bool
+	shutdownMu   sync.RWMutex
+	shutdownOnce sync.Once
+
+	// Testing support - when true, skips os.Exit() call
+	testMode bool
 }
 
 // NewUnified creates a new unified MCP server
@@ -655,10 +663,56 @@ func (us *UnifiedServer) Close() error {
 	return nil
 }
 
+// IsShutdown returns true if the gateway has been shut down
+func (us *UnifiedServer) IsShutdown() bool {
+	us.shutdownMu.RLock()
+	defer us.shutdownMu.RUnlock()
+	return us.isShutdown
+}
+
+// InitiateShutdown initiates graceful shutdown and returns the number of servers terminated
+// This method is idempotent - subsequent calls will return 0 servers terminated
+func (us *UnifiedServer) InitiateShutdown() int {
+	serversTerminated := 0
+	us.shutdownOnce.Do(func() {
+		// Mark as shutdown
+		us.shutdownMu.Lock()
+		us.isShutdown = true
+		us.shutdownMu.Unlock()
+
+		log.Println("Initiating gateway shutdown...")
+		logger.LogInfo("shutdown", "Gateway shutdown initiated")
+
+		// Count servers before closing
+		serversTerminated = len(us.launcher.ServerIDs())
+
+		// Terminate all backend servers
+		log.Printf("Terminating %d backend server(s)...", serversTerminated)
+		logger.LogInfo("shutdown", "Terminating %d backend servers", serversTerminated)
+		us.launcher.Close()
+
+		log.Println("Backend servers terminated")
+		logger.LogInfo("shutdown", "Backend servers terminated successfully")
+	})
+	return serversTerminated
+}
+
 // RegisterTestTool registers a tool for testing purposes
 // This method is used by integration tests to inject mock tools into the gateway
 func (us *UnifiedServer) RegisterTestTool(name string, tool *ToolInfo) {
 	us.toolsMu.Lock()
 	defer us.toolsMu.Unlock()
 	us.tools[name] = tool
+}
+
+// SetTestMode enables test mode which prevents os.Exit() calls
+// This should only be used in unit tests
+func (us *UnifiedServer) SetTestMode(enabled bool) {
+	us.testMode = enabled
+}
+
+// ShouldExit returns whether the gateway should exit after shutdown
+// Returns false in test mode to prevent actual process exit
+func (us *UnifiedServer) ShouldExit() bool {
+	return !us.testMode
 }
