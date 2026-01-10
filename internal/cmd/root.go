@@ -233,6 +233,12 @@ func writeGatewayConfig(cfg *config.Config, listenAddr, mode string, w io.Writer
 	// Determine domain (use host from listen address)
 	domain := host
 
+	// Extract API key from gateway config (per spec section 7.1)
+	apiKey := ""
+	if cfg.Gateway != nil {
+		apiKey = cfg.Gateway.APIKey
+	}
+
 	// Build output configuration
 	outputConfig := map[string]interface{}{
 		"mcpServers": make(map[string]interface{}),
@@ -252,8 +258,13 @@ func writeGatewayConfig(cfg *config.Config, listenAddr, mode string, w io.Writer
 			serverConfig["url"] = fmt.Sprintf("http://%s:%s/mcp", domain, port)
 		}
 
-		// Note: apiKey would be added to headers if implemented
-		// serverConfig["headers"] = map[string]string{"Authorization": apiKey}
+		// Add auth headers per MCP Gateway Specification Section 5.4
+		// Authorization header contains API key directly (not Bearer scheme per spec 7.1)
+		if apiKey != "" {
+			serverConfig["headers"] = map[string]string{
+				"Authorization": apiKey,
+			}
+		}
 
 		servers[name] = serverConfig
 	}
