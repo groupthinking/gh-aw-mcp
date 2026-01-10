@@ -52,7 +52,7 @@ func authMiddleware(apiKey string, next http.HandlerFunc) http.HandlerFunc {
 
 		// Extract token after "Bearer " prefix
 		token := strings.TrimSpace(strings.TrimPrefix(authHeader, "Bearer "))
-		
+
 		if token == "" {
 			// Empty token after Bearer prefix
 			logger.LogError("auth", "Authentication failed: empty token after Bearer prefix, remote=%s, path=%s", r.RemoteAddr, r.URL.Path)
