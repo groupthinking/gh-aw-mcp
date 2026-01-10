@@ -88,6 +88,7 @@ func run(cmd *cobra.Command, args []string) error {
 	}
 	defer logger.CloseGlobalLogger()
 
+	logger.LogInfo("startup", "MCPG Gateway version: %s", version)
 	logger.LogInfo("startup", "Starting MCPG with config: %s, listen: %s, log-dir: %s", configFile, listenAddr, logDir)
 	debugLog.Printf("Starting MCPG with config: %s, listen: %s", configFile, listenAddr)
 
