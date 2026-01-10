@@ -128,6 +128,7 @@ jobs:
             RELEASE_TAG="${GITHUB_REF#refs/tags/}"
           fi
           echo "RELEASE_TAG=$RELEASE_TAG" >> "$GITHUB_ENV"
+          echo "release_tag=$RELEASE_TAG" >> "$GITHUB_OUTPUT"
           echo "Using release tag: $RELEASE_TAG"
           
       - name: Set up Go
