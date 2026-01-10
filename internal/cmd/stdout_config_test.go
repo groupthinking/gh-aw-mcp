@@ -3,6 +3,7 @@ package cmd
 import (
 	"bytes"
 	"encoding/json"
+	"os"
 	"testing"
 
 	"github.com/githubnext/gh-aw-mcpg/internal/config"
@@ -16,6 +17,7 @@ func TestWriteGatewayConfigToStdout(t *testing.T) {
 		mode       string
 		wantHost   string
 		wantPort   string
+		wantAPIKey string
 	}{
 		{
 			name: "routed mode with single server",
@@ -26,11 +28,15 @@ func TestWriteGatewayConfigToStdout(t *testing.T) {
 						Args:    []string{"run", "--rm", "-i", "ghcr.io/github/github-mcp-server:latest"},
 					},
 				},
+				Gateway: &config.GatewayConfig{
+					APIKey: "test-api-key",
+				},
 			},
 			listenAddr: "127.0.0.1:8080",
 			mode:       "routed",
 			wantHost:   "127.0.0.1",
 			wantPort:   "8080",
+			wantAPIKey: "test-api-key",
 		},
 		{
 			name: "unified mode with multiple servers",
@@ -43,11 +49,15 @@ func TestWriteGatewayConfigToStdout(t *testing.T) {
 						Command: "docker",
 					},
 				},
+				Gateway: &config.GatewayConfig{
+					APIKey: "unified-api-key",
+				},
 			},
 			listenAddr: "0.0.0.0:3000",
 			mode:       "unified",
 			wantHost:   "0.0.0.0",
 			wantPort:   "3000",
+			wantAPIKey: "unified-api-key",
 		},
 		{
 			name: "default port when address has no port",
@@ -62,6 +72,7 @@ func TestWriteGatewayConfigToStdout(t *testing.T) {
 			mode:       "routed",
 			wantHost:   "127.0.0.1",
 			wantPort:   "3000",
+			wantAPIKey: "",
 		},
 		{
 			name: "IPv6 address with port",
@@ -76,6 +87,7 @@ func TestWriteGatewayConfigToStdout(t *testing.T) {
 			mode:       "routed",
 			wantHost:   "::1",
 			wantPort:   "8080",
+			wantAPIKey: "",
 		},
 		{
 			name: "IPv6 address with full notation",
@@ -85,11 +97,15 @@ func TestWriteGatewayConfigToStdout(t *testing.T) {
 						Command: "docker",
 					},
 				},
+				Gateway: &config.GatewayConfig{
+					APIKey: "ipv6-key",
+				},
 			},
 			listenAddr: "[2001:db8::1]:3000",
 			mode:       "unified",
 			wantHost:   "2001:db8::1",
 			wantPort:   "3000",
+			wantAPIKey: "ipv6-key",
 		},
 	}
 
@@ -161,6 +177,30 @@ func TestWriteGatewayConfigToStdout(t *testing.T) {
 						t.Errorf("Server '%s' url = %v, want %v", serverName, url, expectedPrefix)
 					}
 				}
+
+				// Verify headers per MCP Gateway Specification Section 5.4
+				if tt.wantAPIKey != "" {
+					headers, ok := serverConfig["headers"].(map[string]interface{})
+					if !ok {
+						t.Errorf("Server '%s' missing headers or wrong type", serverName)
+						continue
+					}
+
+					authHeader, ok := headers["Authorization"].(string)
+					if !ok {
+						t.Errorf("Server '%s' missing Authorization header or wrong type", serverName)
+						continue
+					}
+
+					if authHeader != tt.wantAPIKey {
+						t.Errorf("Server '%s' Authorization header = %v, want %v", serverName, authHeader, tt.wantAPIKey)
+					}
+				} else {
+					// If no API key, headers should not be present
+					if headers, ok := serverConfig["headers"]; ok {
+						t.Errorf("Server '%s' should not have headers when no API key is configured, got: %v", serverName, headers)
+					}
+				}
 			}
 		})
 	}
@@ -221,5 +261,60 @@ func TestWriteGatewayConfigToStdout_JSONFormat(t *testing.T) {
 	// Verify output is pretty-printed (contains newlines)
 	if !bytes.Contains(buf.Bytes(), []byte("\n")) {
 		t.Error("Output should be pretty-printed with indentation")
+	}
+}
+
+func TestWriteGatewayConfigToStdout_WithPipe(t *testing.T) {
+	cfg := &config.Config{
+		Servers: map[string]*config.ServerConfig{
+			"github": {
+				Command: "docker",
+				Args:    []string{"run", "--rm", "-i", "ghcr.io/github/github-mcp-server:latest"},
+			},
+		},
+	}
+
+	// Create a pipe (simulates writing to /dev/stdout in containerized environment)
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("Failed to create pipe: %v", err)
+	}
+	defer r.Close()
+	defer w.Close()
+
+	// Write configuration to pipe in a goroutine
+	errCh := make(chan error, 1)
+	go func() {
+		err := writeGatewayConfig(cfg, "127.0.0.1:3000", "unified", w)
+		w.Close() // Close writer to signal EOF
+		errCh <- err
+	}()
+
+	// Read from pipe
+	var buf bytes.Buffer
+	if _, err := buf.ReadFrom(r); err != nil {
+		t.Fatalf("Failed to read from pipe: %v", err)
+	}
+
+	// Check for errors from write operation
+	if err := <-errCh; err != nil {
+		t.Fatalf("writeGatewayConfig() error = %v", err)
+	}
+
+	// Verify output is valid JSON
+	var result map[string]interface{}
+	if err := json.Unmarshal(buf.Bytes(), &result); err != nil {
+		t.Fatalf("Failed to parse JSON output: %v\nOutput: %s", err, buf.String())
+	}
+
+	// Verify structure
+	mcpServers, ok := result["mcpServers"].(map[string]interface{})
+	if !ok {
+		t.Fatal("Output missing 'mcpServers' field or wrong type")
+	}
+
+	// Verify github server is present
+	if _, ok := mcpServers["github"]; !ok {
+		t.Error("Expected 'github' server in output")
 	}
 }

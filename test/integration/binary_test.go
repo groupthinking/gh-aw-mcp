@@ -274,6 +274,221 @@ func TestBinaryInvocation_ConfigStdin(t *testing.T) {
 	t.Logf("Server output:\nSTDOUT:\n%s\nSTDERR:\n%s", stdout.String(), stderr.String())
 }
 
+// TestBinaryInvocation_PipeOutput tests that stdout pipe output works correctly
+// This validates the fix for "sync /dev/stdout: invalid argument" error
+func TestBinaryInvocation_PipeOutput(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping binary integration test in short mode")
+	}
+
+	binaryPath := findBinary(t)
+	t.Logf("Using binary: %s", binaryPath)
+
+	// Create a simple config
+	configFile := createTempConfig(t, map[string]interface{}{
+		"testserver": map[string]interface{}{
+			"command": "echo",
+			"args":    []string{},
+		},
+	})
+	defer os.Remove(configFile)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	port := "13004"
+	cmd := exec.CommandContext(ctx, binaryPath,
+		"--config", configFile,
+		"--listen", "127.0.0.1:"+port,
+		"--unified",
+	)
+
+	// Capture stdout through a pipe (the scenario we're testing)
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+
+	if err := cmd.Start(); err != nil {
+		t.Fatalf("Failed to start server: %v", err)
+	}
+
+	defer func() {
+		if cmd.Process != nil {
+			cmd.Process.Kill()
+		}
+	}()
+
+	// Wait for server to start
+	serverURL := "http://127.0.0.1:" + port
+	if !waitForServer(t, serverURL+"/health", 5*time.Second) {
+		t.Logf("STDOUT: %s", stdout.String())
+		t.Logf("STDERR: %s", stderr.String())
+		t.Fatal("Server did not start in time")
+	}
+
+	t.Log("✓ Server started successfully with piped stdout")
+
+	// Small delay to ensure stdout is written
+	time.Sleep(100 * time.Millisecond)
+
+	// Parse the JSON gateway configuration from stdout
+	stdoutStr := stdout.String()
+	if stdoutStr == "" {
+		t.Fatal("Expected JSON configuration on stdout, got empty output")
+	}
+
+	// Find the JSON object in stdout (it may be mixed with other output)
+	var gatewayConfig map[string]interface{}
+	decoder := json.NewDecoder(bytes.NewReader(stdout.Bytes()))
+	if err := decoder.Decode(&gatewayConfig); err != nil {
+		t.Fatalf("Failed to parse JSON from stdout: %v\nOutput: %s", err, stdoutStr)
+	}
+
+	// Verify the gateway configuration structure
+	mcpServers, ok := gatewayConfig["mcpServers"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("Expected 'mcpServers' field in output, got: %v", gatewayConfig)
+	}
+
+	testserver, ok := mcpServers["testserver"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("Expected 'testserver' in mcpServers, got: %v", mcpServers)
+	}
+
+	// Verify the server config has expected fields
+	if serverType, ok := testserver["type"].(string); !ok || serverType != "http" {
+		t.Errorf("Expected type 'http', got: %v", testserver["type"])
+	}
+
+	if url, ok := testserver["url"].(string); !ok || url == "" {
+		t.Errorf("Expected non-empty url, got: %v", testserver["url"])
+	}
+
+	t.Log("✓ Gateway configuration JSON successfully written to piped stdout")
+
+	// Verify no sync errors in stderr
+	stderrStr := stderr.String()
+	if bytes.Contains([]byte(stderrStr), []byte("failed to flush stdout")) {
+		t.Errorf("Found stdout flush error in stderr: %s", stderrStr)
+	}
+	if bytes.Contains([]byte(stderrStr), []byte("sync /dev/stdout: invalid argument")) {
+		t.Errorf("Found sync error in stderr: %s", stderrStr)
+	}
+
+	t.Log("✓ No sync errors in output")
+	t.Logf("Parsed gateway config: %+v", gatewayConfig)
+}
+
+// TestBinaryInvocation_PipeInputOutput tests both stdin config input and stdout JSON output through pipes
+// This validates the complete pipe scenario: config via stdin, JSON output via stdout
+func TestBinaryInvocation_PipeInputOutput(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping binary integration test in short mode")
+	}
+
+	binaryPath := findBinary(t)
+	t.Logf("Using binary: %s", binaryPath)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	port := "13005"
+	cmd := exec.CommandContext(ctx, binaryPath,
+		"--config-stdin",
+		"--listen", "127.0.0.1:"+port,
+		"--unified",
+	)
+
+	// Prepare config JSON for stdin pipe
+	configJSON := map[string]interface{}{
+		"mcpServers": map[string]interface{}{
+			"pipetest": map[string]interface{}{
+				"type":      "local",
+				"container": "echo",
+			},
+		},
+		"gateway": map[string]interface{}{
+			"port":   13005,
+			"domain": "localhost",
+			"apiKey": "test-key",
+		},
+	}
+	configBytes, err := json.Marshal(configJSON)
+	if err != nil {
+		t.Fatalf("Failed to marshal config: %v", err)
+	}
+
+	// Setup pipes for both stdin and stdout
+	var stdout, stderr bytes.Buffer
+	cmd.Stdin = bytes.NewReader(configBytes)
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+
+	if err := cmd.Start(); err != nil {
+		t.Fatalf("Failed to start server: %v", err)
+	}
+
+	defer func() {
+		if cmd.Process != nil {
+			cmd.Process.Kill()
+		}
+	}()
+
+	// Wait for server to start
+	serverURL := "http://127.0.0.1:" + port
+	if !waitForServer(t, serverURL+"/health", 5*time.Second) {
+		t.Logf("STDOUT: %s", stdout.String())
+		t.Logf("STDERR: %s", stderr.String())
+		t.Fatal("Server did not start in time")
+	}
+
+	t.Log("✓ Server started with config from stdin pipe")
+
+	// Small delay to ensure stdout is written
+	time.Sleep(100 * time.Millisecond)
+
+	// Parse the JSON gateway configuration from stdout pipe
+	stdoutStr := stdout.String()
+	if stdoutStr == "" {
+		t.Fatal("Expected JSON configuration on stdout, got empty output")
+	}
+
+	var gatewayConfig map[string]interface{}
+	decoder := json.NewDecoder(bytes.NewReader(stdout.Bytes()))
+	if err := decoder.Decode(&gatewayConfig); err != nil {
+		t.Fatalf("Failed to parse JSON from stdout: %v\nOutput: %s", err, stdoutStr)
+	}
+
+	// Verify the gateway configuration structure
+	mcpServers, ok := gatewayConfig["mcpServers"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("Expected 'mcpServers' field in output, got: %v", gatewayConfig)
+	}
+
+	pipetest, ok := mcpServers["pipetest"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("Expected 'pipetest' server in mcpServers, got: %v", mcpServers)
+	}
+
+	// Verify server config
+	if serverType, ok := pipetest["type"].(string); !ok || serverType != "http" {
+		t.Errorf("Expected type 'http', got: %v", pipetest["type"])
+	}
+
+	t.Log("✓ Gateway configuration JSON successfully written to stdout pipe")
+	t.Log("✓ Config input via stdin pipe and JSON output via stdout pipe both working")
+
+	// Verify no sync errors
+	stderrStr := stderr.String()
+	if bytes.Contains([]byte(stderrStr), []byte("failed to flush stdout")) ||
+		bytes.Contains([]byte(stderrStr), []byte("sync /dev/stdout: invalid argument")) {
+		t.Errorf("Found sync error in stderr: %s", stderrStr)
+	}
+
+	t.Log("✓ No pipe-related sync errors")
+	t.Logf("Parsed gateway config: %+v", gatewayConfig)
+}
+
 // TestBinaryInvocation_Version tests the version flag
 func TestBinaryInvocation_Version(t *testing.T) {
 	if testing.Short() {
@@ -381,7 +596,10 @@ func waitForServer(t *testing.T, url string, timeout time.Duration) bool {
 }
 
 // sendMCPRequest sends an MCP request and returns the response
-func sendMCPRequest(t *testing.T, url string, bearerToken string, payload map[string]interface{}) map[string]interface{} {
+// The authToken parameter can be:
+// - Plain API key when API key authentication is configured
+// - Session ID for session tracking (can include "Bearer " prefix for backward compatibility)
+func sendMCPRequest(t *testing.T, url string, authToken string, payload map[string]interface{}) map[string]interface{} {
 	t.Helper()
 
 	jsonData, err := json.Marshal(payload)
@@ -396,7 +614,9 @@ func sendMCPRequest(t *testing.T, url string, bearerToken string, payload map[st
 
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "application/json, text/event-stream")
-	req.Header.Set("Authorization", "Bearer "+bearerToken)
+	// Per spec 7.1: Authorization header contains value directly (not Bearer scheme)
+	// For session tracking without auth, Bearer prefix is optional
+	req.Header.Set("Authorization", authToken)
 
 	client := &http.Client{Timeout: 5 * time.Second}
 	resp, err := client.Do(req)

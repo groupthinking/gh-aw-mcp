@@ -144,38 +144,43 @@ cp ~/.codex/config.toml.bak ~/.codex/config.toml
 
 You can test the MCP server directly using curl commands:
 
-#### 1. Initialize a session and extract session ID
+#### Without API Key (session tracking only)
 
 ```bash
 MCP_URL="http://127.0.0.1:3000/mcp/github"
 
-SESSION_ID=$(
-  curl -isS -X POST $MCP_URL \
-    -H 'Content-Type: application/json' \
-    -H 'Accept: application/json, text/event-stream' \
-    -H 'Authorization: Bearer demo-agent' \
-    -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"1.0.0","capabilities":{},"clientInfo":{"name":"curl","version":"0.1"}}}' \
-  | awk 'BEGIN{IGNORECASE=1} /^mcp-session-id:/{print $2}' | tr -d '\r'
-)
+# Initialize
+curl -X POST $MCP_URL \
+  -H 'Content-Type: application/json' \
+  -H 'Accept: application/json, text/event-stream' \
+  -H 'Authorization: demo-session-id' \
+  -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"1.0.0","capabilities":{},"clientInfo":{"name":"curl","version":"0.1"}}}'
 
-echo "Session ID: $SESSION_ID"
+# List tools
+curl -X POST $MCP_URL \
+  -H 'Content-Type: application/json' \
+  -H 'Authorization: demo-session-id' \
+  -d '{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}'
 ```
 
-#### 2. List available tools
+#### With API Key (authentication enabled)
 
 ```bash
-curl -s \
-  -H "Content-Type: application/json" \
-  -H "Mcp-Session-Id: $SESSION_ID" \
-  -H 'Authorization: Bearer demo-agent' \
-  -X POST \
-  $MCP_URL \
-  -d '{
-    "jsonrpc": "2.0",
-    "id": 2,
-    "method": "tools/list",
-    "params": {}
-  }'
+MCP_URL="http://127.0.0.1:3000/mcp/github"
+API_KEY="your-api-key-here"
+
+# Initialize (per spec 7.1: Authorization header contains plain API key, NOT Bearer scheme)
+curl -X POST $MCP_URL \
+  -H 'Content-Type: application/json' \
+  -H 'Accept: application/json, text/event-stream' \
+  -H "Authorization: $API_KEY" \
+  -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"1.0.0","capabilities":{},"clientInfo":{"name":"curl","version":"0.1"}}}'
+
+# List tools
+curl -X POST $MCP_URL \
+  -H 'Content-Type: application/json' \
+  -H "Authorization: $API_KEY" \
+  -d '{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}'
 ```
 
 ### Cleaning
@@ -438,7 +443,7 @@ make release major
 
 When you push a release tag, the automated release workflow:
 - Runs the full test suite
-- Builds multi-platform binaries (Linux, macOS, Windows for amd64 and arm64)
+- Builds multi-platform binaries (Linux for amd64, arm, and arm64)
 - Creates a GitHub release with all binaries and checksums
 - Builds and pushes a multi-arch Docker image to `ghcr.io/githubnext/gh-aw-mcpg` with tags:
   - `latest` - Always points to the newest release

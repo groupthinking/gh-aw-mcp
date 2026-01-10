@@ -3,11 +3,14 @@ package server
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"log"
 	"net/http"
+	"os"
 	"strings"
+	"time"
 
 	"github.com/githubnext/gh-aw-mcpg/internal/logger"
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
@@ -17,7 +20,7 @@ var logRouted = logger.New("server:routed")
 
 // CreateHTTPServerForRoutedMode creates an HTTP server for routed mode
 // In routed mode, each backend is accessible at /mcp/<server>
-// Multiple routes from the same Bearer token share a session
+// Multiple routes from the same Authorization header share a session
 // If apiKey is provided, all requests except /health require authentication (spec 7.1)
 func CreateHTTPServerForRoutedMode(addr string, unifiedServer *UnifiedServer, apiKey string) *http.Server {
 	logRouted.Printf("Creating HTTP server for routed mode: addr=%s", addr)
@@ -42,19 +45,25 @@ func CreateHTTPServerForRoutedMode(addr string, unifiedServer *UnifiedServer, ap
 
 		// Create StreamableHTTP handler for this route
 		routeHandler := sdk.NewStreamableHTTPHandler(func(r *http.Request) *sdk.Server {
-			// Extract Bearer token from Authorization header
+			// Extract session ID from Authorization header
+			// Per spec 7.1: When API key is configured, Authorization contains plain API key
+			// When API key is not configured, supports Bearer token for backward compatibility
 			authHeader := r.Header.Get("Authorization")
 			var sessionID string
 
 			if strings.HasPrefix(authHeader, "Bearer ") {
+				// Bearer token format (for backward compatibility when no API key)
 				sessionID = strings.TrimPrefix(authHeader, "Bearer ")
 				sessionID = strings.TrimSpace(sessionID)
+			} else if authHeader != "" {
+				// Plain format (per spec 7.1 - API key is session ID)
+				sessionID = authHeader
 			}
 
-			// Reject requests without valid Bearer token
+			// Reject requests without Authorization header
 			if sessionID == "" {
-				logger.LogError("client", "Rejected MCP client connection: no Bearer token, remote=%s, path=%s", r.RemoteAddr, r.URL.Path)
-				log.Printf("[%s] %s %s - REJECTED: No Bearer token", r.RemoteAddr, r.Method, r.URL.Path)
+				logger.LogError("client", "Rejected MCP client connection: no Authorization header, remote=%s, path=%s", r.RemoteAddr, r.URL.Path)
+				log.Printf("[%s] %s %s - REJECTED: No Authorization header", r.RemoteAddr, r.Method, r.URL.Path)
 				return nil
 			}
 
@@ -63,7 +72,7 @@ func CreateHTTPServerForRoutedMode(addr string, unifiedServer *UnifiedServer, ap
 			log.Printf("=== NEW SSE CONNECTION (ROUTED) ===")
 			log.Printf("[%s] %s %s", r.RemoteAddr, r.Method, r.URL.Path)
 			log.Printf("Backend: %s", backendID)
-			log.Printf("Bearer Token (Session ID): %s", sessionID)
+			log.Printf("Authorization (Session ID): %s", sessionID)
 
 			// Log request body for debugging
 			if r.Method == "POST" && r.Body != nil {
@@ -106,6 +115,62 @@ func CreateHTTPServerForRoutedMode(addr string, unifiedServer *UnifiedServer, ap
 		fmt.Fprintf(w, "OK\n")
 	})
 	mux.Handle("/health", withResponseLogging(healthHandler))
+
+	// Close endpoint for graceful shutdown (spec 5.1.3)
+	closeHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		log.Printf("[%s] %s %s", r.RemoteAddr, r.Method, r.URL.Path)
+		logger.LogInfo("shutdown", "Close endpoint called, remote=%s", r.RemoteAddr)
+
+		// Only accept POST requests
+		if r.Method != http.MethodPost {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+
+		// Check if already closed (idempotency - spec 5.1.3)
+		if unifiedServer.IsShutdown() {
+			logger.LogWarn("shutdown", "Close endpoint called but gateway already closed, remote=%s", r.RemoteAddr)
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusGone) // 410 Gone
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"error": "Gateway has already been closed",
+			})
+			return
+		}
+
+		// Initiate shutdown and get server count
+		serversTerminated := unifiedServer.InitiateShutdown()
+
+		// Return success response (spec 5.1.3)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		response := map[string]interface{}{
+			"status":            "closed",
+			"message":           "Gateway shutdown initiated",
+			"serversTerminated": serversTerminated,
+		}
+		json.NewEncoder(w).Encode(response)
+
+		logger.LogInfo("shutdown", "Close endpoint response sent, servers_terminated=%d", serversTerminated)
+		log.Printf("Gateway shutdown initiated. Terminated %d server(s)", serversTerminated)
+
+		// Exit the process after a brief delay to ensure response is sent
+		// Skip exit in test mode
+		if unifiedServer.ShouldExit() {
+			go func() {
+				time.Sleep(100 * time.Millisecond)
+				logger.LogInfo("shutdown", "Gateway process exiting with status 0")
+				os.Exit(0)
+			}()
+		}
+	})
+
+	// Apply auth middleware if API key is configured (spec 7.1)
+	var finalCloseHandler http.Handler = closeHandler
+	if apiKey != "" {
+		finalCloseHandler = authMiddleware(apiKey, closeHandler.ServeHTTP)
+	}
+	mux.Handle("/close", withResponseLogging(finalCloseHandler))
 
 	return &http.Server{
 		Addr:    addr,

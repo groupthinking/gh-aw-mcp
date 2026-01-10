@@ -56,7 +56,8 @@ var rootCmd = &cobra.Command{
 	Version: version,
 	Long: `MCPG is a proxy server for Model Context Protocol (MCP) servers.
 It provides routing, aggregation, and management of multiple MCP backend servers.`,
-	RunE: run,
+	SilenceUsage: true, // Don't show help on runtime errors
+	RunE:         run,
 }
 
 func init() {
@@ -87,6 +88,7 @@ func run(cmd *cobra.Command, args []string) error {
 	}
 	defer logger.CloseGlobalLogger()
 
+	logger.LogInfo("startup", "MCPG Gateway version: %s", version)
 	logger.LogInfo("startup", "Starting MCPG with config: %s, listen: %s, log-dir: %s", configFile, listenAddr, logDir)
 	debugLog.Printf("Starting MCPG with config: %s, listen: %s", configFile, listenAddr)
 
@@ -231,6 +233,12 @@ func writeGatewayConfig(cfg *config.Config, listenAddr, mode string, w io.Writer
 	// Determine domain (use host from listen address)
 	domain := host
 
+	// Extract API key from gateway config (per spec section 7.1)
+	apiKey := ""
+	if cfg.Gateway != nil {
+		apiKey = cfg.Gateway.APIKey
+	}
+
 	// Build output configuration
 	outputConfig := map[string]interface{}{
 		"mcpServers": make(map[string]interface{}),
@@ -250,8 +258,13 @@ func writeGatewayConfig(cfg *config.Config, listenAddr, mode string, w io.Writer
 			serverConfig["url"] = fmt.Sprintf("http://%s:%s/mcp", domain, port)
 		}
 
-		// Note: apiKey would be added to headers if implemented
-		// serverConfig["headers"] = map[string]string{"Authorization": apiKey}
+		// Add auth headers per MCP Gateway Specification Section 5.4
+		// Authorization header contains API key directly (not Bearer scheme per spec 7.1)
+		if apiKey != "" {
+			serverConfig["headers"] = map[string]string{
+				"Authorization": apiKey,
+			}
+		}
 
 		servers[name] = serverConfig
 	}
@@ -263,10 +276,15 @@ func writeGatewayConfig(cfg *config.Config, listenAddr, mode string, w io.Writer
 		return fmt.Errorf("failed to encode configuration: %w", err)
 	}
 
-	// Flush stdout buffer if it's a file
+	// Flush stdout buffer if it's a regular file
+	// Note: Sync() fails on pipes and character devices like /dev/stdout,
+	// which is expected behavior. We only sync regular files.
 	if f, ok := w.(*os.File); ok {
-		if err := f.Sync(); err != nil {
-			return fmt.Errorf("failed to flush stdout: %w", err)
+		if info, err := f.Stat(); err == nil && info.Mode().IsRegular() {
+			if err := f.Sync(); err != nil {
+				// Log warning but don't fail - sync is best-effort
+				debugLog.Printf("Warning: failed to sync file: %v", err)
+			}
 		}
 	}
 

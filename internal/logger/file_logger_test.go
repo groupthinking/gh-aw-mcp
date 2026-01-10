@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"testing"
 )
 
@@ -207,4 +208,102 @@ func TestFileLoggerConcurrency(t *testing.T) {
 	if len(lines) != expectedLines {
 		t.Errorf("Expected %d log lines, got %d", expectedLines, len(lines))
 	}
+}
+
+func TestFileLoggerLocking(t *testing.T) {
+	tmpDir := t.TempDir()
+	logDir := filepath.Join(tmpDir, "logs")
+	fileName := "lock-test.log"
+	logPath := filepath.Join(logDir, fileName)
+
+	// Initialize the logger - this will acquire a shared lock
+	err := InitFileLogger(logDir, fileName)
+	if err != nil {
+		t.Fatalf("InitFileLogger failed: %v", err)
+	}
+
+	// Write some data
+	LogInfo("test", "Testing file locking")
+
+	// Verify another process can open and read the file with a shared lock
+	// This simulates another process trying to read the log file
+	readFile, err := os.Open(logPath)
+	if err != nil {
+		t.Fatalf("Failed to open log file for reading: %v", err)
+	}
+	defer readFile.Close()
+
+	// Try to acquire a shared lock (should succeed with shared lock)
+	err = syscall.Flock(int(readFile.Fd()), syscall.LOCK_SH|syscall.LOCK_NB)
+	if err != nil {
+		t.Errorf("Failed to acquire shared lock for reading: %v", err)
+	} else {
+		// Release the shared lock
+		syscall.Flock(int(readFile.Fd()), syscall.LOCK_UN)
+	}
+
+	// Read the content to verify it's readable
+	content, err := os.ReadFile(logPath)
+	if err != nil {
+		t.Fatalf("Failed to read log file content: %v", err)
+	}
+
+	if !strings.Contains(string(content), "Testing file locking") {
+		t.Errorf("Log file does not contain expected content")
+	}
+
+	// Close the logger - this should release the lock
+	CloseGlobalLogger()
+
+	// Try to acquire an exclusive lock (should succeed now that we've released)
+	exclusiveFile, err := os.OpenFile(logPath, os.O_RDWR, 0644)
+	if err != nil {
+		t.Fatalf("Failed to open log file for exclusive lock: %v", err)
+	}
+	defer exclusiveFile.Close()
+
+	err = syscall.Flock(int(exclusiveFile.Fd()), syscall.LOCK_EX|syscall.LOCK_NB)
+	if err != nil {
+		t.Errorf("Failed to acquire exclusive lock after close: %v", err)
+	} else {
+		// Successfully got exclusive lock - release it
+		syscall.Flock(int(exclusiveFile.Fd()), syscall.LOCK_UN)
+	}
+}
+
+func TestFileLoggerLockReleasedOnClose(t *testing.T) {
+	tmpDir := t.TempDir()
+	logDir := filepath.Join(tmpDir, "logs")
+	fileName := "lock-release-test.log"
+	logPath := filepath.Join(logDir, fileName)
+
+	// Initialize and immediately close
+	err := InitFileLogger(logDir, fileName)
+	if err != nil {
+		t.Fatalf("InitFileLogger failed: %v", err)
+	}
+
+	LogInfo("test", "Test message")
+
+	// Close the logger
+	err = CloseGlobalLogger()
+	if err != nil {
+		t.Fatalf("CloseGlobalLogger failed: %v", err)
+	}
+
+	// Verify we can acquire an exclusive lock after closing
+	file, err := os.OpenFile(logPath, os.O_RDWR, 0644)
+	if err != nil {
+		t.Fatalf("Failed to open log file: %v", err)
+	}
+	defer file.Close()
+
+	// Should be able to get exclusive lock since logger is closed
+	err = syscall.Flock(int(file.Fd()), syscall.LOCK_EX|syscall.LOCK_NB)
+	if err != nil {
+		t.Fatalf("Failed to acquire exclusive lock after logger close: %v", err)
+	}
+
+	// Clean up
+	syscall.Flock(int(file.Fd()), syscall.LOCK_UN)
 }
