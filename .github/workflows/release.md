@@ -127,9 +127,23 @@ jobs:
           else
             RELEASE_TAG="${GITHUB_REF#refs/tags/}"
           fi
+          
+          # Sanity check: ensure release tag is set
+          if [ -z "$RELEASE_TAG" ]; then
+            echo "Error: RELEASE_TAG is not set"
+            exit 1
+          fi
+          
+          # Sanity check: validate format is v<major>.<minor>.<patch>
+          if ! echo "$RELEASE_TAG" | grep -qE '^v[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "Error: RELEASE_TAG '$RELEASE_TAG' does not match required format v<major>.<minor>.<patch>"
+            echo "Example valid format: v1.2.3"
+            exit 1
+          fi
+          
           echo "RELEASE_TAG=$RELEASE_TAG" >> "$GITHUB_ENV"
           echo "release_tag=$RELEASE_TAG" >> "$GITHUB_OUTPUT"
-          echo "Using release tag: $RELEASE_TAG"
+          echo "✓ Using release tag: $RELEASE_TAG"
           
       - name: Set up Go
         uses: actions/setup-go@v6
