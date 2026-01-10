@@ -26,6 +26,16 @@ name: "Release"
   push:
     tags:
     - v*.*.*
+  workflow_dispatch:
+    inputs:
+      release_type:
+        description: Type of release (patch, minor, or major)
+        options:
+        - patch
+        - minor
+        - major
+        required: true
+        type: choice
 
 permissions:
   actions: read
@@ -67,6 +77,7 @@ jobs:
   agent:
     needs:
       - activation
+      - create-tag
       - docker
       - generate-sbom
       - release
@@ -100,8 +111,9 @@ jobs:
       - env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           RELEASE_ID: ${{ needs.release.outputs.release_id }}
+          RELEASE_TAG: ${{ needs.release.outputs.release_tag }}
         name: Setup environment and fetch release data
-        run: "set -e\nmkdir -p /tmp/gh-aw-mcpg/release-data\n\n# Use the release ID from the release job\necho \"Release ID from release job: $RELEASE_ID\"\n\n# Get the release tag from the push event\nif [[ ! \"$GITHUB_REF\" == refs/tags/* ]]; then\n  echo \"Error: Push event triggered but GITHUB_REF is not a tag: $GITHUB_REF\"\n  exit 1\nfi\nRELEASE_TAG=\"${GITHUB_REF#refs/tags/}\"\necho \"Processing release: $RELEASE_TAG\"\n\necho \"RELEASE_TAG=$RELEASE_TAG\" >> \"$GITHUB_ENV\"\n\n# Get the current release information\ngh release view \"$RELEASE_TAG\" --json name,tagName,createdAt,publishedAt,url,body > /tmp/gh-aw-mcpg/release-data/current_release.json\necho \"✓ Fetched current release information\"\n\n# Get the previous release to determine the range\nPREV_RELEASE_TAG=$(gh release list --limit 2 --json tagName --jq '.[1].tagName // empty')\n\nif [ -z \"$PREV_RELEASE_TAG\" ]; then\n  echo \"No previous release found. This appears to be the first release.\"\n  echo \"PREV_RELEASE_TAG=\" >> \"$GITHUB_ENV\"\n  touch /tmp/gh-aw-mcpg/release-data/pull_requests.json\n  echo \"[]\" > /tmp/gh-aw-mcpg/release-data/pull_requests.json\nelse\n  echo \"Previous release: $PREV_RELEASE_TAG\"\n  echo \"PREV_RELEASE_TAG=$PREV_RELEASE_TAG\" >> \"$GITHUB_ENV\"\n  \n  # Get commits between releases\n  echo \"Fetching commits between $PREV_RELEASE_TAG and $RELEASE_TAG...\"\n  git fetch --unshallow 2>/dev/null || git fetch --depth=1000\n  \n  # Get all merged PRs between the two releases\n  echo \"Fetching pull requests merged between releases...\"\n  PREV_PUBLISHED_AT=$(gh release view \"$PREV_RELEASE_TAG\" --json publishedAt --jq .publishedAt)\n  CURR_PUBLISHED_AT=$(gh release view \"$RELEASE_TAG\" --json publishedAt --jq .publishedAt)\n  gh pr list \\\n    --state merged \\\n    --limit 1000 \\\n    --json number,title,author,labels,mergedAt,url,body \\\n    --jq \"[.[] | select(.mergedAt >= \\\"$PREV_PUBLISHED_AT\\\" and .mergedAt <= \\\"$CURR_PUBLISHED_AT\\\")]\" \\\n    > /tmp/gh-aw-mcpg/release-data/pull_requests.json\n  \n  PR_COUNT=$(jq length \"/tmp/gh-aw-mcpg/release-data/pull_requests.json\")\n  echo \"✓ Fetched $PR_COUNT pull requests\"\nfi\n\n# Get the README.md content for context about the project\nif [ -f \"README.md\" ]; then\n  cp README.md /tmp/gh-aw-mcpg/release-data/README.md\n  echo \"✓ Copied README.md for reference\"\nfi\n\n# List documentation files for linking\nfind docs -type f -name \"*.md\" 2>/dev/null > /tmp/gh-aw-mcpg/release-data/docs_files.txt || echo \"No docs directory found\"\n\necho \"✓ Setup complete. Data available in /tmp/gh-aw-mcpg/release-data/\""
+        run: "set -e\nmkdir -p /tmp/gh-aw-mcpg/release-data\n\n# Use the release ID and tag from the release job\necho \"Release ID from release job: $RELEASE_ID\"\necho \"Release tag from release job: $RELEASE_TAG\"\n\necho \"Processing release: $RELEASE_TAG\"\n\necho \"RELEASE_TAG=$RELEASE_TAG\" >> \"$GITHUB_ENV\"\n\n# Get the current release information\ngh release view \"$RELEASE_TAG\" --json name,tagName,createdAt,publishedAt,url,body > /tmp/gh-aw-mcpg/release-data/current_release.json\necho \"✓ Fetched current release information\"\n\n# Get the previous release to determine the range\nPREV_RELEASE_TAG=$(gh release list --limit 2 --json tagName --jq '.[1].tagName // empty')\n\nif [ -z \"$PREV_RELEASE_TAG\" ]; then\n  echo \"No previous release found. This appears to be the first release.\"\n  echo \"PREV_RELEASE_TAG=\" >> \"$GITHUB_ENV\"\n  touch /tmp/gh-aw-mcpg/release-data/pull_requests.json\n  echo \"[]\" > /tmp/gh-aw-mcpg/release-data/pull_requests.json\nelse\n  echo \"Previous release: $PREV_RELEASE_TAG\"\n  echo \"PREV_RELEASE_TAG=$PREV_RELEASE_TAG\" >> \"$GITHUB_ENV\"\n  \n  # Get commits between releases\n  echo \"Fetching commits between $PREV_RELEASE_TAG and $RELEASE_TAG...\"\n  git fetch --unshallow 2>/dev/null || git fetch --depth=1000\n  \n  # Get all merged PRs between the two releases\n  echo \"Fetching pull requests merged between releases...\"\n  PREV_PUBLISHED_AT=$(gh release view \"$PREV_RELEASE_TAG\" --json publishedAt --jq .publishedAt)\n  CURR_PUBLISHED_AT=$(gh release view \"$RELEASE_TAG\" --json publishedAt --jq .publishedAt)\n  gh pr list \\\n    --state merged \\\n    --limit 1000 \\\n    --json number,title,author,labels,mergedAt,url,body \\\n    --jq \"[.[] | select(.mergedAt >= \\\"$PREV_PUBLISHED_AT\\\" and .mergedAt <= \\\"$CURR_PUBLISHED_AT\\\")]\" \\\n    > /tmp/gh-aw-mcpg/release-data/pull_requests.json\n  \n  PR_COUNT=$(jq length \"/tmp/gh-aw-mcpg/release-data/pull_requests.json\")\n  echo \"✓ Fetched $PR_COUNT pull requests\"\nfi\n\n# Get the README.md content for context about the project\nif [ -f \"README.md\" ]; then\n  cp README.md /tmp/gh-aw-mcpg/release-data/README.md\n  echo \"✓ Copied README.md for reference\"\nfi\n\n# List documentation files for linking\nfind docs -type f -name \"*.md\" 2>/dev/null > /tmp/gh-aw-mcpg/release-data/docs_files.txt || echo \"No docs directory found\"\n\necho \"✓ Setup complete. Data available in /tmp/gh-aw-mcpg/release-data/\""
 
       - name: Configure Git credentials
         env:
@@ -968,6 +980,66 @@ jobs:
             const { main } = require('/opt/gh-aw/actions/notify_comment_error.cjs');
             await main();
 
+  create-tag:
+    needs: activation
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    outputs:
+      new_tag: ${{ steps.create_tag.outputs.new_tag }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+        with:
+          fetch-depth: 0
+          persist-credentials: true
+      - name: Create and push tag
+        id: create_tag
+        run: |
+          # Get the latest tag
+          LATEST_TAG=$(git tag --list 'v[0-9]*.[0-9]*.[0-9]*' | sort -V | tail -1)
+
+          if [ -z "$LATEST_TAG" ]; then
+            echo "No existing tags found, starting from v0.0.0"
+            LATEST_TAG="v0.0.0"
+          else
+            echo "Latest tag: $LATEST_TAG"
+          fi
+
+          # Parse version components
+          VERSION_NUM=$(echo $LATEST_TAG | sed 's/^v//')
+          MAJOR=$(echo $VERSION_NUM | cut -d. -f1)
+          MINOR=$(echo $VERSION_NUM | cut -d. -f2)
+          PATCH=$(echo $VERSION_NUM | cut -d. -f3)
+
+          # Increment based on release type
+          if [ "$RELEASE_TYPE" = "major" ]; then
+            MAJOR=$((MAJOR + 1))
+            MINOR=0
+            PATCH=0
+          elif [ "$RELEASE_TYPE" = "minor" ]; then
+            MINOR=$((MINOR + 1))
+            PATCH=0
+          elif [ "$RELEASE_TYPE" = "patch" ]; then
+            PATCH=$((PATCH + 1))
+          fi
+
+          NEW_TAG="v$MAJOR.$MINOR.$PATCH"
+          echo "Creating new tag: $NEW_TAG"
+
+          # Create and push the tag
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag -a "$NEW_TAG" -m "Release $NEW_TAG"
+          git push origin "$NEW_TAG"
+
+          echo "new_tag=$NEW_TAG" >> "$GITHUB_OUTPUT"
+          echo "✓ Tag $NEW_TAG created and pushed"
+        env:
+          RELEASE_TYPE: ${{ inputs.release_type }}
+
   detection:
     needs: agent
     if: needs.agent.outputs.output_types != '' || needs.agent.outputs.has_patch == 'true'
@@ -1142,7 +1214,7 @@ jobs:
       - name: Extract tag version
         id: tag_version
         run: |
-          RELEASE_TAG="${GITHUB_REF#refs/tags/}"
+          RELEASE_TAG="${{ needs.release.outputs.release_tag }}"
           echo "version=$RELEASE_TAG" >> "$GITHUB_OUTPUT"
           echo "✓ Version: $RELEASE_TAG"
       - name: Build and push (multi-arch)
@@ -1234,7 +1306,11 @@ jobs:
             await main();
 
   release:
-    needs: activation
+    needs:
+      - activation
+      - create-tag
+    if: >
+      always() && needs.activation.result == 'success' && (needs.create-tag.result == 'success' || needs.create-tag.result == 'skipped')
     runs-on: ubuntu-latest
     permissions:
       attestations: write
@@ -1251,6 +1327,32 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
+          ref: ${{ needs.create-tag.outputs.new_tag || github.ref }}
+      - name: Set release tag
+        id: set_tag
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            RELEASE_TAG="${{ needs.create-tag.outputs.new_tag }}"
+          else
+            RELEASE_TAG="${GITHUB_REF#refs/tags/}"
+          fi
+
+          # Sanity check: ensure release tag is set
+          if [ -z "$RELEASE_TAG" ]; then
+            echo "Error: RELEASE_TAG is not set"
+            exit 1
+          fi
+
+          # Sanity check: validate format is v<major>.<minor>.<patch>
+          if ! echo "$RELEASE_TAG" | grep -qE '^v[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "Error: RELEASE_TAG '$RELEASE_TAG' does not match required format v<major>.<minor>.<patch>"
+            echo "Example valid format: v1.2.3"
+            exit 1
+          fi
+
+          echo "RELEASE_TAG=$RELEASE_TAG" >> "$GITHUB_ENV"
+          echo "release_tag=$RELEASE_TAG" >> "$GITHUB_OUTPUT"
+          echo "✓ Using release tag: $RELEASE_TAG"
       - name: Set up Go
         uses: actions/setup-go@4dc6199c7b1a012772edbd06daecab0f50c9053c # v6
         with:
@@ -1265,8 +1367,8 @@ jobs:
           echo "✓ Unit tests passed"
       - name: Build binary
         run: |
-          RELEASE_TAG="${GITHUB_REF#refs/tags/}"
           echo "Building binary for integration tests..."
+          echo "Release tag: $RELEASE_TAG"
           make build
           echo "✓ Binary built successfully"
       - name: Run integration tests
@@ -1276,13 +1378,11 @@ jobs:
           echo "✓ Integration tests passed"
       - name: Build release binaries
         run: |
-          RELEASE_TAG="${GITHUB_REF#refs/tags/}"
           echo "Building multi-platform binaries for: $RELEASE_TAG"
           chmod +x scripts/build-release.sh
           ./scripts/build-release.sh "$RELEASE_TAG"
       - name: Upload binaries to release
         run: |
-          RELEASE_TAG="${GITHUB_REF#refs/tags/}"
           echo "Creating release for tag: $RELEASE_TAG"
 
           # Create release with all binaries and checksums
@@ -1297,7 +1397,6 @@ jobs:
       - name: Get release ID
         id: get_release
         run: |
-          RELEASE_TAG="${GITHUB_REF#refs/tags/}"
           echo "Getting release ID for tag: $RELEASE_TAG"
           RELEASE_ID=$(gh release view "$RELEASE_TAG" --json databaseId --jq '.databaseId')
           echo "release_id=$RELEASE_ID" >> "$GITHUB_OUTPUT"
