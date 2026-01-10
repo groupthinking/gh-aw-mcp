@@ -18,6 +18,19 @@ import (
 
 var logUnified = logger.New("server:unified")
 
+// MCPProtocolVersion is the MCP protocol version supported by this gateway
+const MCPProtocolVersion = "2024-11-05"
+
+// gatewayVersion stores the gateway version, set at startup
+var gatewayVersion = "dev"
+
+// SetGatewayVersion sets the gateway version for health endpoint reporting
+func SetGatewayVersion(version string) {
+	if version != "" {
+		gatewayVersion = version
+	}
+}
+
 // Session represents a MCPG session
 type Session struct {
 	Token     string
