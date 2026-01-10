@@ -438,7 +438,7 @@ make release major
 
 When you push a release tag, the automated release workflow:
 - Runs the full test suite
-- Builds multi-platform binaries (Linux, macOS, Windows for amd64 and arm64)
+- Builds multi-platform binaries (Linux for 386, amd64, arm, and arm64)
 - Creates a GitHub release with all binaries and checksums
 - Builds and pushes a multi-arch Docker image to `ghcr.io/githubnext/gh-aw-mcpg` with tags:
   - `latest` - Always points to the newest release
