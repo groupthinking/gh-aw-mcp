@@ -11,18 +11,10 @@ if [ -z "$VERSION" ]; then
 fi
 
 platforms=(
-  darwin-amd64
-  darwin-arm64
-  freebsd-386
-  freebsd-amd64
-  freebsd-arm64
   linux-386
   linux-amd64
   linux-arm
   linux-arm64
-  windows-386
-  windows-amd64
-  windows-arm64
 )
 
 echo "Building binaries with version: $VERSION"
