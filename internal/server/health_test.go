@@ -55,6 +55,14 @@ func TestHealthEndpoint_RoutedMode(t *testing.T) {
 	if response["status"] != "ok" {
 		t.Errorf("Expected status 'ok', got '%s'", response["status"])
 	}
+	
+	if response["protocolVersion"] != MCPProtocolVersion {
+		t.Errorf("Expected protocolVersion '%s', got '%s'", MCPProtocolVersion, response["protocolVersion"])
+	}
+	
+	if response["version"] == "" {
+		t.Error("Expected version to be non-empty")
+	}
 }
 
 // TestHealthEndpoint_UnifiedMode tests that the health endpoint returns proper JSON response in unified mode
@@ -102,6 +110,14 @@ func TestHealthEndpoint_UnifiedMode(t *testing.T) {
 	if response["status"] != "ok" {
 		t.Errorf("Expected status 'ok', got '%s'", response["status"])
 	}
+	
+	if response["protocolVersion"] != MCPProtocolVersion {
+		t.Errorf("Expected protocolVersion '%s', got '%s'", MCPProtocolVersion, response["protocolVersion"])
+	}
+	
+	if response["version"] == "" {
+		t.Error("Expected version to be non-empty")
+	}
 }
 
 // TestHealthEndpoint_NoAuth tests that health endpoint doesn't require authentication
@@ -142,5 +158,13 @@ func TestHealthEndpoint_NoAuth(t *testing.T) {
 	
 	if response["status"] != "ok" {
 		t.Errorf("Expected status 'ok', got '%s'", response["status"])
+	}
+	
+	if response["protocolVersion"] != MCPProtocolVersion {
+		t.Errorf("Expected protocolVersion '%s', got '%s'", MCPProtocolVersion, response["protocolVersion"])
+	}
+	
+	if response["version"] == "" {
+		t.Error("Expected version to be non-empty")
 	}
 }

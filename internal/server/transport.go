@@ -161,7 +161,11 @@ func CreateHTTPServerForMCP(addr string, unifiedServer *UnifiedServer, apiKey st
 	healthHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
+		json.NewEncoder(w).Encode(map[string]string{
+			"status":          "ok",
+			"protocolVersion": MCPProtocolVersion,
+			"version":         gatewayVersion,
+		})
 	})
 	mux.Handle("/health", withResponseLogging(healthHandler))
 

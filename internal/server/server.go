@@ -51,7 +51,11 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 	log.Printf("[%s] %s %s", r.RemoteAddr, r.Method, r.URL.Path)
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
+	json.NewEncoder(w).Encode(map[string]string{
+		"status":          "ok",
+		"protocolVersion": MCPProtocolVersion,
+		"version":         gatewayVersion,
+	})
 }
 
 func (s *Server) handleUnifiedMCP(w http.ResponseWriter, r *http.Request) {
@@ -133,7 +137,7 @@ func (s *Server) handleInitialize(w http.ResponseWriter, req *mcp.Request, serve
 
 	// Return a proper MCP initialize response
 	result := map[string]interface{}{
-		"protocolVersion": "2024-11-05",
+		"protocolVersion": MCPProtocolVersion,
 		"capabilities": map[string]interface{}{
 			"tools":     map[string]interface{}{},
 			"resources": map[string]interface{}{},

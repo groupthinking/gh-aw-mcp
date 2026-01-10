@@ -147,6 +147,9 @@ func run(cmd *cobra.Command, args []string) error {
 
 	debugLog.Printf("Server mode: %s, DIFC enabled: %v", mode, cfg.EnableDIFC)
 
+	// Set gateway version for health endpoint reporting
+	server.SetGatewayVersion(version)
+
 	// Create unified MCP server (backend for both modes)
 	unifiedServer, err := server.NewUnified(ctx, cfg)
 	if err != nil {
