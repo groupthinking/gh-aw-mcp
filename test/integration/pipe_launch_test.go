@@ -15,8 +15,29 @@ import (
 	"time"
 )
 
-// TestPipeBasedLaunch tests launching the gateway using pipes via shell script
-// This test demonstrates different pipe mechanisms similar to start_mcp_gateway_server.sh
+// TestPipeBasedLaunch tests launching the gateway using pipes via shell script.
+//
+// This test suite demonstrates two different pipe mechanisms for launching the MCP Gateway,
+// similar to the start_mcp_gateway_server.sh script in the gh-aw repository:
+//
+// 1. Standard Pipe (echo | command): Configuration is piped directly to the gateway
+//    using standard shell piping. This is the simplest approach.
+//
+// 2. Named Pipe (FIFO): Configuration is written to a named pipe (created with mkfifo),
+//    which the gateway reads from. This approach is more robust for complex scenarios
+//    and allows for asynchronous communication between processes.
+//
+// The tests verify that:
+// - The gateway starts successfully with config provided via pipes
+// - Health checks pass
+// - MCP initialize requests work correctly
+// - Both routed and unified modes are supported
+// - The script handles errors gracefully
+//
+// These tests ensure the gateway can be launched in environments where:
+// - Configuration cannot be provided via files
+// - Dynamic configuration generation is needed
+// - Containerized deployments require stdin-based config
 func TestPipeBasedLaunch(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping pipe-based launch integration test in short mode")

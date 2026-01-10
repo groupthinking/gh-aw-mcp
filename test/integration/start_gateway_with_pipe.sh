@@ -1,8 +1,27 @@
 #!/bin/bash
 # start_gateway_with_pipe.sh - Launch MCP Gateway with configuration via pipes
-# This script demonstrates launching the gateway using different pipe mechanisms:
-# 1. Standard pipe (echo | command)
-# 2. Named pipe/FIFO (mkfifo)
+#
+# This script demonstrates launching the MCP Gateway using different pipe mechanisms:
+# 1. Standard pipe (echo | command) - Simple pipe-based configuration
+# 2. Named pipe/FIFO (mkfifo) - More robust asynchronous communication
+#
+# This script is similar in concept to start_mcp_gateway_server.sh from the gh-aw repository,
+# providing a reusable way to launch the gateway with dynamic configuration in environments
+# where file-based configuration is not suitable (e.g., containerized deployments).
+#
+# Usage:
+#   BINARY=./awmg PORT=8000 MODE=--routed PIPE_TYPE=standard ./start_gateway_with_pipe.sh
+#   BINARY=./awmg PORT=8001 MODE=--unified PIPE_TYPE=named ./start_gateway_with_pipe.sh
+#
+# Environment Variables:
+#   BINARY       - Path to the awmg binary (default: ./awmg)
+#   HOST         - Host to bind to (default: 127.0.0.1)
+#   PORT         - Port to listen on (default: 13100)
+#   MODE         - Gateway mode: --routed or --unified (default: --routed)
+#   PIPE_TYPE    - Pipe mechanism: standard or named (default: standard)
+#   TIMEOUT      - Startup timeout in seconds (default: 30)
+#   NO_CLEANUP   - If set to 1, don't cleanup gateway process on exit (for tests)
+#   KEEP_RUNNING - If set to 1, keep script running after gateway starts
 
 set -e
 
