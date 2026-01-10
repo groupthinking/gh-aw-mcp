@@ -5,6 +5,16 @@ on:
   push:
     tags:
       - 'v*.*.*'
+  workflow_dispatch:
+    inputs:
+      release_type:
+        description: 'Type of release (patch, minor, or major)'
+        required: true
+        type: choice
+        options:
+          - patch
+          - minor
+          - major
 permissions:
   contents: read
   pull-requests: read
@@ -29,8 +39,69 @@ tools:
 safe-outputs:
   update-release:
 jobs:
-  release:
+  create-tag:
+    if: github.event_name == 'workflow_dispatch'
     needs: ["activation"]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    outputs:
+      new_tag: ${{ steps.create_tag.outputs.new_tag }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+          persist-credentials: true
+          
+      - name: Create and push tag
+        id: create_tag
+        env:
+          RELEASE_TYPE: ${{ inputs.release_type }}
+        run: |
+          # Get the latest tag
+          LATEST_TAG=$(git tag --list 'v[0-9]*.[0-9]*.[0-9]*' | sort -V | tail -1)
+          
+          if [ -z "$LATEST_TAG" ]; then
+            echo "No existing tags found, starting from v0.0.0"
+            LATEST_TAG="v0.0.0"
+          else
+            echo "Latest tag: $LATEST_TAG"
+          fi
+          
+          # Parse version components
+          VERSION_NUM=$(echo $LATEST_TAG | sed 's/^v//')
+          MAJOR=$(echo $VERSION_NUM | cut -d. -f1)
+          MINOR=$(echo $VERSION_NUM | cut -d. -f2)
+          PATCH=$(echo $VERSION_NUM | cut -d. -f3)
+          
+          # Increment based on release type
+          if [ "$RELEASE_TYPE" = "major" ]; then
+            MAJOR=$((MAJOR + 1))
+            MINOR=0
+            PATCH=0
+          elif [ "$RELEASE_TYPE" = "minor" ]; then
+            MINOR=$((MINOR + 1))
+            PATCH=0
+          elif [ "$RELEASE_TYPE" = "patch" ]; then
+            PATCH=$((PATCH + 1))
+          fi
+          
+          NEW_TAG="v$MAJOR.$MINOR.$PATCH"
+          echo "Creating new tag: $NEW_TAG"
+          
+          # Create and push the tag
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag -a "$NEW_TAG" -m "Release $NEW_TAG"
+          git push origin "$NEW_TAG"
+          
+          echo "new_tag=$NEW_TAG" >> "$GITHUB_OUTPUT"
+          echo "✓ Tag $NEW_TAG created and pushed"
+
+  release:
+    needs: ["activation", "create-tag"]
+    if: always() && (needs.create-tag.result == 'success' || needs.create-tag.result == 'skipped')
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -46,6 +117,18 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
+          ref: ${{ needs.create-tag.outputs.new_tag || github.ref }}
+          
+      - name: Set release tag
+        id: set_tag
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            RELEASE_TAG="${{ needs.create-tag.outputs.new_tag }}"
+          else
+            RELEASE_TAG="${GITHUB_REF#refs/tags/}"
+          fi
+          echo "release_tag=$RELEASE_TAG" >> "$GITHUB_OUTPUT"
+          echo "Using release tag: $RELEASE_TAG"
           
       - name: Set up Go
         uses: actions/setup-go@v6
@@ -64,7 +147,7 @@ jobs:
 
       - name: Build binary
         run: |
-          RELEASE_TAG="${GITHUB_REF#refs/tags/}"
+          RELEASE_TAG="${{ steps.set_tag.outputs.release_tag }}"
           echo "Building binary for integration tests..."
           make build
           echo "✓ Binary built successfully"
@@ -77,7 +160,7 @@ jobs:
 
       - name: Build release binaries
         run: |
-          RELEASE_TAG="${GITHUB_REF#refs/tags/}"
+          RELEASE_TAG="${{ steps.set_tag.outputs.release_tag }}"
           echo "Building multi-platform binaries for: $RELEASE_TAG"
           chmod +x scripts/build-release.sh
           ./scripts/build-release.sh "$RELEASE_TAG"
@@ -86,7 +169,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          RELEASE_TAG="${GITHUB_REF#refs/tags/}"
+          RELEASE_TAG="${{ steps.set_tag.outputs.release_tag }}"
           echo "Creating release for tag: $RELEASE_TAG"
           
           # Create release with all binaries and checksums
@@ -102,7 +185,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          RELEASE_TAG="${GITHUB_REF#refs/tags/}"
+          RELEASE_TAG="${{ steps.set_tag.outputs.release_tag }}"
           echo "Getting release ID for tag: $RELEASE_TAG"
           RELEASE_ID=$(gh release view "$RELEASE_TAG" --json databaseId --jq '.databaseId')
           echo "release_id=$RELEASE_ID" >> "$GITHUB_OUTPUT"
@@ -137,7 +220,7 @@ jobs:
       - name: Extract tag version
         id: tag_version
         run: |
-          RELEASE_TAG="${GITHUB_REF#refs/tags/}"
+          RELEASE_TAG="${{ needs.release.outputs.release_tag }}"
           echo "version=$RELEASE_TAG" >> "$GITHUB_OUTPUT"
           echo "✓ Version: $RELEASE_TAG"
 
@@ -216,20 +299,16 @@ steps:
   - name: Setup environment and fetch release data
     env:
       RELEASE_ID: ${{ needs.release.outputs.release_id }}
+      RELEASE_TAG: ${{ needs.release.outputs.release_tag }}
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     run: |
       set -e
       mkdir -p /tmp/gh-aw-mcpg/release-data
       
-      # Use the release ID from the release job
+      # Use the release ID and tag from the release job
       echo "Release ID from release job: $RELEASE_ID"
+      echo "Release tag from release job: $RELEASE_TAG"
       
-      # Get the release tag from the push event
-      if [[ ! "$GITHUB_REF" == refs/tags/* ]]; then
-        echo "Error: Push event triggered but GITHUB_REF is not a tag: $GITHUB_REF"
-        exit 1
-      fi
-      RELEASE_TAG="${GITHUB_REF#refs/tags/}"
       echo "Processing release: $RELEASE_TAG"
       
       echo "RELEASE_TAG=$RELEASE_TAG" >> "$GITHUB_ENV"
