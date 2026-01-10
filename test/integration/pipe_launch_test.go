@@ -20,12 +20,12 @@ import (
 // This test suite demonstrates two different pipe mechanisms for launching the MCP Gateway,
 // similar to the start_mcp_gateway_server.sh script in the gh-aw repository:
 //
-// 1. Standard Pipe (echo | command): Configuration is piped directly to the gateway
-//    using standard shell piping. This is the simplest approach.
+//  1. Standard Pipe (echo | command): Configuration is piped directly to the gateway
+//     using standard shell piping. This is the simplest approach.
 //
-// 2. Named Pipe (FIFO): Configuration is written to a named pipe (created with mkfifo),
-//    which the gateway reads from. This approach is more robust for complex scenarios
-//    and allows for asynchronous communication between processes.
+//  2. Named Pipe (FIFO): Configuration is written to a named pipe (created with mkfifo),
+//     which the gateway reads from. This approach is more robust for complex scenarios
+//     and allows for asynchronous communication between processes.
 //
 // The tests verify that:
 // - The gateway starts successfully with config provided via pipes
