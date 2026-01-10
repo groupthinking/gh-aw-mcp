@@ -69,7 +69,7 @@ func InitFileLogger(logDir, fileName string) error {
 
 	fl.logFile = file
 	fl.logger = log.New(file, "", 0)
-	
+
 	// Apply a shared lock (LOCK_SH) to allow other processes to read the file
 	// This is non-blocking (LOCK_NB) so we don't hang if another process has an exclusive lock
 	if err := syscall.Flock(int(file.Fd()), syscall.LOCK_SH|syscall.LOCK_NB); err != nil {
@@ -80,7 +80,7 @@ func InitFileLogger(logDir, fileName string) error {
 	} else {
 		fl.locked = true
 	}
-	
+
 	log.Printf("Logging to file: %s", logPath)
 
 	globalFileLogger = fl
