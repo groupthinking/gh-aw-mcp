@@ -56,7 +56,8 @@ var rootCmd = &cobra.Command{
 	Version: version,
 	Long: `MCPG is a proxy server for Model Context Protocol (MCP) servers.
 It provides routing, aggregation, and management of multiple MCP backend servers.`,
-	RunE: run,
+	SilenceUsage: true, // Don't show help on runtime errors
+	RunE:         run,
 }
 
 func init() {
