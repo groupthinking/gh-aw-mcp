@@ -3,7 +3,11 @@ package sys
 import (
 	"encoding/json"
 	"fmt"
+	
+	"github.com/githubnext/gh-aw-mcpg/internal/logger"
 )
+
+var logSys = logger.New("sys:sys")
 
 // SysServer implements the MCPG system tools
 type SysServer struct {
@@ -12,6 +16,7 @@ type SysServer struct {
 
 // NewSysServer creates a new system server
 func NewSysServer(serverIDs []string) *SysServer {
+	logSys.Printf("Creating sys server with %d backend servers", len(serverIDs))
 	return &SysServer{
 		serverIDs: serverIDs,
 	}
@@ -19,6 +24,8 @@ func NewSysServer(serverIDs []string) *SysServer {
 
 // HandleRequest processes MCP requests for system tools
 func (s *SysServer) HandleRequest(method string, params json.RawMessage) (interface{}, error) {
+	logSys.Printf("Handling sys request: method=%s", method)
+	
 	switch method {
 	case "tools/list":
 		return s.listTools()
@@ -28,10 +35,13 @@ func (s *SysServer) HandleRequest(method string, params json.RawMessage) (interf
 			Arguments map[string]interface{} `json:"arguments"`
 		}
 		if err := json.Unmarshal(params, &callParams); err != nil {
+			logSys.Printf("Invalid params for tools/call: %v", err)
 			return nil, fmt.Errorf("invalid params: %w", err)
 		}
+		logSys.Printf("Calling sys tool: name=%s", callParams.Name)
 		return s.callTool(callParams.Name, callParams.Arguments)
 	default:
+		logSys.Printf("Unsupported sys method: %s", method)
 		return nil, fmt.Errorf("unsupported method: %s", method)
 	}
 }
@@ -71,6 +81,7 @@ func (s *SysServer) callTool(name string, args map[string]interface{}) (interfac
 }
 
 func (s *SysServer) sysInit() (interface{}, error) {
+	logSys.Printf("Executing sys_init with %d servers", len(s.serverIDs))
 	return map[string]interface{}{
 		"content": []map[string]interface{}{
 			{

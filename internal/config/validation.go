@@ -5,7 +5,11 @@ import (
 	"os"
 	"regexp"
 	"strings"
+	
+	"github.com/githubnext/gh-aw-mcpg/internal/logger"
 )
+
+var logValidation = logger.New("config:validation")
 
 // ValidationError represents a configuration validation error with context
 type ValidationError struct {
@@ -30,6 +34,8 @@ var varExprPattern = regexp.MustCompile(`\$\{([A-Za-z_][A-Za-z0-9_]*)\}`)
 // expandVariables expands variable expressions in a string
 // Returns the expanded string and error if any variable is undefined
 func expandVariables(value, jsonPath string) (string, error) {
+	logValidation.Printf("Expanding variables in value at path: %s", jsonPath)
+	
 	var undefinedVars []string
 
 	result := varExprPattern.ReplaceAllStringFunc(value, func(match string) string {
@@ -37,6 +43,7 @@ func expandVariables(value, jsonPath string) (string, error) {
 		varName := match[2 : len(match)-1]
 
 		if envValue, exists := os.LookupEnv(varName); exists {
+			logValidation.Printf("Expanded variable %s at %s", varName, jsonPath)
 			return envValue
 		}
 
@@ -46,6 +53,7 @@ func expandVariables(value, jsonPath string) (string, error) {
 	})
 
 	if len(undefinedVars) > 0 {
+		logValidation.Printf("Undefined variable detected: %s at %s", undefinedVars[0], jsonPath)
 		return "", &ValidationError{
 			Field:      "env variable",
 			Message:    fmt.Sprintf("undefined environment variable referenced: %s", undefinedVars[0]),
@@ -125,6 +133,8 @@ func validateMounts(mounts []string, jsonPath string) error {
 
 // validateStdioServer validates a stdio server configuration
 func validateStdioServer(name string, server *StdinServerConfig) error {
+	logValidation.Printf("Validating stdio server: name=%s, type=%s", name, server.Type)
+	
 	jsonPath := fmt.Sprintf("mcpServers.%s", name)
 
 	// Validate type (empty defaults to stdio)
@@ -139,6 +149,7 @@ func validateStdioServer(name string, server *StdinServerConfig) error {
 
 	// Validate known types
 	if server.Type != "stdio" && server.Type != "http" {
+		logValidation.Printf("Validation failed: unsupported type '%s' for server '%s'", server.Type, name)
 		return &ValidationError{
 			Field:      "type",
 			Message:    fmt.Sprintf("unsupported server type '%s'", server.Type),
@@ -150,6 +161,7 @@ func validateStdioServer(name string, server *StdinServerConfig) error {
 	// For stdio servers, container is required
 	if server.Type == "stdio" || server.Type == "local" {
 		if server.Container == "" {
+			logValidation.Printf("Validation failed: missing container for stdio server '%s'", name)
 			return &ValidationError{
 				Field:      "container",
 				Message:    "'container' is required for stdio servers",
@@ -160,6 +172,7 @@ func validateStdioServer(name string, server *StdinServerConfig) error {
 
 		// Reject unsupported 'command' field
 		if server.Command != "" {
+			logValidation.Printf("Validation failed: unsupported 'command' field for stdio server '%s'", name)
 			return &ValidationError{
 				Field:      "command",
 				Message:    "'command' field is not supported (stdio servers must use 'container')",
@@ -179,6 +192,7 @@ func validateStdioServer(name string, server *StdinServerConfig) error {
 	// For HTTP servers, url is required
 	if server.Type == "http" {
 		if server.URL == "" {
+			logValidation.Printf("Validation failed: missing URL for http server '%s'", name)
 			return &ValidationError{
 				Field:      "url",
 				Message:    "'url' is required for HTTP servers",
@@ -188,6 +202,7 @@ func validateStdioServer(name string, server *StdinServerConfig) error {
 		}
 	}
 
+	logValidation.Printf("Validation successful for server: %s", name)
 	return nil
 }
 

@@ -13,6 +13,8 @@ import (
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
+var logTransport = logger.New("server:transport")
+
 // HTTPTransport wraps the SDK's HTTP transport
 type HTTPTransport struct {
 	Addr string
@@ -74,6 +76,8 @@ func withResponseLogging(handler http.Handler) http.Handler {
 // CreateHTTPServerForMCP creates an HTTP server that handles MCP over SSE
 // If apiKey is provided, all requests except /health require authentication (spec 7.1)
 func CreateHTTPServerForMCP(addr string, unifiedServer *UnifiedServer, apiKey string) *http.Server {
+	logTransport.Printf("Creating HTTP server: addr=%s, authEnabled=%v", addr, apiKey != "")
+	
 	mux := http.NewServeMux()
 
 	// OAuth discovery endpoint - return 404 since we don't use OAuth
@@ -91,6 +95,8 @@ func CreateHTTPServerForMCP(addr string, unifiedServer *UnifiedServer, apiKey st
 		// We use the Bearer token from Authorization header as the session ID
 		// This groups all routes from the same agent (same token) into one session
 
+		logTransport.Printf("New HTTP connection: remote=%s, method=%s, path=%s", r.RemoteAddr, r.Method, r.URL.Path)
+
 		// Extract Bearer token from Authorization header
 		authHeader := r.Header.Get("Authorization")
 		var sessionID string
@@ -104,6 +110,7 @@ func CreateHTTPServerForMCP(addr string, unifiedServer *UnifiedServer, apiKey st
 		if sessionID == "" {
 			logger.LogError("client", "MCP connection rejected: no Bearer token, remote=%s, path=%s", r.RemoteAddr, r.URL.Path)
 			log.Printf("[%s] %s %s - REJECTED: No Bearer token", r.RemoteAddr, r.Method, r.URL.Path)
+			logTransport.Printf("Connection rejected: no Bearer token")
 			// Return nil to reject the connection
 			// The SDK will handle sending an appropriate error response
 			return nil
@@ -113,6 +120,7 @@ func CreateHTTPServerForMCP(addr string, unifiedServer *UnifiedServer, apiKey st
 		log.Printf("=== NEW SSE CONNECTION ===")
 		log.Printf("[%s] %s %s", r.RemoteAddr, r.Method, r.URL.Path)
 		log.Printf("Bearer Token (Session ID): %s", sessionID)
+		logTransport.Printf("Connection accepted: sessionID=%s", sessionID)
 
 		log.Printf("DEBUG: About to check request body, Method=%s, Body!=nil: %v", r.Method, r.Body != nil)
 
@@ -142,12 +150,14 @@ func CreateHTTPServerForMCP(addr string, unifiedServer *UnifiedServer, apiKey st
 	// Apply auth middleware if API key is configured (spec 7.1)
 	var finalHandler http.Handler = streamableHandler
 	if apiKey != "" {
+		logTransport.Print("Applying authentication middleware")
 		finalHandler = authMiddleware(apiKey, streamableHandler.ServeHTTP)
 	}
 
 	// Mount handler at /mcp endpoint (logging is done in the callback above)
 	mux.Handle("/mcp/", finalHandler)
 	mux.Handle("/mcp", finalHandler)
+	logTransport.Print("Registered MCP handler at /mcp endpoints")
 
 	// Health check
 	healthHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

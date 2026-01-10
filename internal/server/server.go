@@ -9,9 +9,12 @@ import (
 	"strings"
 
 	"github.com/githubnext/gh-aw-mcpg/internal/launcher"
+	"github.com/githubnext/gh-aw-mcpg/internal/logger"
 	"github.com/githubnext/gh-aw-mcpg/internal/mcp"
 	"github.com/githubnext/gh-aw-mcpg/internal/sys"
 )
+
+var logServer = logger.New("server:server")
 
 // Server represents the MCPG HTTP server
 type Server struct {
@@ -23,6 +26,8 @@ type Server struct {
 
 // New creates a new Server
 func New(ctx context.Context, l *launcher.Launcher, mode string) *Server {
+	logServer.Printf("Creating new server: mode=%s", mode)
+	
 	s := &Server{
 		launcher:  l,
 		sysServer: sys.NewSysServer(l.ServerIDs()),
@@ -31,20 +36,26 @@ func New(ctx context.Context, l *launcher.Launcher, mode string) *Server {
 	}
 
 	s.setupRoutes()
+	logServer.Printf("Server created successfully with %d configured backends", len(l.ServerIDs()))
 	return s
 }
 
 func (s *Server) setupRoutes() {
+	logServer.Printf("Setting up routes for mode: %s", s.mode)
+	
 	if s.mode == "routed" {
 		// Routed mode: /mcp/{server}/{method}
 		s.mux.HandleFunc("/mcp/", s.handleRoutedMCP)
+		logServer.Print("Registered routed MCP handler at /mcp/")
 	} else {
 		// Unified mode: /mcp (single endpoint for all servers)
 		s.mux.HandleFunc("/mcp", s.handleUnifiedMCP)
+		logServer.Print("Registered unified MCP handler at /mcp")
 	}
 
 	// Health check
 	s.mux.HandleFunc("/health", s.handleHealth)
+	logServer.Print("Registered health check handler at /health")
 }
 
 func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
@@ -156,8 +167,11 @@ func (s *Server) handleInitialize(w http.ResponseWriter, req *mcp.Request, serve
 }
 
 func (s *Server) proxyToServer(w http.ResponseWriter, r *http.Request, serverID string, req *mcp.Request) {
+	logServer.Printf("Proxying request to server: serverID=%s, method=%s", serverID, req.Method)
+	
 	// Handle built-in sys server
 	if serverID == "sys" {
+		logServer.Printf("Routing to built-in sys server")
 		s.handleSysRequest(w, req)
 		return
 	}
@@ -169,6 +183,8 @@ func (s *Server) proxyToServer(w http.ResponseWriter, r *http.Request, serverID 
 		s.sendError(w, -32603, fmt.Sprintf("Failed to connect to server '%s'", serverID), nil)
 		return
 	}
+	
+	logServer.Printf("Connection established to backend: %s", serverID)
 
 	// Forward request based on method
 	var resp *mcp.Response
@@ -258,5 +274,6 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 // ListenAndServe starts the HTTP server
 func (s *Server) ListenAndServe(addr string) error {
 	log.Printf("Starting MCPG HTTP server on %s (mode: %s)", addr, s.mode)
+	logServer.Printf("Starting HTTP server: addr=%s, mode=%s", addr, s.mode)
 	return http.ListenAndServe(addr, s)
 }

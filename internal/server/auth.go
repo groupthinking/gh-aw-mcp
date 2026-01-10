@@ -9,9 +9,13 @@ import (
 	"github.com/githubnext/gh-aw-mcpg/internal/logger"
 )
 
+var logAuth = logger.New("server:auth")
+
 // authMiddleware implements API key authentication per spec section 7.1
 func authMiddleware(apiKey string, next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		logAuth.Printf("Authenticating request: remote=%s, path=%s", r.RemoteAddr, r.URL.Path)
+		
 		// Extract Authorization header
 		authHeader := r.Header.Get("Authorization")
 
@@ -19,6 +23,7 @@ func authMiddleware(apiKey string, next http.HandlerFunc) http.HandlerFunc {
 			// Spec 7.1: Missing token returns 401
 			logger.LogError("auth", "Authentication failed: missing Authorization header, remote=%s, path=%s", r.RemoteAddr, r.URL.Path)
 			logRuntimeError("authentication_failed", "missing_auth_header", r, nil)
+			logAuth.Print("Authentication failed: missing header")
 			http.Error(w, "Unauthorized: missing Authorization header", http.StatusUnauthorized)
 			return
 		}
@@ -35,6 +40,7 @@ func authMiddleware(apiKey string, next http.HandlerFunc) http.HandlerFunc {
 			// Header is neither a Bearer token nor a valid plain API key
 			logger.LogError("auth", "Authentication failed: malformed Authorization header, remote=%s, path=%s", r.RemoteAddr, r.URL.Path)
 			logRuntimeError("authentication_failed", "malformed_auth_header", r, nil)
+			logAuth.Print("Authentication failed: malformed header")
 			http.Error(w, "Bad Request: Authorization header must be 'Bearer <token>' or plain API key", http.StatusBadRequest)
 			return
 		}
@@ -42,11 +48,13 @@ func authMiddleware(apiKey string, next http.HandlerFunc) http.HandlerFunc {
 		if token != apiKey {
 			logger.LogError("auth", "Authentication failed: invalid API key, remote=%s, path=%s", r.RemoteAddr, r.URL.Path)
 			logRuntimeError("authentication_failed", "invalid_token", r, nil)
+			logAuth.Print("Authentication failed: invalid token")
 			http.Error(w, "Unauthorized: invalid API key", http.StatusUnauthorized)
 			return
 		}
 
 		logger.LogInfo("auth", "Authentication successful, remote=%s, path=%s", r.RemoteAddr, r.URL.Path)
+		logAuth.Print("Authentication successful")
 		// Token is valid, proceed to handler
 		next(w, r)
 	}
