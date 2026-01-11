@@ -68,7 +68,7 @@ func init() {
 	rootCmd.Flags().BoolVar(&unifiedMode, "unified", defaultUnifiedMode, "Run in unified mode (all backends at /mcp)")
 	rootCmd.Flags().StringVar(&envFile, "env", defaultEnvFile, "Path to .env file to load environment variables")
 	rootCmd.Flags().BoolVar(&enableDIFC, "enable-difc", defaultEnableDIFC, "Enable DIFC enforcement and session requirement (requires sys___init call before tool access)")
-	rootCmd.Flags().StringVar(&logDir, "log-dir", defaultLogDir, "Directory for log files (falls back to stdout if directory cannot be created)")
+	rootCmd.Flags().StringVar(&logDir, "log-dir", getDefaultLogDir(), "Directory for log files (falls back to stdout if directory cannot be created)")
 	rootCmd.Flags().BoolVar(&validateEnv, "validate-env", false, "Validate execution environment (Docker, env vars) before starting")
 
 	// Mark mutually exclusive flags
@@ -76,6 +76,15 @@ func init() {
 
 	// Add completion command
 	rootCmd.AddCommand(newCompletionCmd())
+}
+
+// getDefaultLogDir returns the default log directory, checking MCP_GATEWAY_LOG_DIR
+// environment variable first, then falling back to the hardcoded default
+func getDefaultLogDir() string {
+	if envLogDir := os.Getenv("MCP_GATEWAY_LOG_DIR"); envLogDir != "" {
+		return envLogDir
+	}
+	return defaultLogDir
 }
 
 func run(cmd *cobra.Command, args []string) error {
