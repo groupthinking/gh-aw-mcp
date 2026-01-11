@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 	"sync"
 	"time"
 )
@@ -87,78 +86,23 @@ func (jl *JSONLLogger) Close() error {
 	return nil
 }
 
-// sanitizePayload sanitizes a JSON payload by removing secrets
-// It takes raw bytes, parses as JSON, sanitizes string values, and returns the sanitized map
+// sanitizePayload sanitizes a JSON payload by applying regex patterns to the entire JSON string
+// It takes raw bytes, sanitizes using regex patterns, then parses back to a map
 func sanitizePayload(payloadBytes []byte) map[string]interface{} {
+	// Apply regex sanitization to the entire JSON string
+	sanitized := sanitizeSecrets(string(payloadBytes))
+
+	// Parse the sanitized JSON back into a map
 	var payload map[string]interface{}
-	if err := json.Unmarshal(payloadBytes, &payload); err != nil {
+	if err := json.Unmarshal([]byte(sanitized), &payload); err != nil {
 		// If we can't parse the payload, return an error object
 		return map[string]interface{}{
 			"_error": "failed to parse JSON",
-			"_raw":   string(payloadBytes),
+			"_raw":   sanitized,
 		}
 	}
 
-	// Recursively sanitize all string values in the payload
-	sanitizeMap(payload)
 	return payload
-}
-
-// sanitizeMap recursively sanitizes all string values in a map
-func sanitizeMap(m map[string]interface{}) {
-	// List of field names that commonly contain secrets
-	secretFieldNames := []string{
-		"password", "passwd", "pwd",
-		"token", "access_token", "refresh_token", "bearer_token",
-		"apikey", "api_key", "api-key",
-		"secret", "client_secret", "api_secret",
-		"authorization", "auth",
-		"key", "private_key", "public_key",
-		"credentials", "credential",
-	}
-
-	for key, value := range m {
-		// Check if the key name indicates it contains a secret
-		keyLower := strings.ToLower(key)
-		isSecretField := false
-		for _, secretName := range secretFieldNames {
-			if strings.Contains(keyLower, secretName) {
-				isSecretField = true
-				break
-			}
-		}
-
-		switch v := value.(type) {
-		case string:
-			if isSecretField && v != "" {
-				// Redact secret field values
-				m[key] = "[REDACTED]"
-			} else {
-				// Sanitize string values using pattern matching
-				m[key] = sanitizeSecrets(v)
-			}
-		case map[string]interface{}:
-			// Recursively sanitize nested maps
-			sanitizeMap(v)
-		case []interface{}:
-			// Recursively sanitize arrays
-			sanitizeArray(v)
-		}
-	}
-}
-
-// sanitizeArray recursively sanitizes all values in an array
-func sanitizeArray(arr []interface{}) {
-	for i, value := range arr {
-		switch v := value.(type) {
-		case string:
-			arr[i] = sanitizeSecrets(v)
-		case map[string]interface{}:
-			sanitizeMap(v)
-		case []interface{}:
-			sanitizeArray(v)
-		}
-	}
 }
 
 // LogMessage logs an RPC message to the JSONL file
