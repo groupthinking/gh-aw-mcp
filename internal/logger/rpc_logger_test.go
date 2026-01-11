@@ -179,9 +179,9 @@ func TestFormatRPCMessage(t *testing.T) {
 
 func TestFormatRPCMessageMarkdown(t *testing.T) {
 	tests := []struct {
-		name string
-		info *RPCMessageInfo
-		want []string // Strings that should be present in output
+		name    string
+		info    *RPCMessageInfo
+		want    []string // Strings that should be present in output
 		notWant []string // Strings that should NOT be present in output
 	}{
 		{
@@ -194,7 +194,7 @@ func TestFormatRPCMessageMarkdown(t *testing.T) {
 				PayloadSize: 50,
 				Payload:     `{"jsonrpc":"2.0","method":"tools/list","params":{}}`,
 			},
-			want: []string{"**github**→`tools/list`", "~~~", `"params"`, "{}"},
+			want:    []string{"**github**→`tools/list`", "~~~", `"params"`, "{}"},
 			notWant: []string{`"jsonrpc"`, `"method"`},
 		},
 		{
@@ -206,7 +206,7 @@ func TestFormatRPCMessageMarkdown(t *testing.T) {
 				PayloadSize: 100,
 				Payload:     `{"result":{}}`,
 			},
-			want: []string{"**github**←resp", "~~~", `"result"`},
+			want:    []string{"**github**←resp", "~~~", `"result"`},
 			notWant: []string{`"jsonrpc"`, `"method"`},
 		},
 		{
@@ -218,7 +218,7 @@ func TestFormatRPCMessageMarkdown(t *testing.T) {
 				PayloadSize: 100,
 				Error:       "Connection timeout",
 			},
-			want: []string{"**github**←resp", "⚠️`Connection timeout`"},
+			want:    []string{"**github**←resp", "⚠️`Connection timeout`"},
 			notWant: []string{},
 		},
 	}
