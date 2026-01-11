@@ -180,7 +180,7 @@ jobs:
           mkdir -p /tmp/gh-aw/safeoutputs
           mkdir -p /tmp/gh-aw/mcp-logs/safeoutputs
           cat > /opt/gh-aw/safeoutputs/config.json << 'EOF'
-          {"missing_data":{},"missing_tool":{},"noop":{"max":1},"update_release":{"max":1}}
+          {"missing_data":{},"missing_tool":{},"noop":{"max":1},"publish-release":{"description":"Publish the draft release","inputs":{"tag":{"default":null,"description":"Release tag to publish","required":true,"type":"string"}},"output":"Release published successfully!"},"update_release":{"max":1}}
           EOF
           cat > /opt/gh-aw/safeoutputs/tools.json << 'EOF'
           [
@@ -258,6 +258,23 @@ jobs:
                 "type": "object"
               },
               "name": "noop"
+            },
+            {
+              "description": "Publish the draft release",
+              "inputSchema": {
+                "additionalProperties": false,
+                "properties": {
+                  "tag": {
+                    "description": "Release tag to publish",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "tag"
+                ],
+                "type": "object"
+              },
+              "name": "publish_release"
             }
           ]
           EOF
@@ -607,13 +624,19 @@ jobs:
           
           ## Output Format
           
-          **CRITICAL**: You MUST call the `update_release` tool to update the release with the generated highlights:
+          **CRITICAL**: You MUST call the `update_release` tool to update the release with the generated highlights, then call `publish_release` to make it public:
           
           ```javascript
+          // Step 1: Update the release with highlights
           update_release({
             tag: "${RELEASE_TAG}",
             operation: "prepend",
             body: "## 🌟 Release Highlights\n\n[Your complete markdown highlights here]"
+          })
+          
+          // Step 2: Publish the release (remove draft status)
+          publish_release({
+            tag: "${RELEASE_TAG}"
           })
           ```
           
@@ -622,7 +645,7 @@ jobs:
           - `operation` - Must be `"prepend"` to add before existing notes
           - `body` - Complete markdown content (include all formatting, emojis, links)
           
-          **WARNING**: If you don't call the `update_release` tool, the release notes will NOT be updated!
+          **WARNING**: If you don't call both `update_release` and `publish_release` tools, the release will remain in draft status!
           
           **Documentation Base URL:**
           - Repository docs: `https://github.com/githubnext/gh-aw-mcpg/blob/main/docs/`
@@ -674,7 +697,7 @@ jobs:
           <instructions>
           To create or modify GitHub resources (issues, discussions, pull requests, etc.), you MUST call the appropriate safe output tool. Simply writing content will NOT work - the workflow requires actual tool calls.
           
-          **Available tools**: missing_tool, noop, update_release
+          **Available tools**: missing_tool, noop, publish-release, update_release
           
           **Critical**: Tool calls write structured data that downstream jobs process. Without tool calls, follow-up actions will be skipped.
           </instructions>
@@ -895,6 +918,7 @@ jobs:
       - activation
       - agent
       - detection
+      - publish_release
       - safe_outputs
     if: (always()) && (needs.agent.result != 'skipped')
     runs-on: ubuntu-slim
@@ -1307,6 +1331,42 @@ jobs:
             const { main } = require('/opt/gh-aw/actions/check_membership.cjs');
             await main();
 
+  publish_release:
+    needs:
+      - agent
+      - detection
+    if: ((!cancelled()) && (needs.agent.result != 'skipped')) && (contains(needs.agent.outputs.output_types, 'publish_release'))
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download agent output artifact
+        continue-on-error: true
+        uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53 # v6.0.0
+        with:
+          name: agent-output
+          path: /opt/gh-aw/safe-jobs/
+      - name: Setup Safe Job Environment Variables
+        run: |
+          find "/opt/gh-aw/safe-jobs/" -type f -print
+          echo "GH_AW_AGENT_OUTPUT=/opt/gh-aw/safe-jobs/agent-output" >> "$GITHUB_ENV"
+      - name: Publish release
+        run: |
+          # Read the tag from agent output
+          RELEASE_TAG=$(jq -r '.tag' "$GH_AW_AGENT_OUTPUT" || echo "")
+
+          if [ -z "$RELEASE_TAG" ]; then
+            echo "Error: Release tag not provided"
+            exit 1
+          fi
+
+          echo "Publishing release: $RELEASE_TAG"
+
+          # Remove draft status from release
+          gh release edit "$RELEASE_TAG" --draft=false
+
+          echo "✓ Release $RELEASE_TAG published successfully"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
   release:
     needs:
       - activation
@@ -1385,15 +1445,16 @@ jobs:
           ./scripts/build-release.sh "$RELEASE_TAG"
       - name: Upload binaries to release
         run: |
-          echo "Creating release for tag: $RELEASE_TAG"
+          echo "Creating draft release for tag: $RELEASE_TAG"
 
-          # Create release with all binaries and checksums
+          # Create draft release with all binaries and checksums
           gh release create "$RELEASE_TAG" \
+            --draft \
             --title "$RELEASE_TAG" \
             --generate-notes \
             dist/*
 
-          echo "✓ Release created with all platform binaries and checksums"
+          echo "✓ Draft release created with all platform binaries and checksums"
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: Get release ID

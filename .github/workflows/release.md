@@ -38,6 +38,35 @@ tools:
   edit:
 safe-outputs:
   update-release:
+  jobs:
+    publish-release:
+      description: "Publish the draft release"
+      runs-on: ubuntu-latest
+      output: "Release published successfully!"
+      inputs:
+        tag:
+          description: "Release tag to publish"
+          required: true
+          type: string
+      steps:
+        - name: Publish release
+          run: |
+            # Read the tag from agent output
+            RELEASE_TAG=$(jq -r '.tag' "$GH_AW_AGENT_OUTPUT" || echo "")
+            
+            if [ -z "$RELEASE_TAG" ]; then
+              echo "Error: Release tag not provided"
+              exit 1
+            fi
+            
+            echo "Publishing release: $RELEASE_TAG"
+            
+            # Remove draft status from release
+            gh release edit "$RELEASE_TAG" --draft=false
+            
+            echo "✓ Release $RELEASE_TAG published successfully"
+          env:
+            GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 jobs:
   create-tag:
     if: github.event_name == 'workflow_dispatch'
@@ -183,15 +212,16 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          echo "Creating release for tag: $RELEASE_TAG"
+          echo "Creating draft release for tag: $RELEASE_TAG"
           
-          # Create release with all binaries and checksums
+          # Create draft release with all binaries and checksums
           gh release create "$RELEASE_TAG" \
+            --draft \
             --title "$RELEASE_TAG" \
             --generate-notes \
             dist/*
           
-          echo "✓ Release created with all platform binaries and checksums"
+          echo "✓ Draft release created with all platform binaries and checksums"
 
       - name: Get release ID
         id: get_release
@@ -534,13 +564,19 @@ Supported platforms: `linux/amd64`, `linux/arm64`
 
 ## Output Format
 
-**CRITICAL**: You MUST call the `update_release` tool to update the release with the generated highlights:
+**CRITICAL**: You MUST call the `update_release` tool to update the release with the generated highlights, then call `publish_release` to make it public:
 
 ```javascript
+// Step 1: Update the release with highlights
 update_release({
   tag: "${RELEASE_TAG}",
   operation: "prepend",
   body: "## 🌟 Release Highlights\n\n[Your complete markdown highlights here]"
+})
+
+// Step 2: Publish the release (remove draft status)
+publish_release({
+  tag: "${RELEASE_TAG}"
 })
 ```
 
@@ -549,7 +585,7 @@ update_release({
 - `operation` - Must be `"prepend"` to add before existing notes
 - `body` - Complete markdown content (include all formatting, emojis, links)
 
-**WARNING**: If you don't call the `update_release` tool, the release notes will NOT be updated!
+**WARNING**: If you don't call both `update_release` and `publish_release` tools, the release will remain in draft status!
 
 **Documentation Base URL:**
 - Repository docs: `https://github.com/githubnext/gh-aw-mcpg/blob/main/docs/`
