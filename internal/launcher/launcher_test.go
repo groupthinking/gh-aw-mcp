@@ -18,9 +18,9 @@ func TestNew(t *testing.T) {
 		setupContainer bool
 	}{
 		{
-			name: "empty config",
-			servers: map[string]*config.ServerConfig{},
-			wantServerLen: 0,
+			name:           "empty config",
+			servers:        map[string]*config.ServerConfig{},
+			wantServerLen:  0,
 			setupContainer: false,
 		},
 		{
@@ -31,7 +31,7 @@ func TestNew(t *testing.T) {
 					Args:    []string{"run", "test"},
 				},
 			},
-			wantServerLen: 1,
+			wantServerLen:  1,
 			setupContainer: false,
 		},
 		{
@@ -50,7 +50,7 @@ func TestNew(t *testing.T) {
 					Args:    []string{"server.js"},
 				},
 			},
-			wantServerLen: 3,
+			wantServerLen:  3,
 			setupContainer: false,
 		},
 	}
@@ -238,15 +238,15 @@ func TestGetOrLaunch_EnvironmentVariablePassthrough(t *testing.T) {
 			shouldSetEnv: true,
 		},
 		{
-			name: "passthrough with missing env var",
-			args: []string{"run", "-e", "MISSING_VAR", "container"},
-			envVars: map[string]string{},
+			name:         "passthrough with missing env var",
+			args:         []string{"run", "-e", "MISSING_VAR", "container"},
+			envVars:      map[string]string{},
 			shouldSetEnv: false,
 		},
 		{
-			name: "explicit value (not passthrough)",
-			args: []string{"run", "-e", "VAR=value", "container"},
-			envVars: map[string]string{},
+			name:         "explicit value (not passthrough)",
+			args:         []string{"run", "-e", "VAR=value", "container"},
+			envVars:      map[string]string{},
 			shouldSetEnv: false,
 		},
 		{
@@ -259,9 +259,9 @@ func TestGetOrLaunch_EnvironmentVariablePassthrough(t *testing.T) {
 			shouldSetEnv: true,
 		},
 		{
-			name: "no -e flags",
-			args: []string{"run", "container"},
-			envVars: map[string]string{},
+			name:         "no -e flags",
+			args:         []string{"run", "container"},
+			envVars:      map[string]string{},
 			shouldSetEnv: false,
 		},
 	}
@@ -409,9 +409,9 @@ func TestLauncher_ContainerDetection(t *testing.T) {
 
 func TestGetOrLaunch_DirectCommandWarning(t *testing.T) {
 	tests := []struct {
-		name      string
-		command   string
-		wantWarn  bool
+		name     string
+		command  string
+		wantWarn bool
 	}{
 		{
 			name:     "docker command (no warning)",
@@ -506,7 +506,7 @@ func TestNew_NilConfig(t *testing.T) {
 	// Defensive test - verify behavior with nil config
 	// This would likely panic in real usage, but tests defensive coding
 	ctx := context.Background()
-	
+
 	// This will panic if config.Servers is accessed without nil check
 	// The actual code doesn't check for nil, but tests document the expectation
 	defer func() {
@@ -515,9 +515,9 @@ func TestNew_NilConfig(t *testing.T) {
 			t.Logf("Expected panic with nil config: %v", r)
 		}
 	}()
-	
+
 	_ = New(ctx, nil)
-	
+
 	// If we get here, no panic occurred (config handling is defensive)
 	// This is actually fine - the code will just have an empty servers map
 }
@@ -526,7 +526,7 @@ func TestGetOrLaunch_ContextCancellation(t *testing.T) {
 	// Test that a cancelled context is handled properly
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel() // Cancel immediately
-	
+
 	cfg := &config.Config{
 		Servers: map[string]*config.ServerConfig{
 			"test": {
