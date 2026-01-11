@@ -7,7 +7,6 @@ import (
 	"regexp"
 	"strings"
 	"sync"
-	"time"
 )
 
 // MarkdownLogger manages logging to a markdown file for GitHub workflow previews
@@ -165,7 +164,6 @@ func (ml *MarkdownLogger) Log(level LogLevel, category, format string, args ...i
 		return
 	}
 
-	timestamp := time.Now().UTC().Format("15:04:05")
 	message := fmt.Sprintf(format, args...)
 
 	// Sanitize potential secrets
@@ -178,10 +176,10 @@ func (ml *MarkdownLogger) Log(level LogLevel, category, format string, args ...i
 	var logLine string
 	if strings.Contains(message, "\n") || strings.Contains(message, "command=") || strings.Contains(message, "args=") {
 		// Multi-line or technical content - use code block
-		logLine = fmt.Sprintf("- %s `%s` **%s** [%s]\n  ```\n  %s\n  ```\n", emoji, timestamp, category, level, message)
+		logLine = fmt.Sprintf("- %s **%s**\n  ```\n  %s\n  ```\n", emoji, category, message)
 	} else {
 		// Simple single-line message
-		logLine = fmt.Sprintf("- %s `%s` **%s** [%s] %s\n", emoji, timestamp, category, level, message)
+		logLine = fmt.Sprintf("- %s **%s** %s\n", emoji, category, message)
 	}
 
 	if ml.logFile != nil {
