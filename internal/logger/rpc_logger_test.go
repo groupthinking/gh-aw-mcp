@@ -234,6 +234,32 @@ func TestFormatRPCMessageMarkdown(t *testing.T) {
 			want:    []string{"**github**→`tools/call`", "`{invalid json syntax}`"},
 			notWant: []string{"~~~"}, // Should NOT use code blocks for invalid JSON
 		},
+		{
+			name: "request with only params null after field removal",
+			info: &RPCMessageInfo{
+				Direction:   RPCDirectionOutbound,
+				MessageType: RPCMessageRequest,
+				ServerID:    "github",
+				Method:      "tools/list",
+				PayloadSize: 50,
+				Payload:     `{"jsonrpc":"2.0","method":"tools/list","params":null}`,
+			},
+			want:    []string{"**github**→`tools/list`"},
+			notWant: []string{"~~~", `"params"`}, // Should NOT show JSON block when only params: null
+		},
+		{
+			name: "request with empty object after field removal",
+			info: &RPCMessageInfo{
+				Direction:   RPCDirectionOutbound,
+				MessageType: RPCMessageRequest,
+				ServerID:    "github",
+				Method:      "tools/list",
+				PayloadSize: 50,
+				Payload:     `{"jsonrpc":"2.0","method":"tools/list"}`,
+			},
+			want:    []string{"**github**→`tools/list`"},
+			notWant: []string{"~~~"}, // Should NOT show JSON block when empty
+		},
 	}
 
 	for _, tt := range tests {
@@ -263,6 +289,7 @@ func TestFormatJSONWithoutFields(t *testing.T) {
 		wantContains   []string
 		wantNotContain []string
 		wantValid      bool
+		wantEmpty      bool
 	}{
 		{
 			name:           "remove jsonrpc and method",
@@ -271,6 +298,7 @@ func TestFormatJSONWithoutFields(t *testing.T) {
 			wantContains:   []string{`"params"`, `"arg"`, `"value"`, `"id"`},
 			wantNotContain: []string{`"jsonrpc"`, `"method"`},
 			wantValid:      true,
+			wantEmpty:      false,
 		},
 		{
 			name:           "indent with 2 spaces",
@@ -279,6 +307,7 @@ func TestFormatJSONWithoutFields(t *testing.T) {
 			wantContains:   []string{"  \"a\"", "  \"c\"", "    \"d\""},
 			wantNotContain: []string{},
 			wantValid:      true,
+			wantEmpty:      false,
 		},
 		{
 			name:           "invalid JSON returns as-is with false",
@@ -287,6 +316,7 @@ func TestFormatJSONWithoutFields(t *testing.T) {
 			wantContains:   []string{`{invalid json}`},
 			wantNotContain: []string{},
 			wantValid:      false,
+			wantEmpty:      false,
 		},
 		{
 			name:           "empty object",
@@ -295,15 +325,38 @@ func TestFormatJSONWithoutFields(t *testing.T) {
 			wantContains:   []string{`{}`},
 			wantNotContain: []string{},
 			wantValid:      true,
+			wantEmpty:      true,
+		},
+		{
+			name:           "only params null after removal",
+			input:          `{"jsonrpc":"2.0","method":"tools/list","params":null}`,
+			fieldsToRemove: []string{"jsonrpc", "method"},
+			wantContains:   []string{`"params"`, `null`},
+			wantNotContain: []string{},
+			wantValid:      true,
+			wantEmpty:      true,
+		},
+		{
+			name:           "params with value is not empty",
+			input:          `{"jsonrpc":"2.0","method":"tools/list","params":{"key":"value"}}`,
+			fieldsToRemove: []string{"jsonrpc", "method"},
+			wantContains:   []string{`"params"`},
+			wantNotContain: []string{},
+			wantValid:      true,
+			wantEmpty:      false,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result, isValid := formatJSONWithoutFields(tt.input, tt.fieldsToRemove)
+			result, isValid, isEmpty := formatJSONWithoutFields(tt.input, tt.fieldsToRemove)
 
 			if isValid != tt.wantValid {
 				t.Errorf("Expected isValid=%v, got %v", tt.wantValid, isValid)
+			}
+
+			if isEmpty != tt.wantEmpty {
+				t.Errorf("Expected isEmpty=%v, got %v", tt.wantEmpty, isEmpty)
 			}
 
 			for _, want := range tt.wantContains {

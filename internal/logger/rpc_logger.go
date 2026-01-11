@@ -140,12 +140,12 @@ func formatRPCMessage(info *RPCMessageInfo) string {
 }
 
 // formatJSONWithoutFields formats JSON by removing specified fields and indenting with 2 spaces
-// Returns the formatted string and a boolean indicating if the JSON was valid
-func formatJSONWithoutFields(jsonStr string, fieldsToRemove []string) (string, bool) {
+// Returns the formatted string, a boolean indicating if the JSON was valid, and a boolean indicating if empty
+func formatJSONWithoutFields(jsonStr string, fieldsToRemove []string) (string, bool, bool) {
 	var data map[string]interface{}
 	if err := json.Unmarshal([]byte(jsonStr), &data); err != nil {
 		// If not valid JSON, return as-is with false
-		return jsonStr, false
+		return jsonStr, false, false
 	}
 
 	// Remove specified fields
@@ -153,23 +153,33 @@ func formatJSONWithoutFields(jsonStr string, fieldsToRemove []string) (string, b
 		delete(data, field)
 	}
 
-	// Re-marshal with 2-space indentation
+	// Check if only "params": null remains (or equivalent empty state)
+	isEmpty := isEffectivelyEmpty(data)
+
+	// Re-marshal with 2-space indentation (pretty print)
 	formatted, err := json.MarshalIndent(data, "", "  ")
 	if err != nil {
-		return jsonStr, false
+		return jsonStr, false, false
 	}
 
-	// Compress JSON: remove newline after opening brace and before closing brace
-	result := string(formatted)
-	// Remove newline after opening brace
-	result = strings.Replace(result, "{\n", "{ ", 1)
-	// Remove newline before closing brace
-	lastNewline := strings.LastIndex(result, "\n}")
-	if lastNewline != -1 {
-		result = result[:lastNewline] + " }"
+	return string(formatted), true, isEmpty
+}
+
+// isEffectivelyEmpty checks if the data is effectively empty (only contains params: null)
+func isEffectivelyEmpty(data map[string]interface{}) bool {
+	// If empty, it's empty
+	if len(data) == 0 {
+		return true
 	}
 
-	return result, true
+	// If only one field and it's "params" with null value, it's empty
+	if len(data) == 1 {
+		if params, ok := data["params"]; ok && params == nil {
+			return true
+		}
+	}
+
+	return false
 }
 
 // formatRPCMessageMarkdown formats an RPC message for markdown logging
@@ -196,11 +206,14 @@ func formatRPCMessageMarkdown(info *RPCMessageInfo) string {
 	// Add formatted payload in code block
 	if info.Payload != "" {
 		// Remove jsonrpc and method fields, then format
-		formatted, isValidJSON := formatJSONWithoutFields(info.Payload, []string{"jsonrpc", "method"})
+		formatted, isValidJSON, isEmpty := formatJSONWithoutFields(info.Payload, []string{"jsonrpc", "method"})
 		if isValidJSON {
-			// Valid JSON: use code block for better readability (compact formatting)
-			// Empty line before ~~~ per markdown convention
-			message += fmt.Sprintf(" \n\n~~~\n%s\n~~~", formatted)
+			// Don't show JSON block if it's effectively empty (only params: null)
+			if !isEmpty {
+				// Valid JSON: use code block for better readability (pretty printed)
+				// Empty line before ~~~ per markdown convention
+				message += fmt.Sprintf(" \n\n~~~\n%s\n~~~", formatted)
+			}
 		} else {
 			// Invalid JSON: use inline backticks to avoid malformed markdown
 			message += fmt.Sprintf(" `%s`", formatted)
