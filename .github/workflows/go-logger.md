@@ -16,7 +16,7 @@ safe-outputs:
   create-pull-request:
     title-prefix: "[log] "
     labels: [enhancement, automation]
-    draft: false
+    draft: true
 
 steps:
   - name: Set up Go
@@ -68,10 +68,11 @@ Add meaningful debug logging calls to Go files in the `internal/` directory foll
 
 ## Important Constraints
 
-1. **Maximum 5 files per pull request** - Keep changes focused and reviewable
+1. **Process exactly 1 file per pull request** - Focus deeply on a single file for thorough, reviewable changes
 2. **Skip test files** - Never modify files ending in `_test.go`
 3. **No side effects** - Logger arguments must NOT compute anything or cause side effects
 4. **Follow logger naming convention** - Use `pkg:filename` pattern (e.g., `server:routed`)
+5. **Reuse existing loggers** - If a file already has a logger declaration, preserve it and add new logging calls
 
 ## Logger Guidelines from AGENTS.md
 
@@ -157,39 +158,46 @@ find internal -name '*.go' -type f ! -name '*_test.go'
 grep -r 'var log = logger.New' internal --include='*.go'
 ```
 
-### 2. Select Files for Enhancement
+### 2. Select File for Enhancement
 
 From the list of Go files:
 1. Prioritize files without loggers or with minimal logging
 2. Focus on files with complex logic (server, launcher, config)
 3. Avoid trivial files with just simple functions
-4. **Select exactly 5 files maximum** for this PR
+4. **Select exactly 1 file** for this PR - focus deeply on a single file for quality
+5. **Check if the file already has a logger** - if it does, reuse it rather than creating a new one
 
-### 3. Analyze Each Selected File
+### 3. Analyze the Selected File
 
-For each selected file:
+For the selected file:
 1. Read the file content to understand its structure
-2. Identify functions that would benefit from logging
-3. Check if the file already has a logger declaration
-4. Plan where to add logging calls
+2. **Check if the file already has a logger declaration** (search for `var log = logger.New`)
+3. If a logger exists, note its namespace and reuse it
+4. Identify functions that would benefit from logging
+5. Plan where to add logging calls
 
 ### 4. Add Logger and Logging Calls
 
-For each file:
+For the selected file:
 
 1. **Add logger declaration if missing:**
    - Add import: `"github.com/githubnext/gh-aw-mcpg/internal/logger"`
    - Add logger variable using correct naming: `var log = logger.New("pkg:filename")`
+   
+2. **Reuse existing logger if present:**
+   - If the file already has a logger declaration (e.g., `var log = logger.New("server:routed")`), keep it as-is
+   - Do NOT create a duplicate logger
+   - Use the existing logger variable name for all new logging calls
 
-2. **Add meaningful logging calls:**
+3. **Add meaningful logging calls:**
    - Add logging at function entry for important functions
    - Add logging before/after state changes
    - Add logging for control flow decisions
    - Ensure log arguments don't have side effects
    - Use `log.Enabled()` check for expensive debug info
 
-3. **Keep it focused:**
-   - 2-5 logging calls per file is usually sufficient
+4. **Keep it focused:**
+   - 3-7 logging calls for this single file is appropriate
    - Don't over-log - focus on the most useful information
    - Ensure messages are meaningful and helpful for debugging
 
@@ -228,9 +236,10 @@ After adding logging to the selected files, **validate your changes** before cre
 
 After validating your changes:
 
-1. The safe-outputs create-pull-request will automatically create a PR
+1. The safe-outputs create-pull-request will automatically create a draft PR
 2. Ensure your changes follow the guidelines above
 3. The PR title will automatically have the "[log] " prefix
+4. Since only one file is modified, the PR will be focused and easy to review
 
 ## Example Transformation
 
@@ -276,9 +285,10 @@ func StartServer(port int) error {
 
 Before creating the PR, verify:
 
-- [ ] Maximum 5 files modified
+- [ ] Exactly 1 file modified (focused, single-file PR)
 - [ ] No test files modified (`*_test.go`)
-- [ ] Each file has logger declaration with correct naming convention
+- [ ] File has logger declaration (added if missing, or reused if present)
+- [ ] Logger naming follows the `pkg:filename` convention
 - [ ] Logger arguments don't compute anything or cause side effects
 - [ ] Logging messages are meaningful and helpful
 - [ ] No duplicate logging with existing logs
@@ -291,8 +301,10 @@ Before creating the PR, verify:
 
 - You have access to the edit tool to modify files
 - You have access to bash commands to explore the codebase
-- The safe-outputs create-pull-request will automatically create the PR
-- Focus on quality over quantity - 5 well-logged files is better than 10 poorly-logged files
+- The safe-outputs create-pull-request will automatically create a draft PR
+- Focus on quality over quantity - 1 well-logged file with 3-7 meaningful logging calls is the goal
 - Remember: debug logs are for developers, not end users
+- **Always check for existing logger declarations** before adding a new one
+- Reuse existing logger infrastructure when present
 
 Good luck enhancing the codebase with better logging!

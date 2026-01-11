@@ -49,8 +49,13 @@ func (s *Server) setupRoutes() {
 
 func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 	log.Printf("[%s] %s %s", r.RemoteAddr, r.Method, r.URL.Path)
+	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	fmt.Fprintf(w, "OK\n")
+	json.NewEncoder(w).Encode(map[string]string{
+		"status":          "ok",
+		"protocolVersion": MCPProtocolVersion,
+		"version":         gatewayVersion,
+	})
 }
 
 func (s *Server) handleUnifiedMCP(w http.ResponseWriter, r *http.Request) {
@@ -132,7 +137,7 @@ func (s *Server) handleInitialize(w http.ResponseWriter, req *mcp.Request, serve
 
 	// Return a proper MCP initialize response
 	result := map[string]interface{}{
-		"protocolVersion": "2024-11-05",
+		"protocolVersion": MCPProtocolVersion,
 		"capabilities": map[string]interface{}{
 			"tools":     map[string]interface{}{},
 			"resources": map[string]interface{}{},
@@ -175,21 +180,21 @@ func (s *Server) proxyToServer(w http.ResponseWriter, r *http.Request, serverID 
 
 	switch req.Method {
 	case "tools/list":
-		resp, err = conn.SendRequest("tools/list", nil)
+		resp, err = conn.SendRequestWithServerID("tools/list", nil, serverID)
 	case "tools/call":
 		var params mcp.CallToolParams
 		if err := json.Unmarshal(req.Params, &params); err != nil {
 			s.sendError(w, -32602, "Invalid params", nil)
 			return
 		}
-		resp, err = conn.SendRequest("tools/call", params)
+		resp, err = conn.SendRequestWithServerID("tools/call", params, serverID)
 	default:
 		// Forward as-is
 		var params interface{}
 		if len(req.Params) > 0 {
 			json.Unmarshal(req.Params, &params)
 		}
-		resp, err = conn.SendRequest(req.Method, params)
+		resp, err = conn.SendRequestWithServerID(req.Method, params, serverID)
 	}
 
 	if err != nil {

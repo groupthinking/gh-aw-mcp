@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"fmt"
 	"io"
 	"log"
 	"net/http"
@@ -111,7 +110,7 @@ func CreateHTTPServerForMCP(addr string, unifiedServer *UnifiedServer, apiKey st
 
 		// Reject requests without Authorization header
 		if sessionID == "" {
-			logger.LogError("client", "MCP connection rejected: no Authorization header, remote=%s, path=%s", r.RemoteAddr, r.URL.Path)
+			logger.LogErrorMd("client", "MCP connection rejected: no Authorization header, remote=%s, path=%s", r.RemoteAddr, r.URL.Path)
 			log.Printf("[%s] %s %s - REJECTED: No Authorization header", r.RemoteAddr, r.Method, r.URL.Path)
 			// Return nil to reject the connection
 			// The SDK will handle sending an appropriate error response
@@ -158,11 +157,8 @@ func CreateHTTPServerForMCP(addr string, unifiedServer *UnifiedServer, apiKey st
 	mux.Handle("/mcp/", finalHandler)
 	mux.Handle("/mcp", finalHandler)
 
-	// Health check
-	healthHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-		fmt.Fprintf(w, "OK\n")
-	})
+	// Health check (spec 8.1.1)
+	healthHandler := HandleHealth(unifiedServer)
 	mux.Handle("/health", withResponseLogging(healthHandler))
 
 	// Close endpoint for graceful shutdown (spec 5.1.3)

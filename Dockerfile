@@ -11,8 +11,11 @@ RUN go mod download
 COPY . .
 RUN go mod tidy
 
-# Build the binary
-RUN CGO_ENABLED=0 GOOS=linux go build -o awmg .
+# Build argument for version (defaults to "dev")
+ARG VERSION=dev
+
+# Build the binary with version information
+RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w -X main.Version=${VERSION}" -o awmg .
 
 # Runtime stage
 FROM alpine:latest

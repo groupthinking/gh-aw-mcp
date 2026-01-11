@@ -33,7 +33,7 @@ const (
 	defaultUnifiedMode = false
 	defaultEnvFile     = ""
 	defaultEnableDIFC  = false
-	defaultLogDir      = "/tmp/gh-aw/sandbox/mcp"
+	defaultLogDir      = "/tmp/gh-aw/mcp-logs"
 )
 
 var (
@@ -68,7 +68,7 @@ func init() {
 	rootCmd.Flags().BoolVar(&unifiedMode, "unified", defaultUnifiedMode, "Run in unified mode (all backends at /mcp)")
 	rootCmd.Flags().StringVar(&envFile, "env", defaultEnvFile, "Path to .env file to load environment variables")
 	rootCmd.Flags().BoolVar(&enableDIFC, "enable-difc", defaultEnableDIFC, "Enable DIFC enforcement and session requirement (requires sys___init call before tool access)")
-	rootCmd.Flags().StringVar(&logDir, "log-dir", defaultLogDir, "Directory for log files (falls back to stdout if directory cannot be created)")
+	rootCmd.Flags().StringVar(&logDir, "log-dir", getDefaultLogDir(), "Directory for log files (falls back to stdout if directory cannot be created)")
 	rootCmd.Flags().BoolVar(&validateEnv, "validate-env", false, "Validate execution environment (Docker, env vars) before starting")
 
 	// Mark mutually exclusive flags
@@ -76,6 +76,15 @@ func init() {
 
 	// Add completion command
 	rootCmd.AddCommand(newCompletionCmd())
+}
+
+// getDefaultLogDir returns the default log directory, checking MCP_GATEWAY_LOG_DIR
+// environment variable first, then falling back to the hardcoded default
+func getDefaultLogDir() string {
+	if envLogDir := os.Getenv("MCP_GATEWAY_LOG_DIR"); envLogDir != "" {
+		return envLogDir
+	}
+	return defaultLogDir
 }
 
 func run(cmd *cobra.Command, args []string) error {
@@ -88,8 +97,14 @@ func run(cmd *cobra.Command, args []string) error {
 	}
 	defer logger.CloseGlobalLogger()
 
-	logger.LogInfo("startup", "MCPG Gateway version: %s", version)
-	logger.LogInfo("startup", "Starting MCPG with config: %s, listen: %s, log-dir: %s", configFile, listenAddr, logDir)
+	// Initialize markdown logger for GitHub workflow preview
+	if err := logger.InitMarkdownLogger(logDir, "gateway.md"); err != nil {
+		log.Printf("Warning: Failed to initialize markdown logger: %v", err)
+	}
+	defer logger.CloseMarkdownLogger()
+
+	logger.LogInfoMd("startup", "MCPG Gateway version: %s", version)
+	logger.LogInfoMd("startup", "Starting MCPG with config: %s, listen: %s, log-dir: %s", configFile, listenAddr, logDir)
 	debugLog.Printf("Starting MCPG with config: %s, listen: %s", configFile, listenAddr)
 
 	// Load .env file if specified
@@ -105,10 +120,10 @@ func run(cmd *cobra.Command, args []string) error {
 		debugLog.Printf("Validating execution environment...")
 		result := config.ValidateExecutionEnvironment()
 		if !result.IsValid() {
-			logger.LogError("startup", "Environment validation failed: %s", result.Error())
+			logger.LogErrorMd("startup", "Environment validation failed: %s", result.Error())
 			return fmt.Errorf("environment validation failed: %s", result.Error())
 		}
-		logger.LogInfo("startup", "Environment validation passed")
+		logger.LogInfoMd("startup", "Environment validation passed")
 		log.Println("Environment validation passed")
 	}
 
@@ -147,6 +162,9 @@ func run(cmd *cobra.Command, args []string) error {
 
 	debugLog.Printf("Server mode: %s, DIFC enabled: %v", mode, cfg.EnableDIFC)
 
+	// Set gateway version for health endpoint reporting
+	server.SetGatewayVersion(version)
+
 	// Create unified MCP server (backend for both modes)
 	unifiedServer, err := server.NewUnified(ctx, cfg)
 	if err != nil {
@@ -160,10 +178,11 @@ func run(cmd *cobra.Command, args []string) error {
 
 	go func() {
 		<-sigChan
-		logger.LogInfo("shutdown", "Shutting down gateway...")
+		logger.LogInfoMd("shutdown", "Shutting down gateway...")
 		log.Println("Shutting down...")
 		cancel()
 		unifiedServer.Close()
+		logger.CloseMarkdownLogger()
 		logger.CloseGlobalLogger()
 		os.Exit(0)
 	}()

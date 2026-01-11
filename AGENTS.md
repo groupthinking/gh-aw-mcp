@@ -224,10 +224,11 @@ DEBUG_COLORS=0 DEBUG=* ./awmg --config config.toml
 - `PORT`, `HOST`, `MODE` - Server config (via run.sh)
 - `DEBUG` - Enable debug logging (e.g., `DEBUG=*`, `DEBUG=server:*,launcher:*`)
 - `DEBUG_COLORS` - Control colored output (0 to disable, auto-disabled when piping)
+- `MCP_GATEWAY_LOG_DIR` - Log file directory (sets default for `--log-dir` flag, default: `/tmp/gh-aw/mcp-logs`)
 
 **File Logging:**
 - Operational logs are always written to `mcp-gateway.log` in the configured log directory
-- Default log directory: `/tmp/gh-aw/sandbox/mcp` (configurable via `--log-dir` flag)
+- Default log directory: `/tmp/gh-aw/mcp-logs` (configurable via `--log-dir` flag or `MCP_GATEWAY_LOG_DIR` env var)
 - Falls back to stdout if log directory cannot be created
 - Logs include: startup, client interactions, backend operations, auth events, errors
 

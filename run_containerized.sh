@@ -206,7 +206,7 @@ validate_container_config() {
 # Validate log directory is mounted for persistent logging
 validate_log_directory_mount() {
     local container_id="$1"
-    local log_dir="${MCP_GATEWAY_LOG_DIR:-/tmp/gh-aw/sandbox/mcp}"
+    local log_dir="${MCP_GATEWAY_LOG_DIR:-/tmp/gh-aw/mcp-logs}"
     
     if ! validate_container_id "$container_id"; then
         log_warn "Cannot validate log directory mount: container ID invalid or unknown"
@@ -241,7 +241,7 @@ build_command_args() {
     local host="${MCP_GATEWAY_HOST:-0.0.0.0}"
     local port="$MCP_GATEWAY_PORT"
     local mode="${MCP_GATEWAY_MODE:---routed}"
-    local log_dir="${MCP_GATEWAY_LOG_DIR:-/tmp/gh-aw/sandbox/mcp}"
+    local log_dir="${MCP_GATEWAY_LOG_DIR:-/tmp/gh-aw/mcp-logs}"
     
     local flags="$mode --listen ${host}:${port} --config-stdin --log-dir ${log_dir}"
     

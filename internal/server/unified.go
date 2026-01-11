@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"sync"
+	"time"
 
 	"github.com/githubnext/gh-aw-mcpg/internal/config"
 	"github.com/githubnext/gh-aw-mcpg/internal/difc"
@@ -18,10 +19,33 @@ import (
 
 var logUnified = logger.New("server:unified")
 
+// MCPProtocolVersion is the MCP protocol version supported by this gateway
+const MCPProtocolVersion = "2024-11-05"
+
+// MCPGatewaySpecVersion is the MCP Gateway Specification version this implementation conforms to
+const MCPGatewaySpecVersion = "1.3.0"
+
+// gatewayVersion stores the gateway version, set at startup
+var gatewayVersion = "dev"
+
+// SetGatewayVersion sets the gateway version for health endpoint reporting
+func SetGatewayVersion(version string) {
+	if version != "" {
+		gatewayVersion = version
+	}
+}
+
 // Session represents a MCPG session
 type Session struct {
 	Token     string
 	SessionID string
+	StartTime time.Time
+}
+
+// ServerStatus represents the health status of a backend server
+type ServerStatus struct {
+	Status string `json:"status"` // "running" | "stopped" | "error"
+	Uptime int    `json:"uptime"` // seconds since server was launched
 }
 
 // NewSession creates a new Session with the given session ID and optional token
@@ -29,6 +53,7 @@ func NewSession(sessionID, token string) *Session {
 	return &Session{
 		Token:     token,
 		SessionID: sessionID,
+		StartTime: time.Now(),
 	}
 }
 
@@ -156,7 +181,7 @@ func (us *UnifiedServer) registerToolsFromBackend(serverID string) error {
 	}
 
 	// List tools from backend
-	result, err := conn.SendRequest("tools/list", nil)
+	result, err := conn.SendRequestWithServerID("tools/list", nil, serverID)
 	if err != nil {
 		return fmt.Errorf("failed to list tools: %w", err)
 	}
@@ -402,10 +427,10 @@ func (g *guardBackendCaller) CallTool(ctx context.Context, toolName string, args
 		return nil, fmt.Errorf("failed to connect: %w", err)
 	}
 
-	response, err := conn.SendRequest("tools/call", map[string]interface{}{
+	response, err := conn.SendRequestWithServerID("tools/call", map[string]interface{}{
 		"name":      toolName,
 		"arguments": args,
-	})
+	}, g.serverID)
 	if err != nil {
 		return nil, err
 	}
@@ -477,10 +502,10 @@ func (us *UnifiedServer) callBackendTool(ctx context.Context, serverID, toolName
 		return &sdk.CallToolResult{IsError: true}, nil, fmt.Errorf("failed to connect: %w", err)
 	}
 
-	response, err := conn.SendRequest("tools/call", map[string]interface{}{
+	response, err := conn.SendRequestWithServerID("tools/call", map[string]interface{}{
 		"name":      toolName,
 		"arguments": args,
-	})
+	}, serverID)
 	if err != nil {
 		return &sdk.CallToolResult{IsError: true}, nil, err
 	}
@@ -622,6 +647,28 @@ func (us *UnifiedServer) getSessionKeys() []string {
 // GetServerIDs returns the list of backend server IDs
 func (us *UnifiedServer) GetServerIDs() []string {
 	return us.launcher.ServerIDs()
+}
+
+// GetServerStatus returns the status of all configured backend servers
+func (us *UnifiedServer) GetServerStatus() map[string]ServerStatus {
+	status := make(map[string]ServerStatus)
+
+	// Get all configured servers
+	serverIDs := us.launcher.ServerIDs()
+
+	for _, serverID := range serverIDs {
+		// Check if server has been launched by checking launcher connections
+		// For now, we'll return "running" for all configured servers
+		// and track uptime from when the gateway started
+		// This is a simple implementation - a more sophisticated version
+		// would track actual connection state per server
+		status[serverID] = ServerStatus{
+			Status: "running",
+			Uptime: 0, // Will be properly tracked when servers are actually launched
+		}
+	}
+
+	return status
 }
 
 // GetToolsForBackend returns tools for a specific backend with prefix stripped

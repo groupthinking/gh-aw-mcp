@@ -678,3 +678,260 @@ func parseSSEResponse(t *testing.T, body string) map[string]interface{} {
 
 	return result
 }
+
+// TestBinaryInvocation_LogFileCreation tests that the mcp-gateway.log file is created when the binary runs
+func TestBinaryInvocation_LogFileCreation(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping binary integration test in short mode")
+	}
+
+	binaryPath := findBinary(t)
+	t.Logf("Using binary: %s", binaryPath)
+
+	// Create a temporary directory for logs
+	tmpLogDir, err := os.MkdirTemp("", "awmg-log-test-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp log directory: %v", err)
+	}
+	defer os.RemoveAll(tmpLogDir)
+
+	// Create a temporary config file
+	configFile := createTempConfig(t, map[string]interface{}{
+		"testserver": map[string]interface{}{
+			"command": "echo",
+			"args":    []string{},
+		},
+	})
+	defer os.Remove(configFile)
+
+	// Start the server process with custom log directory
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	port := "13006"
+	cmd := exec.CommandContext(ctx, binaryPath,
+		"--config", configFile,
+		"--listen", "127.0.0.1:"+port,
+		"--log-dir", tmpLogDir,
+		"--routed",
+	)
+
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+
+	if err := cmd.Start(); err != nil {
+		t.Fatalf("Failed to start server: %v", err)
+	}
+
+	defer func() {
+		if cmd.Process != nil {
+			cmd.Process.Kill()
+		}
+	}()
+
+	// Wait for server to start
+	serverURL := "http://127.0.0.1:" + port
+	if !waitForServer(t, serverURL+"/health", 5*time.Second) {
+		t.Logf("STDOUT: %s", stdout.String())
+		t.Logf("STDERR: %s", stderr.String())
+		t.Fatal("Server did not start in time")
+	}
+
+	t.Log("✓ Server started successfully")
+
+	// Check that the log file was created
+	logFilePath := filepath.Join(tmpLogDir, "mcp-gateway.log")
+	if _, err := os.Stat(logFilePath); os.IsNotExist(err) {
+		t.Fatalf("Log file was not created at %s", logFilePath)
+	}
+
+	t.Logf("✓ Log file created at: %s", logFilePath)
+
+	// Read the log file to verify it contains log entries
+	logContent, err := os.ReadFile(logFilePath)
+	if err != nil {
+		t.Fatalf("Failed to read log file: %v", err)
+	}
+
+	if len(logContent) == 0 {
+		t.Error("Log file is empty")
+	} else {
+		t.Logf("✓ Log file contains %d bytes", len(logContent))
+	}
+
+	// Verify log file contains expected startup messages
+	logStr := string(logContent)
+	expectedMessages := []string{
+		"startup",
+		"Starting MCPG",
+	}
+
+	for _, msg := range expectedMessages {
+		if !bytes.Contains(logContent, []byte(msg)) {
+			t.Errorf("Log file does not contain expected message: %q", msg)
+			t.Logf("Log content:\n%s", logStr)
+		}
+	}
+
+	t.Log("✓ Log file contains expected startup messages")
+
+	// Verify log file permissions (should be 0644)
+	fileInfo, err := os.Stat(logFilePath)
+	if err != nil {
+		t.Fatalf("Failed to stat log file: %v", err)
+	}
+
+	perms := fileInfo.Mode().Perm()
+	expectedPerms := os.FileMode(0644)
+	if perms != expectedPerms {
+		t.Errorf("Log file has incorrect permissions: got %o, expected %o", perms, expectedPerms)
+	} else {
+		t.Logf("✓ Log file has correct permissions: %o", perms)
+	}
+
+	// Test that the log file is readable by other processes
+	// Try to open and read the file while the server is still running
+	readFile, err := os.Open(logFilePath)
+	if err != nil {
+		t.Fatalf("Failed to open log file for reading (concurrent access): %v", err)
+	}
+	defer readFile.Close()
+
+	// Read content
+	concurrentRead, err := io.ReadAll(readFile)
+	if err != nil {
+		t.Fatalf("Failed to read log file concurrently: %v", err)
+	}
+
+	if len(concurrentRead) == 0 {
+		t.Error("Concurrent read returned empty content")
+	} else {
+		t.Logf("✓ Log file is readable by other processes (%d bytes read concurrently)", len(concurrentRead))
+	}
+
+	// Make an API call to generate more log entries
+	resp, err := http.Get(serverURL + "/health")
+	if err == nil {
+		resp.Body.Close()
+	}
+
+	// Wait a moment for logs to be written
+	time.Sleep(200 * time.Millisecond)
+
+	// Read the log file again to verify new entries were added (or at least it's still readable)
+	newLogContent, err := os.ReadFile(logFilePath)
+	if err != nil {
+		t.Fatalf("Failed to read log file after API call: %v", err)
+	}
+
+	// Log file should either grow or stay the same (health endpoint may not always log)
+	if len(newLogContent) >= len(logContent) {
+		if len(newLogContent) > len(logContent) {
+			t.Logf("✓ Log file grew from %d to %d bytes after API call (immediate flush working)", len(logContent), len(newLogContent))
+		} else {
+			t.Logf("✓ Log file size unchanged (%d bytes) but still readable after API call", len(logContent))
+		}
+	} else {
+		t.Errorf("Log file shrank from %d to %d bytes - unexpected behavior", len(logContent), len(newLogContent))
+	}
+
+	t.Log("✓ All log file checks passed")
+}
+
+// TestBinaryInvocation_LogDirEnvironmentVariable tests that MCP_GATEWAY_LOG_DIR environment variable works
+func TestBinaryInvocation_LogDirEnvironmentVariable(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping binary integration test in short mode")
+	}
+
+	// Find the binary
+	binaryPath := findBinary(t)
+	t.Logf("Using binary: %s", binaryPath)
+
+	// Create a temporary directory for logs
+	tmpLogDir := t.TempDir()
+	t.Logf("Using temporary log directory: %s", tmpLogDir)
+
+	// Create a temporary config file
+	configFile := createTempConfig(t, map[string]interface{}{
+		"testserver": map[string]interface{}{
+			"command": "echo",
+			"args":    []string{},
+		},
+	})
+	defer os.Remove(configFile)
+
+	// Start the server process with MCP_GATEWAY_LOG_DIR environment variable (no --log-dir flag)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	port := "13007"
+	cmd := exec.CommandContext(ctx, binaryPath,
+		"--config", configFile,
+		"--listen", "127.0.0.1:"+port,
+		"--routed",
+	)
+
+	// Set the MCP_GATEWAY_LOG_DIR environment variable
+	cmd.Env = append(os.Environ(), "MCP_GATEWAY_LOG_DIR="+tmpLogDir)
+
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+
+	if err := cmd.Start(); err != nil {
+		t.Fatalf("Failed to start server: %v", err)
+	}
+
+	defer func() {
+		if cmd.Process != nil {
+			cmd.Process.Kill()
+		}
+	}()
+
+	// Wait for server to start
+	serverURL := "http://127.0.0.1:" + port
+	if !waitForServer(t, serverURL+"/health", 5*time.Second) {
+		t.Logf("STDOUT: %s", stdout.String())
+		t.Logf("STDERR: %s", stderr.String())
+		t.Fatal("Server did not start in time")
+	}
+
+	t.Log("✓ Server started successfully with MCP_GATEWAY_LOG_DIR environment variable")
+
+	// Check that the log file was created in the directory specified by the environment variable
+	logFilePath := filepath.Join(tmpLogDir, "mcp-gateway.log")
+	if _, err := os.Stat(logFilePath); os.IsNotExist(err) {
+		t.Fatalf("Log file was not created at %s (from MCP_GATEWAY_LOG_DIR)", logFilePath)
+	}
+
+	t.Logf("✓ Log file created at: %s (from MCP_GATEWAY_LOG_DIR)", logFilePath)
+
+	// Read the log file to verify it contains log entries
+	logContent, err := os.ReadFile(logFilePath)
+	if err != nil {
+		t.Fatalf("Failed to read log file: %v", err)
+	}
+
+	if len(logContent) == 0 {
+		t.Error("Log file is empty")
+	} else {
+		t.Logf("✓ Log file contains %d bytes", len(logContent))
+	}
+
+	// Verify log file contains expected startup messages
+	expectedMessages := []string{
+		"startup",
+		"Starting MCPG",
+	}
+
+	for _, msg := range expectedMessages {
+		if !bytes.Contains(logContent, []byte(msg)) {
+			t.Errorf("Log file does not contain expected message: %q", msg)
+			t.Logf("Log content:\n%s", string(logContent))
+		}
+	}
+
+	t.Log("✓ MCP_GATEWAY_LOG_DIR environment variable test passed")
+}

@@ -65,7 +65,7 @@ func NewConnection(ctx context.Context, command string, args []string, env map[s
 		cancel()
 
 		// Enhanced error context for debugging
-		logger.LogError("backend", "MCP backend connection failed, command=%s, args=%v, error=%v", command, expandedArgs, err)
+		logger.LogErrorMd("backend", "MCP backend connection failed, command=%s, args=%v, error=%v", command, expandedArgs, err)
 		log.Printf("❌ MCP Connection Failed:")
 		log.Printf("   Command: %s", command)
 		log.Printf("   Args: %v", expandedArgs)
@@ -74,14 +74,14 @@ func NewConnection(ctx context.Context, command string, args []string, env map[s
 		// Check if it's a command not found error
 		if strings.Contains(err.Error(), "executable file not found") ||
 			strings.Contains(err.Error(), "no such file or directory") {
-			logger.LogError("backend", "MCP backend command not found, command=%s", command)
+			logger.LogErrorMd("backend", "MCP backend command not found, command=%s", command)
 			log.Printf("   ⚠️  Command '%s' not found in PATH", command)
 			log.Printf("   ⚠️  Verify the command is installed and executable")
 		}
 
 		// Check if it's a connection/protocol error
 		if strings.Contains(err.Error(), "EOF") || strings.Contains(err.Error(), "broken pipe") {
-			logger.LogError("backend", "MCP backend connection/protocol error, command=%s", command)
+			logger.LogErrorMd("backend", "MCP backend connection/protocol error, command=%s", command)
 			log.Printf("   ⚠️  Process started but terminated unexpectedly")
 			log.Printf("   ⚠️  Check if the command supports MCP protocol over stdio")
 		}
@@ -90,7 +90,7 @@ func NewConnection(ctx context.Context, command string, args []string, env map[s
 		return nil, fmt.Errorf("failed to connect: %w", err)
 	}
 
-	logger.LogInfo("backend", "Successfully connected to MCP backend server, command=%s", command)
+	logger.LogInfoMd("backend", "Successfully connected to MCP backend server, command=%s", command)
 	logConn.Printf("Successfully connected to MCP server: command=%s", command)
 
 	conn := &Connection{
@@ -105,23 +105,49 @@ func NewConnection(ctx context.Context, command string, args []string, env map[s
 }
 
 // SendRequest sends a JSON-RPC request and waits for the response
+// The serverID parameter is used for logging to associate the request with a backend server
 func (c *Connection) SendRequest(method string, params interface{}) (*Response, error) {
+	return c.SendRequestWithServerID(method, params, "unknown")
+}
+
+// SendRequestWithServerID sends a JSON-RPC request with server ID for logging
+func (c *Connection) SendRequestWithServerID(method string, params interface{}, serverID string) (*Response, error) {
+	// Log the outbound request to backend server
+	requestPayload, _ := json.Marshal(map[string]interface{}{
+		"jsonrpc": "2.0",
+		"method":  method,
+		"params":  params,
+	})
+	logger.LogRPCRequest(logger.RPCDirectionOutbound, serverID, method, requestPayload)
+
+	var result *Response
+	var err error
+
 	switch method {
 	case "tools/list":
-		return c.listTools()
+		result, err = c.listTools()
 	case "tools/call":
-		return c.callTool(params)
+		result, err = c.callTool(params)
 	case "resources/list":
-		return c.listResources()
+		result, err = c.listResources()
 	case "resources/read":
-		return c.readResource(params)
+		result, err = c.readResource(params)
 	case "prompts/list":
-		return c.listPrompts()
+		result, err = c.listPrompts()
 	case "prompts/get":
-		return c.getPrompt(params)
+		result, err = c.getPrompt(params)
 	default:
-		return nil, fmt.Errorf("unsupported method: %s", method)
+		err = fmt.Errorf("unsupported method: %s", method)
 	}
+
+	// Log the response from backend server
+	var responsePayload []byte
+	if result != nil {
+		responsePayload, _ = json.Marshal(result)
+	}
+	logger.LogRPCResponse(logger.RPCDirectionInbound, serverID, responsePayload, err)
+
+	return result, err
 }
 
 func (c *Connection) listTools() (*Response, error) {
