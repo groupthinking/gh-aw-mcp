@@ -1,0 +1,23 @@
+{
+  "mcpServers": {
+    "safeinputs": {
+      "type": "http",
+      "url": "http://host.docker.internal:3000/",
+      "headers": {
+        "Authorization": "your-auth-secret-here"
+      }
+    },
+    "github": {
+      "type": "stdio",
+      "container": "ghcr.io/github/github-mcp-server:latest",
+      "env": {
+        "GITHUB_PERSONAL_ACCESS_TOKEN": ""
+      }
+    }
+  },
+  "gateway": {
+    "port": 3001,
+    "domain": "localhost",
+    "apiKey": "gateway-api-key"
+  }
+}
