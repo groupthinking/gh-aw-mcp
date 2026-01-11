@@ -935,4 +935,3 @@ func TestBinaryInvocation_LogDirEnvironmentVariable(t *testing.T) {
 
 	t.Log("✓ MCP_GATEWAY_LOG_DIR environment variable test passed")
 }
-
