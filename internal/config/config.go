@@ -31,10 +31,14 @@ type GatewayConfig struct {
 
 // ServerConfig represents a single MCP server configuration
 type ServerConfig struct {
+	Type             string            // "stdio" | "http"
 	Command          string            `toml:"command"`
 	Args             []string          `toml:"args"`
 	Env              map[string]string `toml:"env"`
 	WorkingDirectory string            `toml:"working_directory"`
+	// HTTP-specific fields
+	URL     string            // HTTP endpoint URL
+	Headers map[string]string // HTTP headers for authentication
 }
 
 // StdinConfig represents JSON configuration from stdin
@@ -53,7 +57,8 @@ type StdinServerConfig struct {
 	Entrypoint     string            `json:"entrypoint,omitempty"`
 	EntrypointArgs []string          `json:"entrypointArgs,omitempty"`
 	Mounts         []string          `json:"mounts,omitempty"`
-	URL            string            `json:"url,omitempty"` // For HTTP-based MCP servers
+	URL            string            `json:"url,omitempty"`            // For HTTP-based MCP servers
+	Headers        map[string]string `json:"headers,omitempty"`        // HTTP headers for authentication
 }
 
 // StdinGatewayConfig represents gateway configuration from stdin JSON
@@ -154,6 +159,16 @@ func LoadFromStdin() (*Config, error) {
 			}
 			server.Env = expandedEnv
 		}
+		
+		// Expand variable expressions in HTTP headers (fail-fast on undefined vars)
+		if len(server.Headers) > 0 {
+			expandedHeaders, err := expandEnvVariables(server.Headers, name)
+			if err != nil {
+				return nil, err
+			}
+			server.Headers = expandedHeaders
+		}
+		
 		// Normalize type: "local" is an alias for "stdio" (backward compatibility)
 		serverType := server.Type
 		if serverType == "" {
@@ -163,9 +178,15 @@ func LoadFromStdin() (*Config, error) {
 			serverType = "stdio"
 		}
 
-		// HTTP servers are not yet implemented
+		// Handle HTTP servers
 		if serverType == "http" {
-			log.Printf("Warning: skipping server '%s' with type 'http' (HTTP transport not yet implemented)", name)
+			cfg.Servers[name] = &ServerConfig{
+				Type:    "http",
+				URL:     server.URL,
+				Headers: server.Headers,
+			}
+			logConfig.Printf("Configured HTTP MCP server: name=%s, url=%s", name, server.URL)
+			log.Printf("[CONFIG] Configured HTTP MCP server: %s -> %s", name, server.URL)
 			continue
 		}
 
@@ -213,6 +234,7 @@ func LoadFromStdin() (*Config, error) {
 		args = append(args, server.EntrypointArgs...)
 
 		cfg.Servers[name] = &ServerConfig{
+			Type:    "stdio",
 			Command: "docker",
 			Args:    args,
 			Env:     make(map[string]string),
