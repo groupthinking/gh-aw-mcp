@@ -652,10 +652,10 @@ func (us *UnifiedServer) GetServerIDs() []string {
 // GetServerStatus returns the status of all configured backend servers
 func (us *UnifiedServer) GetServerStatus() map[string]ServerStatus {
 	status := make(map[string]ServerStatus)
-	
+
 	// Get all configured servers
 	serverIDs := us.launcher.ServerIDs()
-	
+
 	for _, serverID := range serverIDs {
 		// Check if server has been launched by checking launcher connections
 		// For now, we'll return "running" for all configured servers
@@ -667,7 +667,7 @@ func (us *UnifiedServer) GetServerStatus() map[string]ServerStatus {
 			Uptime: 0, // Will be properly tracked when servers are actually launched
 		}
 	}
-	
+
 	return status
 }
 

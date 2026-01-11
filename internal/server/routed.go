@@ -112,10 +112,10 @@ func CreateHTTPServerForRoutedMode(addr string, unifiedServer *UnifiedServer, ap
 	// Health check (spec 8.1.1)
 	healthHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		
+
 		// Get server status
 		serverStatus := unifiedServer.GetServerStatus()
-		
+
 		// Determine overall health based on server status
 		overallStatus := "healthy"
 		for _, status := range serverStatus {
@@ -124,7 +124,7 @@ func CreateHTTPServerForRoutedMode(addr string, unifiedServer *UnifiedServer, ap
 				break
 			}
 		}
-		
+
 		w.WriteHeader(http.StatusOK)
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"status":         overallStatus,
