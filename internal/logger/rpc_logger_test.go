@@ -10,38 +10,38 @@ import (
 
 func TestTruncateAndSanitize(t *testing.T) {
 	tests := []struct {
-		name      string
-		input     string
-		maxLength int
-		wantLen   int // Expected length (may be less due to sanitization)
+		name         string
+		input        string
+		maxLength    int
+		wantLen      int // Expected length (may be less due to sanitization)
 		wantRedacted bool
 	}{
 		{
-			name:      "short message without secrets",
-			input:     "Hello, world!",
-			maxLength: 50,
-			wantLen:   13,
+			name:         "short message without secrets",
+			input:        "Hello, world!",
+			maxLength:    50,
+			wantLen:      13,
 			wantRedacted: false,
 		},
 		{
-			name:      "long message gets truncated",
-			input:     `{"method":"test","data":"` + strings.Repeat("x", 200) + `"}`,
-			maxLength: 100,
-			wantLen:   103, // 100 + "..."
+			name:         "long message gets truncated",
+			input:        `{"method":"test","data":"` + strings.Repeat("x", 200) + `"}`,
+			maxLength:    100,
+			wantLen:      103, // 100 + "..."
 			wantRedacted: false,
 		},
 		{
-			name:      "message with token gets sanitized",
-			input:     "Authorization: ghp_1234567890123456789012345678901234567890",
-			maxLength: 150,
-			wantLen:   -1, // Variable due to redaction
+			name:         "message with token gets sanitized",
+			input:        "Authorization: ghp_1234567890123456789012345678901234567890",
+			maxLength:    150,
+			wantLen:      -1, // Variable due to redaction
 			wantRedacted: true,
 		},
 		{
-			name:      "message with password gets sanitized",
-			input:     "password=supersecretpassword123",
-			maxLength: 150,
-			wantLen:   -1, // Variable due to redaction
+			name:         "message with password gets sanitized",
+			input:        "password=supersecretpassword123",
+			maxLength:    150,
+			wantLen:      -1, // Variable due to redaction
 			wantRedacted: true,
 		},
 	}
@@ -49,7 +49,7 @@ func TestTruncateAndSanitize(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result := truncateAndSanitize(tt.input, tt.maxLength)
-			
+
 			if tt.wantRedacted {
 				if !strings.Contains(result, "[REDACTED]") {
 					t.Errorf("Expected result to contain [REDACTED], got: %s", result)
@@ -59,7 +59,7 @@ func TestTruncateAndSanitize(t *testing.T) {
 					t.Errorf("Expected length %d, got %d: %s", tt.wantLen, len(result), result)
 				}
 			}
-			
+
 			// Ensure result is not longer than maxLength + 3 (for "...")
 			if !tt.wantRedacted && len(result) > tt.maxLength+3 {
 				t.Errorf("Result too long: %d > %d", len(result), tt.maxLength+3)
@@ -99,18 +99,18 @@ func TestExtractEssentialFields(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result := extractEssentialFields([]byte(tt.payload))
-			
+
 			if tt.wantKeys == nil {
 				if result != nil {
 					t.Errorf("Expected nil result for invalid JSON, got: %v", result)
 				}
 				return
 			}
-			
+
 			if result == nil {
 				t.Fatalf("Expected result map, got nil")
 			}
-			
+
 			for _, key := range tt.wantKeys {
 				if _, ok := result[key]; !ok {
 					t.Errorf("Expected key %s not found in result: %v", key, result)
@@ -167,7 +167,7 @@ func TestFormatRPCMessage(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result := formatRPCMessage(tt.info)
-			
+
 			for _, expected := range tt.want {
 				if !strings.Contains(result, expected) {
 					t.Errorf("Expected result to contain %q, got: %s", expected, result)
@@ -222,7 +222,7 @@ func TestFormatRPCMessageMarkdown(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result := formatRPCMessageMarkdown(tt.info)
-			
+
 			for _, expected := range tt.want {
 				if !strings.Contains(result, expected) {
 					t.Errorf("Expected result to contain %q, got:\n%s", expected, result)
@@ -235,33 +235,33 @@ func TestFormatRPCMessageMarkdown(t *testing.T) {
 func TestLogRPCRequest(t *testing.T) {
 	tmpDir := t.TempDir()
 	logDir := filepath.Join(tmpDir, "logs")
-	
+
 	// Initialize both loggers
 	if err := InitFileLogger(logDir, "test.log"); err != nil {
 		t.Fatalf("InitFileLogger failed: %v", err)
 	}
 	defer CloseGlobalLogger()
-	
+
 	if err := InitMarkdownLogger(logDir, "test.md"); err != nil {
 		t.Fatalf("InitMarkdownLogger failed: %v", err)
 	}
 	defer CloseMarkdownLogger()
-	
+
 	// Log an RPC request
 	payload := []byte(`{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}`)
 	LogRPCRequest(RPCDirectionOutbound, "github", "tools/list", payload)
-	
+
 	// Close loggers to flush
 	CloseGlobalLogger()
 	CloseMarkdownLogger()
-	
+
 	// Check text log
 	textLog := filepath.Join(logDir, "test.log")
 	textContent, err := os.ReadFile(textLog)
 	if err != nil {
 		t.Fatalf("Failed to read text log: %v", err)
 	}
-	
+
 	textStr := string(textContent)
 	expectedInText := []string{"[OUT]", "[REQUEST]", "server=github", "method=tools/list", "size="}
 	for _, expected := range expectedInText {
@@ -269,14 +269,14 @@ func TestLogRPCRequest(t *testing.T) {
 			t.Errorf("Text log does not contain %q", expected)
 		}
 	}
-	
+
 	// Check markdown log
 	mdLog := filepath.Join(logDir, "test.md")
 	mdContent, err := os.ReadFile(mdLog)
 	if err != nil {
 		t.Fatalf("Failed to read markdown log: %v", err)
 	}
-	
+
 	mdStr := string(mdContent)
 	expectedInMd := []string{"Server **github**", "→", "`tools/list`", "bytes"}
 	for _, expected := range expectedInMd {
@@ -289,34 +289,34 @@ func TestLogRPCRequest(t *testing.T) {
 func TestLogRPCResponse(t *testing.T) {
 	tmpDir := t.TempDir()
 	logDir := filepath.Join(tmpDir, "logs")
-	
+
 	// Initialize both loggers
 	if err := InitFileLogger(logDir, "test.log"); err != nil {
 		t.Fatalf("InitFileLogger failed: %v", err)
 	}
 	defer CloseGlobalLogger()
-	
+
 	if err := InitMarkdownLogger(logDir, "test.md"); err != nil {
 		t.Fatalf("InitMarkdownLogger failed: %v", err)
 	}
 	defer CloseMarkdownLogger()
-	
+
 	// Log an RPC response with error
 	payload := []byte(`{"jsonrpc":"2.0","id":1,"error":{"code":-32600,"message":"Invalid request"}}`)
 	err := errors.New("backend connection failed")
 	LogRPCResponse(RPCDirectionInbound, "github", payload, err)
-	
+
 	// Close loggers to flush
 	CloseGlobalLogger()
 	CloseMarkdownLogger()
-	
+
 	// Check text log
 	textLog := filepath.Join(logDir, "test.log")
 	textContent, err := os.ReadFile(textLog)
 	if err != nil {
 		t.Fatalf("Failed to read text log: %v", err)
 	}
-	
+
 	textStr := string(textContent)
 	expectedInText := []string{"[IN]", "[RESPONSE]", "server=github", "error=backend connection failed"}
 	for _, expected := range expectedInText {
@@ -324,14 +324,14 @@ func TestLogRPCResponse(t *testing.T) {
 			t.Errorf("Text log does not contain %q", expected)
 		}
 	}
-	
+
 	// Check markdown log
 	mdLog := filepath.Join(logDir, "test.md")
 	mdContent, err := os.ReadFile(mdLog)
 	if err != nil {
 		t.Fatalf("Failed to read markdown log: %v", err)
 	}
-	
+
 	mdStr := string(mdContent)
 	expectedInMd := []string{"Server **github**", "←", "Error: backend connection failed"}
 	for _, expected := range expectedInMd {
@@ -344,33 +344,33 @@ func TestLogRPCResponse(t *testing.T) {
 func TestLogRPCRequestWithSecrets(t *testing.T) {
 	tmpDir := t.TempDir()
 	logDir := filepath.Join(tmpDir, "logs")
-	
+
 	// Initialize both loggers
 	if err := InitFileLogger(logDir, "test.log"); err != nil {
 		t.Fatalf("InitFileLogger failed: %v", err)
 	}
 	defer CloseGlobalLogger()
-	
+
 	if err := InitMarkdownLogger(logDir, "test.md"); err != nil {
 		t.Fatalf("InitMarkdownLogger failed: %v", err)
 	}
 	defer CloseMarkdownLogger()
-	
+
 	// Log an RPC request with a secret
 	payload := []byte(`{"jsonrpc":"2.0","id":1,"method":"authenticate","params":{"token":"ghp_1234567890123456789012345678901234567890"}}`)
 	LogRPCRequest(RPCDirectionInbound, "client", "authenticate", payload)
-	
+
 	// Close loggers to flush
 	CloseGlobalLogger()
 	CloseMarkdownLogger()
-	
+
 	// Check text log - should NOT contain the actual token
 	textLog := filepath.Join(logDir, "test.log")
 	textContent, err := os.ReadFile(textLog)
 	if err != nil {
 		t.Fatalf("Failed to read text log: %v", err)
 	}
-	
+
 	textStr := string(textContent)
 	if strings.Contains(textStr, "ghp_1234567890123456789012345678901234567890") {
 		t.Errorf("Text log contains secret that should be redacted")
@@ -378,14 +378,14 @@ func TestLogRPCRequestWithSecrets(t *testing.T) {
 	if !strings.Contains(textStr, "[REDACTED]") {
 		t.Errorf("Text log does not contain [REDACTED] marker")
 	}
-	
+
 	// Check markdown log - should NOT contain the actual token
 	mdLog := filepath.Join(logDir, "test.md")
 	mdContent, err := os.ReadFile(mdLog)
 	if err != nil {
 		t.Fatalf("Failed to read markdown log: %v", err)
 	}
-	
+
 	mdStr := string(mdContent)
 	if strings.Contains(mdStr, "ghp_1234567890123456789012345678901234567890") {
 		t.Errorf("Markdown log contains secret that should be redacted")
@@ -398,39 +398,39 @@ func TestLogRPCRequestWithSecrets(t *testing.T) {
 func TestLogRPCRequestPayloadTruncation(t *testing.T) {
 	tmpDir := t.TempDir()
 	logDir := filepath.Join(tmpDir, "logs")
-	
+
 	// Initialize both loggers
 	if err := InitFileLogger(logDir, "test.log"); err != nil {
 		t.Fatalf("InitFileLogger failed: %v", err)
 	}
 	defer CloseGlobalLogger()
-	
+
 	if err := InitMarkdownLogger(logDir, "test.md"); err != nil {
 		t.Fatalf("InitMarkdownLogger failed: %v", err)
 	}
 	defer CloseMarkdownLogger()
-	
+
 	// Create a large payload (> 120 characters)
 	largeData := strings.Repeat("x", 200)
 	payload := []byte(`{"jsonrpc":"2.0","id":1,"method":"test","params":{"data":"` + largeData + `"}}`)
 	LogRPCRequest(RPCDirectionOutbound, "backend", "test", payload)
-	
+
 	// Close loggers to flush
 	CloseGlobalLogger()
 	CloseMarkdownLogger()
-	
+
 	// Check text log - payload should be truncated
 	textLog := filepath.Join(logDir, "test.log")
 	textContent, err := os.ReadFile(textLog)
 	if err != nil {
 		t.Fatalf("Failed to read text log: %v", err)
 	}
-	
+
 	textStr := string(textContent)
 	if !strings.Contains(textStr, "...") {
 		t.Errorf("Text log does not show truncation marker")
 	}
-	
+
 	// The logged payload should not contain the full 200 x's
 	// (it should be truncated to 120 chars + "...")
 	xCount := strings.Count(textStr, strings.Repeat("x", 150))

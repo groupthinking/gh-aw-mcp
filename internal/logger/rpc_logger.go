@@ -46,7 +46,7 @@ type RPCMessageInfo struct {
 func truncateAndSanitize(payload string, maxLength int) string {
 	// First sanitize secrets
 	sanitized := sanitizeSecrets(payload)
-	
+
 	// Then truncate if needed
 	if len(sanitized) > maxLength {
 		return sanitized[:maxLength] + "..."
@@ -60,10 +60,10 @@ func extractEssentialFields(payload []byte) map[string]interface{} {
 	if err := json.Unmarshal(payload, &data); err != nil {
 		return nil
 	}
-	
+
 	// Extract only essential fields
 	essential := make(map[string]interface{})
-	
+
 	// Common JSON-RPC fields
 	if method, ok := data["method"].(string); ok {
 		essential["method"] = method
@@ -74,12 +74,12 @@ func extractEssentialFields(payload []byte) map[string]interface{} {
 	if jsonrpc, ok := data["jsonrpc"].(string); ok {
 		essential["jsonrpc"] = jsonrpc
 	}
-	
+
 	// For responses, include error info
 	if errData, ok := data["error"]; ok {
 		essential["error"] = errData
 	}
-	
+
 	// For requests, include params summary (but not full params)
 	if params, ok := data["params"]; ok {
 		if paramsMap, ok := params.(map[string]interface{}); ok {
@@ -87,7 +87,7 @@ func extractEssentialFields(payload []byte) map[string]interface{} {
 			essential["params_keys"] = getMapKeys(paramsMap)
 		}
 	}
-	
+
 	return essential
 }
 
@@ -107,25 +107,25 @@ func formatRPCMessage(info *RPCMessageInfo) string {
 		fmt.Sprintf("[%s]", info.Direction),
 		fmt.Sprintf("[%s]", info.MessageType),
 	}
-	
+
 	if info.ServerID != "" {
 		parts = append(parts, fmt.Sprintf("server=%s", info.ServerID))
 	}
-	
+
 	if info.Method != "" {
 		parts = append(parts, fmt.Sprintf("method=%s", info.Method))
 	}
-	
+
 	parts = append(parts, fmt.Sprintf("size=%d", info.PayloadSize))
-	
+
 	if info.Error != "" {
 		parts = append(parts, fmt.Sprintf("error=%s", info.Error))
 	}
-	
+
 	if info.Payload != "" {
 		parts = append(parts, fmt.Sprintf("payload=%s", info.Payload))
 	}
-	
+
 	return strings.Join(parts, " ")
 }
 
@@ -133,41 +133,41 @@ func formatRPCMessage(info *RPCMessageInfo) string {
 func formatRPCMessageMarkdown(info *RPCMessageInfo) string {
 	// Format: Server **<id>** <direction> <type> `<method>` (<size> bytes)
 	var parts []string
-	
+
 	// Start with server attribution
 	if info.ServerID != "" {
 		parts = append(parts, fmt.Sprintf("Server **%s**", info.ServerID))
 	}
-	
+
 	// Add direction and type
 	directionSymbol := "→"
 	if info.Direction == RPCDirectionInbound {
 		directionSymbol = "←"
 	}
 	parts = append(parts, directionSymbol)
-	
+
 	// Add method in code formatting
 	if info.Method != "" {
 		parts = append(parts, fmt.Sprintf("`%s`", info.Method))
 	} else {
 		parts = append(parts, string(info.MessageType))
 	}
-	
+
 	// Add size
 	parts = append(parts, fmt.Sprintf("(%d bytes)", info.PayloadSize))
-	
+
 	message := strings.Join(parts, " ")
-	
+
 	// Add payload preview if available
 	if info.Payload != "" {
 		message += fmt.Sprintf("\n  ```\n  %s\n  ```", info.Payload)
 	}
-	
+
 	// Add error if present
 	if info.Error != "" {
 		message += fmt.Sprintf("\n  Error: %s", info.Error)
 	}
-	
+
 	return message
 }
 
@@ -181,14 +181,14 @@ func LogRPCRequest(direction RPCMessageDirection, serverID, method string, paylo
 		PayloadSize: len(payload),
 		Payload:     truncateAndSanitize(string(payload), MaxPayloadPreviewLength),
 	}
-	
+
 	// Log to text file
 	LogDebug("rpc", "%s", formatRPCMessage(info))
-	
+
 	// Log to markdown file
 	globalMarkdownMu.RLock()
 	defer globalMarkdownMu.RUnlock()
-	
+
 	if globalMarkdownLogger != nil {
 		globalMarkdownLogger.Log(LogLevelDebug, "rpc", "%s", formatRPCMessageMarkdown(info))
 	}
@@ -203,18 +203,18 @@ func LogRPCResponse(direction RPCMessageDirection, serverID string, payload []by
 		PayloadSize: len(payload),
 		Payload:     truncateAndSanitize(string(payload), MaxPayloadPreviewLength),
 	}
-	
+
 	if err != nil {
 		info.Error = err.Error()
 	}
-	
+
 	// Log to text file
 	LogDebug("rpc", "%s", formatRPCMessage(info))
-	
+
 	// Log to markdown file
 	globalMarkdownMu.RLock()
 	defer globalMarkdownMu.RUnlock()
-	
+
 	if globalMarkdownLogger != nil {
 		globalMarkdownLogger.Log(LogLevelDebug, "rpc", "%s", formatRPCMessageMarkdown(info))
 	}
@@ -224,11 +224,11 @@ func LogRPCResponse(direction RPCMessageDirection, serverID string, payload []by
 func LogRPCMessage(info *RPCMessageInfo) {
 	// Log to text file
 	LogDebug("rpc", "%s", formatRPCMessage(info))
-	
+
 	// Log to markdown file
 	globalMarkdownMu.RLock()
 	defer globalMarkdownMu.RUnlock()
-	
+
 	if globalMarkdownLogger != nil {
 		globalMarkdownLogger.Log(LogLevelDebug, "rpc", "%s", formatRPCMessageMarkdown(info))
 	}

@@ -119,10 +119,10 @@ func (c *Connection) SendRequestWithServerID(method string, params interface{}, 
 		"params":  params,
 	})
 	logger.LogRPCRequest(logger.RPCDirectionOutbound, serverID, method, requestPayload)
-	
+
 	var result *Response
 	var err error
-	
+
 	switch method {
 	case "tools/list":
 		result, err = c.listTools()
@@ -139,14 +139,14 @@ func (c *Connection) SendRequestWithServerID(method string, params interface{}, 
 	default:
 		err = fmt.Errorf("unsupported method: %s", method)
 	}
-	
+
 	// Log the response from backend server
 	var responsePayload []byte
 	if result != nil {
 		responsePayload, _ = json.Marshal(result)
 	}
 	logger.LogRPCResponse(logger.RPCDirectionInbound, serverID, responsePayload, err)
-	
+
 	return result, err
 }
 
