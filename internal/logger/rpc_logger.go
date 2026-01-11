@@ -159,7 +159,17 @@ func formatJSONWithoutFields(jsonStr string, fieldsToRemove []string) (string, b
 		return jsonStr, false
 	}
 
-	return string(formatted), true
+	// Compress JSON: remove newline after opening brace and before closing brace
+	result := string(formatted)
+	// Remove newline after opening brace
+	result = strings.Replace(result, "{\n", "{ ", 1)
+	// Remove newline before closing brace
+	lastNewline := strings.LastIndex(result, "\n}")
+	if lastNewline != -1 {
+		result = result[:lastNewline] + " }"
+	}
+
+	return result, true
 }
 
 // formatRPCMessageMarkdown formats an RPC message for markdown logging
@@ -189,7 +199,8 @@ func formatRPCMessageMarkdown(info *RPCMessageInfo) string {
 		formatted, isValidJSON := formatJSONWithoutFields(info.Payload, []string{"jsonrpc", "method"})
 		if isValidJSON {
 			// Valid JSON: use code block for better readability (compact formatting)
-			message += fmt.Sprintf(" ~~~\n%s\n~~~", formatted)
+			// Empty line before ~~~ per markdown convention
+			message += fmt.Sprintf(" \n\n~~~\n%s\n~~~", formatted)
 		} else {
 			// Invalid JSON: use inline backticks to avoid malformed markdown
 			message += fmt.Sprintf(" `%s`", formatted)
