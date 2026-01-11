@@ -111,14 +111,14 @@ func (l *Logger) Printf(format string, args ...any) {
 	l.mu.Unlock()
 
 	message := fmt.Sprintf(format, args...)
-	
+
 	// Write to stderr with colors and time diff
 	if l.color != "" {
 		fmt.Fprintf(os.Stderr, "%s%s%s %s +%s\n", l.color, l.namespace, colorReset, message, timeutil.FormatDuration(diff))
 	} else {
 		fmt.Fprintf(os.Stderr, "%s %s +%s\n", l.namespace, message, timeutil.FormatDuration(diff))
 	}
-	
+
 	// Also write to file logger in text-only format (no colors, no time diff)
 	LogDebug(l.namespace, "%s", message)
 }
@@ -138,14 +138,14 @@ func (l *Logger) Print(args ...any) {
 	l.mu.Unlock()
 
 	message := fmt.Sprint(args...)
-	
+
 	// Write to stderr with colors and time diff
 	if l.color != "" {
 		fmt.Fprintf(os.Stderr, "%s%s%s %s +%s\n", l.color, l.namespace, colorReset, message, timeutil.FormatDuration(diff))
 	} else {
 		fmt.Fprintf(os.Stderr, "%s %s +%s\n", l.namespace, message, timeutil.FormatDuration(diff))
 	}
-	
+
 	// Also write to file logger in text-only format (no colors, no time diff)
 	LogDebug(l.namespace, "%s", message)
 }
