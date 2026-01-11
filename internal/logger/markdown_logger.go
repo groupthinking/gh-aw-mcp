@@ -26,11 +26,11 @@ var (
 	// Patterns for detecting potential secrets (simple heuristics)
 	secretPatterns = []*regexp.Regexp{
 		regexp.MustCompile(`(?i)(token|key|secret|password|auth)[=:]\s*[^\s]{8,}`),
-		regexp.MustCompile(`ghp_[a-zA-Z0-9]{36,}`),                                    // GitHub PATs
-		regexp.MustCompile(`github_pat_[a-zA-Z0-9]{22}_[a-zA-Z0-9]{59}`),             // GitHub fine-grained PATs
-		regexp.MustCompile(`(?i)bearer\s+[a-zA-Z0-9\-._~+/]+=*`),                     // Bearer tokens
-		regexp.MustCompile(`(?i)authorization:\s*[a-zA-Z0-9\-._~+/]+=*`),             // Auth headers
-		regexp.MustCompile(`[a-f0-9]{32,}`),                                          // Long hex strings (API keys)
+		regexp.MustCompile(`ghp_[a-zA-Z0-9]{36,}`),                                  // GitHub PATs
+		regexp.MustCompile(`github_pat_[a-zA-Z0-9]{22}_[a-zA-Z0-9]{59}`),            // GitHub fine-grained PATs
+		regexp.MustCompile(`(?i)bearer\s+[a-zA-Z0-9\-._~+/]+=*`),                    // Bearer tokens
+		regexp.MustCompile(`(?i)authorization:\s*[a-zA-Z0-9\-._~+/]+=*`),            // Auth headers
+		regexp.MustCompile(`[a-f0-9]{32,}`),                                         // Long hex strings (API keys)
 		regexp.MustCompile(`(?i)(apikey|api_key|access_key)[=:]\s*[^\s]{8,}`),       // API keys
 		regexp.MustCompile(`(?i)(client_secret|client_id)[=:]\s*[^\s]{8,}`),         // OAuth secrets
 		regexp.MustCompile(`[a-zA-Z0-9_-]{20,}\.eyJ[a-zA-Z0-9_-]+\.[a-zA-Z0-9_-]+`), // JWT tokens
@@ -167,12 +167,12 @@ func (ml *MarkdownLogger) Log(level LogLevel, category, format string, args ...i
 
 	timestamp := time.Now().UTC().Format("15:04:05")
 	message := fmt.Sprintf(format, args...)
-	
+
 	// Sanitize potential secrets
 	message = sanitizeSecrets(message)
-	
+
 	emoji := getEmojiForLevel(level)
-	
+
 	// Format as markdown bullet point with emoji
 	// Use code blocks for multi-line content or technical details
 	var logLine string
@@ -201,11 +201,11 @@ func (ml *MarkdownLogger) Log(level LogLevel, category, format string, args ...i
 func LogInfoMd(category, format string, args ...interface{}) {
 	// Log to regular logger
 	LogInfo(category, format, args...)
-	
+
 	// Log to markdown logger
 	globalMarkdownMu.RLock()
 	defer globalMarkdownMu.RUnlock()
-	
+
 	if globalMarkdownLogger != nil {
 		globalMarkdownLogger.Log(LogLevelInfo, category, format, args...)
 	}
@@ -215,11 +215,11 @@ func LogInfoMd(category, format string, args ...interface{}) {
 func LogWarnMd(category, format string, args ...interface{}) {
 	// Log to regular logger
 	LogWarn(category, format, args...)
-	
+
 	// Log to markdown logger
 	globalMarkdownMu.RLock()
 	defer globalMarkdownMu.RUnlock()
-	
+
 	if globalMarkdownLogger != nil {
 		globalMarkdownLogger.Log(LogLevelWarn, category, format, args...)
 	}
@@ -229,11 +229,11 @@ func LogWarnMd(category, format string, args ...interface{}) {
 func LogErrorMd(category, format string, args ...interface{}) {
 	// Log to regular logger
 	LogError(category, format, args...)
-	
+
 	// Log to markdown logger
 	globalMarkdownMu.RLock()
 	defer globalMarkdownMu.RUnlock()
-	
+
 	if globalMarkdownLogger != nil {
 		globalMarkdownLogger.Log(LogLevelError, category, format, args...)
 	}
@@ -243,11 +243,11 @@ func LogErrorMd(category, format string, args ...interface{}) {
 func LogDebugMd(category, format string, args ...interface{}) {
 	// Log to regular logger
 	LogDebug(category, format, args...)
-	
+
 	// Log to markdown logger
 	globalMarkdownMu.RLock()
 	defer globalMarkdownMu.RUnlock()
-	
+
 	if globalMarkdownLogger != nil {
 		globalMarkdownLogger.Log(LogLevelDebug, category, format, args...)
 	}
