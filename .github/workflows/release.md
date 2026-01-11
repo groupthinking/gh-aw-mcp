@@ -43,24 +43,15 @@ safe-outputs:
       description: "Publish the draft release"
       runs-on: ubuntu-latest
       output: "Release published successfully!"
-      inputs:
-        tag:
-          description: "Release tag to publish"
-          required: true
-          type: string
+      needs: ["release"]
       steps:
         - name: Publish release
           run: |
-            # Read the tag from agent output (JSONL format, find publish_release entries)
-            if [ ! -f "$GH_AW_AGENT_OUTPUT" ]; then
-              echo "Error: Agent output file not found"
-              exit 1
-            fi
-            
-            RELEASE_TAG=$(jq -r 'select(.type == "publish_release") | .tag' "$GH_AW_AGENT_OUTPUT" | head -1)
+            # Get the release tag from the release job output
+            RELEASE_TAG="${{ needs.release.outputs.release_tag }}"
             
             if [ -z "$RELEASE_TAG" ]; then
-              echo "Error: Release tag not provided in agent output"
+              echo "Error: Release tag not available from release job output"
               exit 1
             fi
             
@@ -580,15 +571,16 @@ update_release({
 })
 
 // Step 2: Publish the release (remove draft status)
-publish_release({
-  tag: "${RELEASE_TAG}"
-})
+// Note: The release tag is automatically retrieved from the release job output
+publish_release()
 ```
 
 **Required Parameters:**
-- `tag` - Release tag from `${RELEASE_TAG}` environment variable (e.g., "v0.1.0")
-- `operation` - Must be `"prepend"` to add before existing notes
-- `body` - Complete markdown content (include all formatting, emojis, links)
+- For `update_release`:
+  - `tag` - Release tag from `${RELEASE_TAG}` environment variable (e.g., "v0.1.0")
+  - `operation` - Must be `"prepend"` to add before existing notes
+  - `body` - Complete markdown content (include all formatting, emojis, links)
+- For `publish_release`: No parameters required (tag is automatically retrieved)
 
 **WARNING**: If you don't call both `update_release` and `publish_release` tools, the release will remain in draft status!
 
