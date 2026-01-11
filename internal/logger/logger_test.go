@@ -506,3 +506,170 @@ func TestDebugLoggerDisabledNoFileWrite(t *testing.T) {
 		t.Errorf("Disabled logger should not write to file, got: %s", logContent)
 	}
 }
+
+// TestNew_WithDebugEnv tests logger creation with various DEBUG environment patterns
+func TestNew_WithDebugEnv(t *testing.T) {
+	tests := []struct {
+		name      string
+		debugEnv  string
+		namespace string
+		enabled   bool
+	}{
+		{
+			name:      "wildcard enables all loggers",
+			debugEnv:  "*",
+			namespace: "app:feature",
+			enabled:   true,
+		},
+		{
+			name:      "exact match enables logger",
+			debugEnv:  "app:feature",
+			namespace: "app:feature",
+			enabled:   true,
+		},
+		{
+			name:      "namespace wildcard enables matching loggers",
+			debugEnv:  "app:*",
+			namespace: "app:feature",
+			enabled:   true,
+		},
+		{
+			name:      "namespace wildcard does not match different prefix",
+			debugEnv:  "app:*",
+			namespace: "other:feature",
+			enabled:   false,
+		},
+		{
+			name:      "multiple patterns with comma",
+			debugEnv:  "app:*,other:*",
+			namespace: "app:feature",
+			enabled:   true,
+		},
+		{
+			name:      "exclusion pattern disables specific logger",
+			debugEnv:  "app:*,-app:skip",
+			namespace: "app:skip",
+			enabled:   false,
+		},
+		{
+			name:      "exclusion does not affect other loggers",
+			debugEnv:  "app:*,-app:skip",
+			namespace: "app:feature",
+			enabled:   true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Use t.Setenv to set environment variable for this test
+			t.Setenv("DEBUG", tt.debugEnv)
+
+			log := New(tt.namespace)
+			if log.Enabled() != tt.enabled {
+				t.Errorf("New(%q) with DEBUG=%q: enabled = %v, want %v",
+					tt.namespace, tt.debugEnv, log.Enabled(), tt.enabled)
+			}
+		})
+	}
+}
+
+// TestLogger_Printf_WithDebug tests Printf functionality with DEBUG enabled
+func TestLogger_Printf_WithDebug(t *testing.T) {
+	// Set DEBUG to enable all loggers
+	t.Setenv("DEBUG", "*")
+
+	log := New("test:feature")
+	if !log.Enabled() {
+		t.Error("Logger should be enabled with DEBUG=*")
+	}
+
+	// Note: Printf writes to stderr, so we can't easily capture the output
+	// in an example test. This test just verifies it doesn't panic.
+	log.Printf("Processing %d items", 42)
+}
+
+// TestLogger_Print_WithDebug tests Print functionality with DEBUG enabled
+func TestLogger_Print_WithDebug(t *testing.T) {
+	// Set DEBUG to enable all loggers
+	t.Setenv("DEBUG", "*")
+
+	log := New("test:feature")
+	if !log.Enabled() {
+		t.Error("Logger should be enabled with DEBUG=*")
+	}
+
+	// Note: Print writes to stderr, so we can't easily capture the output
+	// in an example test. This test just verifies it doesn't panic.
+	log.Print("Processing", " ", "items")
+}
+
+// TestDebugPatterns tests various DEBUG pattern matching scenarios
+func TestDebugPatterns(t *testing.T) {
+	tests := []struct {
+		name      string
+		debugEnv  string
+		namespace string
+		enabled   bool
+	}{
+		{
+			name:      "empty DEBUG disables all loggers",
+			debugEnv:  "",
+			namespace: "test:logger",
+			enabled:   false,
+		},
+		{
+			name:      "wildcard-all pattern",
+			debugEnv:  "*",
+			namespace: "any:namespace",
+			enabled:   true,
+		},
+		{
+			name:      "suffix wildcard",
+			debugEnv:  "*:logger",
+			namespace: "test:logger",
+			enabled:   true,
+		},
+		{
+			name:      "suffix wildcard no match",
+			debugEnv:  "*:logger",
+			namespace: "test:other",
+			enabled:   false,
+		},
+		{
+			name:      "middle wildcard",
+			debugEnv:  "test:*:end",
+			namespace: "test:middle:end",
+			enabled:   true,
+		},
+		{
+			name:      "exclusion with wildcard",
+			debugEnv:  "*,-test:*",
+			namespace: "test:logger",
+			enabled:   false,
+		},
+		{
+			name:      "exclusion with wildcard allows others",
+			debugEnv:  "*,-test:*",
+			namespace: "other:logger",
+			enabled:   true,
+		},
+		{
+			name:      "spaces in patterns are trimmed",
+			debugEnv:  "test:* , other:*",
+			namespace: "other:logger",
+			enabled:   true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Setenv("DEBUG", tt.debugEnv)
+
+			log := New(tt.namespace)
+			if log.Enabled() != tt.enabled {
+				t.Errorf("New(%q) with DEBUG=%q: enabled = %v, want %v",
+					tt.namespace, tt.debugEnv, log.Enabled(), tt.enabled)
+			}
+		})
+	}
+}
