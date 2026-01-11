@@ -105,23 +105,49 @@ func NewConnection(ctx context.Context, command string, args []string, env map[s
 }
 
 // SendRequest sends a JSON-RPC request and waits for the response
+// The serverID parameter is used for logging to associate the request with a backend server
 func (c *Connection) SendRequest(method string, params interface{}) (*Response, error) {
+	return c.SendRequestWithServerID(method, params, "unknown")
+}
+
+// SendRequestWithServerID sends a JSON-RPC request with server ID for logging
+func (c *Connection) SendRequestWithServerID(method string, params interface{}, serverID string) (*Response, error) {
+	// Log the outbound request to backend server
+	requestPayload, _ := json.Marshal(map[string]interface{}{
+		"jsonrpc": "2.0",
+		"method":  method,
+		"params":  params,
+	})
+	logger.LogRPCRequest(logger.RPCDirectionOutbound, serverID, method, requestPayload)
+	
+	var result *Response
+	var err error
+	
 	switch method {
 	case "tools/list":
-		return c.listTools()
+		result, err = c.listTools()
 	case "tools/call":
-		return c.callTool(params)
+		result, err = c.callTool(params)
 	case "resources/list":
-		return c.listResources()
+		result, err = c.listResources()
 	case "resources/read":
-		return c.readResource(params)
+		result, err = c.readResource(params)
 	case "prompts/list":
-		return c.listPrompts()
+		result, err = c.listPrompts()
 	case "prompts/get":
-		return c.getPrompt(params)
+		result, err = c.getPrompt(params)
 	default:
-		return nil, fmt.Errorf("unsupported method: %s", method)
+		err = fmt.Errorf("unsupported method: %s", method)
 	}
+	
+	// Log the response from backend server
+	var responsePayload []byte
+	if result != nil {
+		responsePayload, _ = json.Marshal(result)
+	}
+	logger.LogRPCResponse(logger.RPCDirectionInbound, serverID, responsePayload, err)
+	
+	return result, err
 }
 
 func (c *Connection) listTools() (*Response, error) {
