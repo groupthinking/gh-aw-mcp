@@ -123,8 +123,8 @@ func validateMounts(mounts []string, jsonPath string) error {
 	return nil
 }
 
-// validateStdioServer validates a stdio server configuration
-func validateStdioServer(name string, server *StdinServerConfig) error {
+// validateServerConfig validates a server configuration (stdio or HTTP)
+func validateServerConfig(name string, server *StdinServerConfig) error {
 	jsonPath := fmt.Sprintf("mcpServers.%s", name)
 
 	// Validate type (empty defaults to stdio)

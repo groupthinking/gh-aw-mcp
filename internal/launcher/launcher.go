@@ -75,6 +75,31 @@ func GetOrLaunch(l *Launcher, serverID string) (*mcp.Connection, error) {
 		return nil, fmt.Errorf("server '%s' not found in config", serverID)
 	}
 
+	// Handle HTTP backends differently
+	if serverCfg.Type == "http" {
+		logger.LogInfo("backend", "Configuring HTTP MCP backend: %s, url=%s", serverID, serverCfg.URL)
+		log.Printf("[LAUNCHER] Configuring HTTP MCP backend: %s", serverID)
+		log.Printf("[LAUNCHER] URL: %s", serverCfg.URL)
+		logLauncher.Printf("HTTP backend: serverID=%s, url=%s", serverID, serverCfg.URL)
+
+		// Create an HTTP connection
+		conn, err := mcp.NewHTTPConnection(l.ctx, serverCfg.URL, serverCfg.Headers)
+		if err != nil {
+			logger.LogError("backend", "Failed to create HTTP connection: %s, error=%v", serverID, err)
+			log.Printf("[LAUNCHER] ❌ FAILED to create HTTP connection for '%s'", serverID)
+			log.Printf("[LAUNCHER] Error: %v", err)
+			return nil, fmt.Errorf("failed to create HTTP connection: %w", err)
+		}
+
+		logger.LogInfo("backend", "Successfully configured HTTP MCP backend: %s", serverID)
+		log.Printf("[LAUNCHER] Successfully configured HTTP backend: %s", serverID)
+		logLauncher.Printf("HTTP connection configured: serverID=%s", serverID)
+
+		l.connections[serverID] = conn
+		return conn, nil
+	}
+
+	// stdio backends from this point
 	// Warn if using direct command in a container
 	isDirectCommand := serverCfg.Command != "docker"
 	if l.runningInContainer && isDirectCommand {

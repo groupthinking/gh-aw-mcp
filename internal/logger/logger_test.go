@@ -3,6 +3,7 @@ package logger
 import (
 	"bytes"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -149,8 +150,8 @@ func TestNew(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Set environment for this test
-			debugEnv = tt.debugEnv
+			// Use t.Setenv to set environment variable for this test
+			t.Setenv("DEBUG", tt.debugEnv)
 
 			logger := New(tt.namespace)
 			if logger.Enabled() != tt.enabled {
@@ -190,8 +191,8 @@ func TestLogger_Printf(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Set environment
-			debugEnv = tt.debugEnv
+			// Use t.Setenv to set environment variable for this test
+			t.Setenv("DEBUG", tt.debugEnv)
 
 			logger := New(tt.namespace)
 
@@ -220,8 +221,8 @@ func TestLogger_Printf(t *testing.T) {
 }
 
 func TestLogger_Print(t *testing.T) {
-	// Set environment
-	debugEnv = "*"
+	// Use t.Setenv to set environment variable for this test
+	t.Setenv("DEBUG", "*")
 
 	logger := New("test:print")
 
@@ -242,8 +243,8 @@ func TestLogger_Print(t *testing.T) {
 }
 
 func TestLogger_TimeDiff(t *testing.T) {
-	// Set environment
-	debugEnv = "*"
+	// Use t.Setenv to set environment variable for this test
+	t.Setenv("DEBUG", "*")
 
 	logger := New("test:timediff")
 
@@ -381,12 +382,293 @@ func TestComputeEnabled(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Set DEBUG for this test
-			debugEnv = tt.debugEnv
+			// Use t.Setenv to set DEBUG for this test
+			t.Setenv("DEBUG", tt.debugEnv)
 			got := computeEnabled(tt.namespace)
 			if got != tt.want {
 				t.Errorf("computeEnabled(%q) with DEBUG=%q = %v, want %v",
 					tt.namespace, tt.debugEnv, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestDebugLoggerWritesToFile(t *testing.T) {
+	// Create a temporary directory for the file logger
+	tmpDir := t.TempDir()
+	logDir := filepath.Join(tmpDir, "logs")
+	fileName := "debug-test.log"
+
+	// Initialize the file logger
+	err := InitFileLogger(logDir, fileName)
+	if err != nil {
+		t.Fatalf("InitFileLogger failed: %v", err)
+	}
+	defer CloseGlobalLogger()
+
+	// Use t.Setenv to enable all debug loggers
+	t.Setenv("DEBUG", "*")
+
+	// Create a debug logger
+	log := New("test:debug")
+
+	// Capture stderr to verify stderr output
+	stderrOutput := captureStderr(func() {
+		log.Printf("Test message %d", 42)
+		log.Print("Another test message")
+	})
+
+	// Verify stderr output contains the messages
+	if !strings.Contains(stderrOutput, "Test message 42") {
+		t.Errorf("Stderr should contain debug message, got: %s", stderrOutput)
+	}
+	if !strings.Contains(stderrOutput, "Another test message") {
+		t.Errorf("Stderr should contain debug message, got: %s", stderrOutput)
+	}
+
+	// Close the file logger to flush all data
+	CloseGlobalLogger()
+
+	// Read the log file
+	logPath := filepath.Join(logDir, fileName)
+	content, err := os.ReadFile(logPath)
+	if err != nil {
+		t.Fatalf("Failed to read log file: %v", err)
+	}
+
+	logContent := string(content)
+
+	// Verify the file logger contains the same messages (text-only, no colors)
+	if !strings.Contains(logContent, "Test message 42") {
+		t.Errorf("Log file should contain debug message, got: %s", logContent)
+	}
+	if !strings.Contains(logContent, "Another test message") {
+		t.Errorf("Log file should contain debug message, got: %s", logContent)
+	}
+
+	// Verify the file logger has DEBUG level
+	if !strings.Contains(logContent, "[DEBUG]") {
+		t.Errorf("Log file should contain [DEBUG] level, got: %s", logContent)
+	}
+
+	// Verify the file logger has the namespace as category
+	if !strings.Contains(logContent, "[test:debug]") {
+		t.Errorf("Log file should contain [test:debug] category, got: %s", logContent)
+	}
+
+	// Verify no color codes in file output
+	if strings.Contains(logContent, "\033[") {
+		t.Errorf("Log file should not contain ANSI color codes, got: %s", logContent)
+	}
+}
+
+func TestDebugLoggerDisabledNoFileWrite(t *testing.T) {
+	// Create a temporary directory for the file logger
+	tmpDir := t.TempDir()
+	logDir := filepath.Join(tmpDir, "logs")
+	fileName := "debug-disabled-test.log"
+
+	// Initialize the file logger
+	err := InitFileLogger(logDir, fileName)
+	if err != nil {
+		t.Fatalf("InitFileLogger failed: %v", err)
+	}
+	defer CloseGlobalLogger()
+
+	// Use t.Setenv to disable all debug loggers
+	t.Setenv("DEBUG", "")
+
+	// Create a debug logger (should be disabled)
+	log := New("test:disabled")
+
+	// Verify logger is disabled
+	if log.Enabled() {
+		t.Fatal("Logger should be disabled when DEBUG is empty")
+	}
+
+	// Try to log (should not write anywhere)
+	log.Printf("This should not appear")
+
+	// Close the file logger to flush all data
+	CloseGlobalLogger()
+
+	// Read the log file
+	logPath := filepath.Join(logDir, fileName)
+	content, err := os.ReadFile(logPath)
+	if err != nil {
+		t.Fatalf("Failed to read log file: %v", err)
+	}
+
+	logContent := string(content)
+
+	// Verify the message is NOT in the file (logger was disabled)
+	if strings.Contains(logContent, "This should not appear") {
+		t.Errorf("Disabled logger should not write to file, got: %s", logContent)
+	}
+}
+
+// TestNew_WithDebugEnv tests logger creation with various DEBUG environment patterns
+func TestNew_WithDebugEnv(t *testing.T) {
+	tests := []struct {
+		name      string
+		debugEnv  string
+		namespace string
+		enabled   bool
+	}{
+		{
+			name:      "wildcard enables all loggers",
+			debugEnv:  "*",
+			namespace: "app:feature",
+			enabled:   true,
+		},
+		{
+			name:      "exact match enables logger",
+			debugEnv:  "app:feature",
+			namespace: "app:feature",
+			enabled:   true,
+		},
+		{
+			name:      "namespace wildcard enables matching loggers",
+			debugEnv:  "app:*",
+			namespace: "app:feature",
+			enabled:   true,
+		},
+		{
+			name:      "namespace wildcard does not match different prefix",
+			debugEnv:  "app:*",
+			namespace: "other:feature",
+			enabled:   false,
+		},
+		{
+			name:      "multiple patterns with comma",
+			debugEnv:  "app:*,other:*",
+			namespace: "app:feature",
+			enabled:   true,
+		},
+		{
+			name:      "exclusion pattern disables specific logger",
+			debugEnv:  "app:*,-app:skip",
+			namespace: "app:skip",
+			enabled:   false,
+		},
+		{
+			name:      "exclusion does not affect other loggers",
+			debugEnv:  "app:*,-app:skip",
+			namespace: "app:feature",
+			enabled:   true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Use t.Setenv to set environment variable for this test
+			t.Setenv("DEBUG", tt.debugEnv)
+
+			log := New(tt.namespace)
+			if log.Enabled() != tt.enabled {
+				t.Errorf("New(%q) with DEBUG=%q: enabled = %v, want %v",
+					tt.namespace, tt.debugEnv, log.Enabled(), tt.enabled)
+			}
+		})
+	}
+}
+
+// TestLogger_Printf_WithDebug tests Printf functionality with DEBUG enabled
+func TestLogger_Printf_WithDebug(t *testing.T) {
+	// Set DEBUG to enable all loggers
+	t.Setenv("DEBUG", "*")
+
+	log := New("test:feature")
+	if !log.Enabled() {
+		t.Error("Logger should be enabled with DEBUG=*")
+	}
+
+	// Note: Printf writes to stderr, so we can't easily capture the output
+	// in an example test. This test just verifies it doesn't panic.
+	log.Printf("Processing %d items", 42)
+}
+
+// TestLogger_Print_WithDebug tests Print functionality with DEBUG enabled
+func TestLogger_Print_WithDebug(t *testing.T) {
+	// Set DEBUG to enable all loggers
+	t.Setenv("DEBUG", "*")
+
+	log := New("test:feature")
+	if !log.Enabled() {
+		t.Error("Logger should be enabled with DEBUG=*")
+	}
+
+	// Note: Print writes to stderr, so we can't easily capture the output
+	// in an example test. This test just verifies it doesn't panic.
+	log.Print("Processing", " ", "items")
+}
+
+// TestDebugPatterns tests various DEBUG pattern matching scenarios
+func TestDebugPatterns(t *testing.T) {
+	tests := []struct {
+		name      string
+		debugEnv  string
+		namespace string
+		enabled   bool
+	}{
+		{
+			name:      "empty DEBUG disables all loggers",
+			debugEnv:  "",
+			namespace: "test:logger",
+			enabled:   false,
+		},
+		{
+			name:      "wildcard-all pattern",
+			debugEnv:  "*",
+			namespace: "any:namespace",
+			enabled:   true,
+		},
+		{
+			name:      "suffix wildcard",
+			debugEnv:  "*:logger",
+			namespace: "test:logger",
+			enabled:   true,
+		},
+		{
+			name:      "suffix wildcard no match",
+			debugEnv:  "*:logger",
+			namespace: "test:other",
+			enabled:   false,
+		},
+		{
+			name:      "middle wildcard",
+			debugEnv:  "test:*:end",
+			namespace: "test:middle:end",
+			enabled:   true,
+		},
+		{
+			name:      "exclusion with wildcard",
+			debugEnv:  "*,-test:*",
+			namespace: "test:logger",
+			enabled:   false,
+		},
+		{
+			name:      "exclusion with wildcard allows others",
+			debugEnv:  "*,-test:*",
+			namespace: "other:logger",
+			enabled:   true,
+		},
+		{
+			name:      "spaces in patterns are trimmed",
+			debugEnv:  "test:* , other:*",
+			namespace: "other:logger",
+			enabled:   true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Setenv("DEBUG", tt.debugEnv)
+
+			log := New(tt.namespace)
+			if log.Enabled() != tt.enabled {
+				t.Errorf("New(%q) with DEBUG=%q: enabled = %v, want %v",
+					tt.namespace, tt.debugEnv, log.Enabled(), tt.enabled)
 			}
 		})
 	}

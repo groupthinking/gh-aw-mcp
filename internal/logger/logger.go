@@ -22,9 +22,6 @@ type Logger struct {
 }
 
 var (
-	// DEBUG environment variable value, read once at initialization.
-	debugEnv = os.Getenv("DEBUG")
-
 	// DEBUG_COLORS environment variable to control color output.
 	debugColors = os.Getenv("DEBUG_COLORS") != "0"
 
@@ -99,6 +96,7 @@ func (l *Logger) Enabled() bool {
 // Printf prints a formatted message if the logger is enabled.
 // A newline is always added at the end.
 // Time diff since last log is displayed like the debug npm package.
+// Also writes to the file logger in text-only format.
 func (l *Logger) Printf(format string, args ...any) {
 	if !l.enabled {
 		return
@@ -110,16 +108,22 @@ func (l *Logger) Printf(format string, args ...any) {
 	l.mu.Unlock()
 
 	message := fmt.Sprintf(format, args...)
+
+	// Write to stderr with colors and time diff
 	if l.color != "" {
 		fmt.Fprintf(os.Stderr, "%s%s%s %s +%s\n", l.color, l.namespace, colorReset, message, timeutil.FormatDuration(diff))
 	} else {
 		fmt.Fprintf(os.Stderr, "%s %s +%s\n", l.namespace, message, timeutil.FormatDuration(diff))
 	}
+
+	// Also write to file logger in text-only format (no colors, no time diff)
+	LogDebug(l.namespace, "%s", message)
 }
 
 // Print prints a message if the logger is enabled.
 // A newline is always added at the end.
 // Time diff since last log is displayed like the debug npm package.
+// Also writes to the file logger in text-only format.
 func (l *Logger) Print(args ...any) {
 	if !l.enabled {
 		return
@@ -131,15 +135,22 @@ func (l *Logger) Print(args ...any) {
 	l.mu.Unlock()
 
 	message := fmt.Sprint(args...)
+
+	// Write to stderr with colors and time diff
 	if l.color != "" {
 		fmt.Fprintf(os.Stderr, "%s%s%s %s +%s\n", l.color, l.namespace, colorReset, message, timeutil.FormatDuration(diff))
 	} else {
 		fmt.Fprintf(os.Stderr, "%s %s +%s\n", l.namespace, message, timeutil.FormatDuration(diff))
 	}
+
+	// Also write to file logger in text-only format (no colors, no time diff)
+	LogDebug(l.namespace, "%s", message)
 }
 
 // computeEnabled computes whether a namespace matches the DEBUG patterns
 func computeEnabled(namespace string) bool {
+	// Read DEBUG from environment each time to support t.Setenv() in tests
+	debugEnv := os.Getenv("DEBUG")
 	patterns := strings.Split(debugEnv, ",")
 
 	enabled := false

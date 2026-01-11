@@ -350,7 +350,10 @@ func TestLoadFromStdin_HttpType(t *testing.T) {
 		"mcpServers": {
 			"http-server": {
 				"type": "http",
-				"url": "https://example.com/mcp"
+				"url": "https://example.com/mcp",
+				"headers": {
+					"Authorization": "test-token"
+				}
 			},
 			"stdio-server": {
 				"type": "stdio",
@@ -380,15 +383,28 @@ func TestLoadFromStdin_HttpType(t *testing.T) {
 		t.Fatalf("LoadFromStdin() failed: %v", err)
 	}
 
-	// HTTP type should be skipped (not yet implemented)
-	if len(cfg.Servers) != 1 {
-		t.Errorf("Expected 1 server (http skipped), got %d", len(cfg.Servers))
+	// Both HTTP and stdio servers should be loaded
+	if len(cfg.Servers) != 2 {
+		t.Errorf("Expected 2 servers (http + stdio), got %d", len(cfg.Servers))
 	}
 
-	if _, ok := cfg.Servers["http-server"]; ok {
-		t.Error("HTTP server should not be loaded (not yet implemented)")
+	// Check HTTP server configuration
+	httpServer, ok := cfg.Servers["http-server"]
+	if !ok {
+		t.Error("HTTP server should be loaded")
+	} else {
+		if httpServer.Type != "http" {
+			t.Errorf("Expected type 'http', got '%s'", httpServer.Type)
+		}
+		if httpServer.URL != "https://example.com/mcp" {
+			t.Errorf("Expected URL 'https://example.com/mcp', got '%s'", httpServer.URL)
+		}
+		if httpServer.Headers["Authorization"] != "test-token" {
+			t.Errorf("Expected Authorization header 'test-token', got '%s'", httpServer.Headers["Authorization"])
+		}
 	}
 
+	// Check stdio server is still loaded
 	if _, ok := cfg.Servers["stdio-server"]; !ok {
 		t.Error("stdio server should be loaded")
 	}
@@ -595,10 +611,9 @@ func TestLoadFromStdin_MixedServerTypes(t *testing.T) {
 		t.Fatalf("LoadFromStdin() failed: %v", err)
 	}
 
-	// Should load: stdio-container-1, stdio-container-2, local-container (3 total)
-	// Should skip: http-server (not implemented)
-	if len(cfg.Servers) != 3 {
-		t.Errorf("Expected 3 servers, got %d", len(cfg.Servers))
+	// Should load all 4 servers: stdio-container-1, stdio-container-2, local-container, http-server
+	if len(cfg.Servers) != 4 {
+		t.Errorf("Expected 4 servers, got %d", len(cfg.Servers))
 	}
 
 	if _, ok := cfg.Servers["stdio-container-1"]; !ok {
@@ -613,8 +628,8 @@ func TestLoadFromStdin_MixedServerTypes(t *testing.T) {
 		t.Error("local-container server not loaded")
 	}
 
-	if _, ok := cfg.Servers["http-server"]; ok {
-		t.Error("http-server should be skipped")
+	if _, ok := cfg.Servers["http-server"]; !ok {
+		t.Error("http-server should be loaded")
 	}
 }
 
