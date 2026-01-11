@@ -62,7 +62,7 @@ For detailed setup instructions, building from source, and local development, se
 - `-i`: Enables stdin for passing JSON configuration
 - `-e MCP_GATEWAY_*`: Required environment variables
 - `-v /var/run/docker.sock`: Required for spawning backend MCP servers
-- `-v /path/to/logs:/tmp/gh-aw/mcp-logs`: Mount for persistent gateway logs
+- `-v /path/to/logs:/tmp/gh-aw/mcp-logs`: Mount for persistent gateway logs (or use `-e MCP_GATEWAY_LOG_DIR=/custom/path` with matching volume mount)
 - `-p 8000:8000`: Port mapping must match `MCP_GATEWAY_PORT`
 
 MCPG will start in routed mode on `http://0.0.0.0:8000` (using `MCP_GATEWAY_PORT`), proxying MCP requests to your configured backend servers.
@@ -225,7 +225,7 @@ When running locally (`run.sh`), these variables are optional (warnings shown if
 | `MCP_GATEWAY_API_KEY` | API authentication key | (disabled) |
 | `MCP_GATEWAY_HOST` | Gateway bind address | `0.0.0.0` |
 | `MCP_GATEWAY_MODE` | Gateway mode | `--routed` |
-| `MCP_GATEWAY_LOG_DIR` | Log file directory | `/tmp/gh-aw/mcp-logs` |
+| `MCP_GATEWAY_LOG_DIR` | Log file directory (sets default for `--log-dir` flag) | `/tmp/gh-aw/mcp-logs` |
 
 ### Docker Configuration
 
@@ -253,6 +253,7 @@ docker run -i \
   -e MCP_GATEWAY_DOMAIN=localhost \
   -e MCP_GATEWAY_API_KEY=your-key \
   -v /var/run/docker.sock:/var/run/docker.sock \
+  -v /path/to/logs:/tmp/gh-aw/mcp-logs \
   -p 8080:8080 \
   ghcr.io/githubnext/gh-aw-mcpg:latest < config.json
 ```
@@ -260,6 +261,7 @@ docker run -i \
 **Important flags:**
 - `-i`: Required for passing configuration via stdin
 - `-v /var/run/docker.sock:/var/run/docker.sock`: Required for spawning backend MCP servers
+- `-v /path/to/logs:/tmp/gh-aw/mcp-logs`: Optional but recommended for persistent logs (path matches default or `MCP_GATEWAY_LOG_DIR`)
 - `-p <host>:<container>`: Port mapping must match `MCP_GATEWAY_PORT`
 
 ### Validation Checks
@@ -299,8 +301,20 @@ MCPG provides comprehensive logging of all gateway operations to help diagnose i
 
 ### Log File Location
 
-By default, logs are written to `/tmp/gh-aw/mcp-logs/mcp-gateway.log`. This location can be configured using the `--log-dir` flag or `MCP_GATEWAY_LOG_DIR` environment variable:
+By default, logs are written to `/tmp/gh-aw/mcp-logs/mcp-gateway.log`. This location can be configured using either:
 
+1. **`MCP_GATEWAY_LOG_DIR` environment variable** - Sets the default log directory
+2. **`--log-dir` flag** - Overrides the environment variable and default
+
+The precedence order is: `--log-dir` flag → `MCP_GATEWAY_LOG_DIR` env var → default (`/tmp/gh-aw/mcp-logs`)
+
+**Using the environment variable:**
+```bash
+export MCP_GATEWAY_LOG_DIR=/var/log/mcp-gateway
+./awmg --config config.toml
+```
+
+**Using the command-line flag:**
 ```bash
 ./awmg --config config.toml --log-dir /var/log/mcp-gateway
 ```
