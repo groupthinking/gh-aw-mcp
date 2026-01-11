@@ -91,6 +91,12 @@ Replace `pkg:filename` with the actual package and filename:
 - For `internal/cmd/root.go` → `"cmd:root"`
 - For `internal/launcher/docker.go` → `"launcher:docker"`
 
+**Note:** Debug loggers created with `logger.New()` write to both:
+- **stderr** - Colorized output with time diffs (when `DEBUG` env var matches namespace)
+- **file logger** - Text-only output (always logged when the logger is enabled)
+
+This dual output approach ensures all debug logs are captured to file for troubleshooting while providing real-time colored output during development.
+
 ### Logger Usage Patterns
 
 **Good logging examples:**

@@ -3,6 +3,7 @@ package logger
 import (
 	"bytes"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -389,5 +390,119 @@ func TestComputeEnabled(t *testing.T) {
 					tt.namespace, tt.debugEnv, got, tt.want)
 			}
 		})
+	}
+}
+
+func TestDebugLoggerWritesToFile(t *testing.T) {
+	// Create a temporary directory for the file logger
+	tmpDir := t.TempDir()
+	logDir := filepath.Join(tmpDir, "logs")
+	fileName := "debug-test.log"
+
+	// Initialize the file logger
+	err := InitFileLogger(logDir, fileName)
+	if err != nil {
+		t.Fatalf("InitFileLogger failed: %v", err)
+	}
+	defer CloseGlobalLogger()
+
+	// Enable all debug loggers
+	debugEnv = "*"
+
+	// Create a debug logger
+	log := New("test:debug")
+
+	// Capture stderr to verify stderr output
+	stderrOutput := captureStderr(func() {
+		log.Printf("Test message %d", 42)
+		log.Print("Another test message")
+	})
+
+	// Verify stderr output contains the messages
+	if !strings.Contains(stderrOutput, "Test message 42") {
+		t.Errorf("Stderr should contain debug message, got: %s", stderrOutput)
+	}
+	if !strings.Contains(stderrOutput, "Another test message") {
+		t.Errorf("Stderr should contain debug message, got: %s", stderrOutput)
+	}
+
+	// Close the file logger to flush all data
+	CloseGlobalLogger()
+
+	// Read the log file
+	logPath := filepath.Join(logDir, fileName)
+	content, err := os.ReadFile(logPath)
+	if err != nil {
+		t.Fatalf("Failed to read log file: %v", err)
+	}
+
+	logContent := string(content)
+
+	// Verify the file logger contains the same messages (text-only, no colors)
+	if !strings.Contains(logContent, "Test message 42") {
+		t.Errorf("Log file should contain debug message, got: %s", logContent)
+	}
+	if !strings.Contains(logContent, "Another test message") {
+		t.Errorf("Log file should contain debug message, got: %s", logContent)
+	}
+
+	// Verify the file logger has DEBUG level
+	if !strings.Contains(logContent, "[DEBUG]") {
+		t.Errorf("Log file should contain [DEBUG] level, got: %s", logContent)
+	}
+
+	// Verify the file logger has the namespace as category
+	if !strings.Contains(logContent, "[test:debug]") {
+		t.Errorf("Log file should contain [test:debug] category, got: %s", logContent)
+	}
+
+	// Verify no color codes in file output
+	if strings.Contains(logContent, "\033[") {
+		t.Errorf("Log file should not contain ANSI color codes, got: %s", logContent)
+	}
+}
+
+func TestDebugLoggerDisabledNoFileWrite(t *testing.T) {
+	// Create a temporary directory for the file logger
+	tmpDir := t.TempDir()
+	logDir := filepath.Join(tmpDir, "logs")
+	fileName := "debug-disabled-test.log"
+
+	// Initialize the file logger
+	err := InitFileLogger(logDir, fileName)
+	if err != nil {
+		t.Fatalf("InitFileLogger failed: %v", err)
+	}
+	defer CloseGlobalLogger()
+
+	// Disable all debug loggers
+	debugEnv = ""
+
+	// Create a debug logger (should be disabled)
+	log := New("test:disabled")
+
+	// Verify logger is disabled
+	if log.Enabled() {
+		t.Fatal("Logger should be disabled when DEBUG is empty")
+	}
+
+	// Try to log (should not write anywhere)
+	log.Printf("This should not appear")
+
+	// Close the file logger to flush all data
+	CloseGlobalLogger()
+
+	// Read the log file
+	logPath := filepath.Join(logDir, fileName)
+	content, err := os.ReadFile(logPath)
+	if err != nil {
+		t.Fatalf("Failed to read log file: %v", err)
+	}
+
+	logContent := string(content)
+
+	// Verify the message is NOT in the file (logger was disabled)
+	if strings.Contains(logContent, "This should not appear") {
+		t.Errorf("Disabled logger should not write to file, got: %s", logContent)
 	}
 }

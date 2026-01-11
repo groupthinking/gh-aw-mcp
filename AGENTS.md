@@ -148,7 +148,9 @@ import "github.com/githubnext/gh-aw-mcpg/internal/logger"
 // Create a logger with namespace following pkg:filename convention
 var log = logger.New("pkg:filename")
 
-// Log debug messages (only shown when DEBUG environment variable matches)
+// Log debug messages
+// - Writes to stderr with colors and time diffs (when DEBUG matches namespace)
+// - Also writes to file logger as text-only (always, when logger is enabled)
 log.Printf("Processing %d items", count)
 log.Print("Simple debug message")
 
@@ -158,7 +160,7 @@ if log.Enabled() {
 }
 ```
 
-**For operational/file logging, use the file logger:**
+**For operational/file logging, use the file logger directly:**
 
 ```go
 import "github.com/githubnext/gh-aw-mcpg/internal/logger"
@@ -169,6 +171,8 @@ logger.LogWarn("category", "Potential issue detected: %s", issue)
 logger.LogError("category", "Operation failed: %v", err)
 logger.LogDebug("category", "Debug details: %+v", details)
 ```
+
+**Note:** Debug loggers created with `logger.New()` now write to both stderr (with colors/time diffs) and the file logger (text-only). This provides real-time colored output during development while ensuring all debug logs are captured to file for production troubleshooting.
 
 **Logging Categories:**
 - `startup` - Gateway initialization and configuration
