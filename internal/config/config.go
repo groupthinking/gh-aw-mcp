@@ -57,8 +57,8 @@ type StdinServerConfig struct {
 	Entrypoint     string            `json:"entrypoint,omitempty"`
 	EntrypointArgs []string          `json:"entrypointArgs,omitempty"`
 	Mounts         []string          `json:"mounts,omitempty"`
-	URL            string            `json:"url,omitempty"`            // For HTTP-based MCP servers
-	Headers        map[string]string `json:"headers,omitempty"`        // HTTP headers for authentication
+	URL            string            `json:"url,omitempty"`     // For HTTP-based MCP servers
+	Headers        map[string]string `json:"headers,omitempty"` // HTTP headers for authentication
 }
 
 // StdinGatewayConfig represents gateway configuration from stdin JSON
@@ -159,7 +159,7 @@ func LoadFromStdin() (*Config, error) {
 			}
 			server.Env = expandedEnv
 		}
-		
+
 		// Expand variable expressions in HTTP headers (fail-fast on undefined vars)
 		if len(server.Headers) > 0 {
 			expandedHeaders, err := expandEnvVariables(server.Headers, name)
@@ -168,7 +168,7 @@ func LoadFromStdin() (*Config, error) {
 			}
 			server.Headers = expandedHeaders
 		}
-		
+
 		// Normalize type: "local" is an alias for "stdio" (backward compatibility)
 		serverType := server.Type
 		if serverType == "" {
