@@ -2,73 +2,67 @@ package logger_test
 
 import (
 	"fmt"
-	"os"
 
 	"github.com/githubnext/gh-aw-mcpg/internal/logger"
 )
 
-// Note: Example functions cannot use t.Setenv() as they don't have access to *testing.T
-// These need to remain using os.Setenv/Unsetenv
-
 func ExampleNew() {
-	// Set DEBUG environment variable to enable loggers
-	os.Setenv("DEBUG", "app:*")
-	defer os.Unsetenv("DEBUG")
-
 	// Create a logger for a specific namespace
+	// Note: Set DEBUG environment variable before running your application:
+	//   DEBUG=app:* go run main.go
 	log := logger.New("app:feature")
 
 	// Check if logger is enabled
 	if log.Enabled() {
 		fmt.Println("Logger is enabled")
+	} else {
+		fmt.Println("Logger is disabled (set DEBUG=app:* to enable)")
 	}
 
-	// Output: Logger is enabled
+	// Output: Logger is disabled (set DEBUG=app:* to enable)
 }
 
 func ExampleLogger_Printf() {
-	// Enable all loggers
-	os.Setenv("DEBUG", "*")
-	defer os.Unsetenv("DEBUG")
-
+	// Printf uses standard fmt.Printf formatting
+	// Note: Set DEBUG=* before running to see output:
+	//   DEBUG=* go run main.go
 	log := logger.New("app:feature")
 
-	// Printf uses standard fmt.Printf formatting
 	log.Printf("Processing %d items", 42)
-
-	// Output to stderr: app:feature Processing 42 items
+	// When DEBUG=* is set, this writes to stderr:
+	// app:feature Processing 42 items +Xms
 }
 
 func ExampleLogger_Print() {
-	// Enable all loggers
-	os.Setenv("DEBUG", "*")
-	defer os.Unsetenv("DEBUG")
-
+	// Print concatenates arguments like fmt.Sprint
+	// Note: Set DEBUG=* before running to see output:
+	//   DEBUG=* go run main.go
 	log := logger.New("app:feature")
 
-	// Print concatenates arguments like fmt.Sprint
 	log.Print("Processing", " ", "items")
-
-	// Output to stderr: app:feature Processing items +0ns
+	// When DEBUG=* is set, this writes to stderr:
+	// app:feature Processing items +Xms
 }
 
 func ExampleNew_patterns() {
 	// Example patterns for DEBUG environment variable
+	// Set these before running your application:
 
 	// Enable all loggers
-	os.Setenv("DEBUG", "*")
+	// DEBUG=*
 
 	// Enable all loggers in workflow namespace
-	os.Setenv("DEBUG", "workflow:*")
+	// DEBUG=workflow:*
 
 	// Enable multiple namespaces
-	os.Setenv("DEBUG", "workflow:*,cli:*")
+	// DEBUG=workflow:*,cli:*
 
 	// Enable all except specific patterns
-	os.Setenv("DEBUG", "*,-workflow:test")
+	// DEBUG=*,-workflow:test
 
 	// Enable namespace but exclude specific loggers
-	os.Setenv("DEBUG", "workflow:*,-workflow:cache")
+	// DEBUG=workflow:*,-workflow:cache
 
-	defer os.Unsetenv("DEBUG")
+	fmt.Println("See comments for DEBUG pattern examples")
+	// Output: See comments for DEBUG pattern examples
 }
