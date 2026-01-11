@@ -51,11 +51,16 @@ safe-outputs:
       steps:
         - name: Publish release
           run: |
-            # Read the tag from agent output
-            RELEASE_TAG=$(jq -r '.tag' "$GH_AW_AGENT_OUTPUT" || echo "")
+            # Read the tag from agent output (JSONL format, find publish_release entries)
+            if [ ! -f "$GH_AW_AGENT_OUTPUT" ]; then
+              echo "Error: Agent output file not found"
+              exit 1
+            fi
+            
+            RELEASE_TAG=$(jq -r 'select(.type == "publish_release") | .tag' "$GH_AW_AGENT_OUTPUT" | head -1)
             
             if [ -z "$RELEASE_TAG" ]; then
-              echo "Error: Release tag not provided"
+              echo "Error: Release tag not provided in agent output"
               exit 1
             fi
             
