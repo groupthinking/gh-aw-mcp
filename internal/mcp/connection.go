@@ -11,12 +11,17 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+	"sync/atomic"
+	"time"
 
 	"github.com/githubnext/gh-aw-mcpg/internal/logger"
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
 var logConn = logger.New("mcp:connection")
+
+// requestIDCounter is used to generate unique request IDs for HTTP requests
+var requestIDCounter uint64
 
 // Connection represents a connection to an MCP server using the official SDK
 type Connection struct {
@@ -25,9 +30,10 @@ type Connection struct {
 	ctx     context.Context
 	cancel  context.CancelFunc
 	// HTTP-specific fields
-	isHTTP  bool
-	httpURL string
-	headers map[string]string
+	isHTTP     bool
+	httpURL    string
+	headers    map[string]string
+	httpClient *http.Client
 }
 
 // NewConnection creates a new MCP connection using the official SDK
@@ -119,12 +125,23 @@ func NewHTTPConnection(ctx context.Context, url string, headers map[string]strin
 	logConn.Printf("Creating HTTP MCP connection: url=%s", url)
 	ctx, cancel := context.WithCancel(ctx)
 
+	// Create an HTTP client with appropriate timeouts
+	httpClient := &http.Client{
+		Timeout: 120 * time.Second, // Overall request timeout
+		Transport: &http.Transport{
+			MaxIdleConns:        10,
+			IdleConnTimeout:     90 * time.Second,
+			TLSHandshakeTimeout: 10 * time.Second,
+		},
+	}
+
 	conn := &Connection{
-		ctx:     ctx,
-		cancel:  cancel,
-		isHTTP:  true,
-		httpURL: url,
-		headers: headers,
+		ctx:        ctx,
+		cancel:     cancel,
+		isHTTP:     true,
+		httpURL:    url,
+		headers:    headers,
+		httpClient: httpClient,
 	}
 
 	logger.LogInfoMd("backend", "Successfully created HTTP MCP connection, url=%s", url)
@@ -209,10 +226,13 @@ func (c *Connection) SendRequestWithServerID(method string, params interface{}, 
 
 // sendHTTPRequest sends a JSON-RPC request to an HTTP MCP server
 func (c *Connection) sendHTTPRequest(method string, params interface{}) (*Response, error) {
+	// Generate unique request ID using atomic counter
+	requestID := atomic.AddUint64(&requestIDCounter, 1)
+
 	// Create JSON-RPC request
 	request := map[string]interface{}{
 		"jsonrpc": "2.0",
-		"id":      1,
+		"id":      requestID,
 		"method":  method,
 		"params":  params,
 	}
@@ -234,11 +254,10 @@ func (c *Connection) sendHTTPRequest(method string, params interface{}) (*Respon
 		httpReq.Header.Set(key, value)
 	}
 
-	logConn.Printf("Sending HTTP request to %s: method=%s", c.httpURL, method)
+	logConn.Printf("Sending HTTP request to %s: method=%s, id=%d", c.httpURL, method, requestID)
 
-	// Send request
-	client := &http.Client{}
-	httpResp, err := client.Do(httpReq)
+	// Send request using the reusable HTTP client
+	httpResp, err := c.httpClient.Do(httpReq)
 	if err != nil {
 		return nil, fmt.Errorf("failed to send HTTP request: %w", err)
 	}

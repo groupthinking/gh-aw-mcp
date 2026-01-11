@@ -147,7 +147,7 @@ func LoadFromStdin() (*Config, error) {
 
 	for name, server := range stdinCfg.MCPServers {
 		// Validate server configuration (fail-fast)
-		if err := validateStdioServer(name, server); err != nil {
+		if err := validateServerConfig(name, server); err != nil {
 			return nil, err
 		}
 
