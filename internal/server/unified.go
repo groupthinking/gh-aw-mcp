@@ -181,7 +181,7 @@ func (us *UnifiedServer) registerToolsFromBackend(serverID string) error {
 	}
 
 	// List tools from backend
-	result, err := conn.SendRequest("tools/list", nil)
+	result, err := conn.SendRequestWithServerID("tools/list", nil, serverID)
 	if err != nil {
 		return fmt.Errorf("failed to list tools: %w", err)
 	}
@@ -427,10 +427,10 @@ func (g *guardBackendCaller) CallTool(ctx context.Context, toolName string, args
 		return nil, fmt.Errorf("failed to connect: %w", err)
 	}
 
-	response, err := conn.SendRequest("tools/call", map[string]interface{}{
+	response, err := conn.SendRequestWithServerID("tools/call", map[string]interface{}{
 		"name":      toolName,
 		"arguments": args,
-	})
+	}, g.serverID)
 	if err != nil {
 		return nil, err
 	}
@@ -502,10 +502,10 @@ func (us *UnifiedServer) callBackendTool(ctx context.Context, serverID, toolName
 		return &sdk.CallToolResult{IsError: true}, nil, fmt.Errorf("failed to connect: %w", err)
 	}
 
-	response, err := conn.SendRequest("tools/call", map[string]interface{}{
+	response, err := conn.SendRequestWithServerID("tools/call", map[string]interface{}{
 		"name":      toolName,
 		"arguments": args,
-	})
+	}, serverID)
 	if err != nil {
 		return &sdk.CallToolResult{IsError: true}, nil, err
 	}
