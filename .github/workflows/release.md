@@ -43,7 +43,7 @@ safe-outputs:
       description: "Publish the draft release"
       runs-on: ubuntu-latest
       output: "Release published successfully!"
-      needs: ["release"]
+      needs: ["release", "safe_outputs"]
       steps:
         - name: Publish release
           run: |

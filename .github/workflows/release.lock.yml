@@ -1329,6 +1329,7 @@ jobs:
       - agent
       - detection
       - release
+      - safe_outputs
     if: ((!cancelled()) && (needs.agent.result != 'skipped')) && (contains(needs.agent.outputs.output_types, 'publish_release'))
     runs-on: ubuntu-latest
     steps:
