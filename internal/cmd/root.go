@@ -97,8 +97,14 @@ func run(cmd *cobra.Command, args []string) error {
 	}
 	defer logger.CloseGlobalLogger()
 
-	logger.LogInfo("startup", "MCPG Gateway version: %s", version)
-	logger.LogInfo("startup", "Starting MCPG with config: %s, listen: %s, log-dir: %s", configFile, listenAddr, logDir)
+	// Initialize markdown logger for GitHub workflow preview
+	if err := logger.InitMarkdownLogger(logDir, "gateway.md"); err != nil {
+		log.Printf("Warning: Failed to initialize markdown logger: %v", err)
+	}
+	defer logger.CloseMarkdownLogger()
+
+	logger.LogInfoMd("startup", "MCPG Gateway version: %s", version)
+	logger.LogInfoMd("startup", "Starting MCPG with config: %s, listen: %s, log-dir: %s", configFile, listenAddr, logDir)
 	debugLog.Printf("Starting MCPG with config: %s, listen: %s", configFile, listenAddr)
 
 	// Load .env file if specified
@@ -114,10 +120,10 @@ func run(cmd *cobra.Command, args []string) error {
 		debugLog.Printf("Validating execution environment...")
 		result := config.ValidateExecutionEnvironment()
 		if !result.IsValid() {
-			logger.LogError("startup", "Environment validation failed: %s", result.Error())
+			logger.LogErrorMd("startup", "Environment validation failed: %s", result.Error())
 			return fmt.Errorf("environment validation failed: %s", result.Error())
 		}
-		logger.LogInfo("startup", "Environment validation passed")
+		logger.LogInfoMd("startup", "Environment validation passed")
 		log.Println("Environment validation passed")
 	}
 
@@ -172,10 +178,11 @@ func run(cmd *cobra.Command, args []string) error {
 
 	go func() {
 		<-sigChan
-		logger.LogInfo("shutdown", "Shutting down gateway...")
+		logger.LogInfoMd("shutdown", "Shutting down gateway...")
 		log.Println("Shutting down...")
 		cancel()
 		unifiedServer.Close()
+		logger.CloseMarkdownLogger()
 		logger.CloseGlobalLogger()
 		os.Exit(0)
 	}()

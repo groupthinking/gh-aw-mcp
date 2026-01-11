@@ -65,7 +65,7 @@ func NewConnection(ctx context.Context, command string, args []string, env map[s
 		cancel()
 
 		// Enhanced error context for debugging
-		logger.LogError("backend", "MCP backend connection failed, command=%s, args=%v, error=%v", command, expandedArgs, err)
+		logger.LogErrorMd("backend", "MCP backend connection failed, command=%s, args=%v, error=%v", command, expandedArgs, err)
 		log.Printf("❌ MCP Connection Failed:")
 		log.Printf("   Command: %s", command)
 		log.Printf("   Args: %v", expandedArgs)
@@ -74,14 +74,14 @@ func NewConnection(ctx context.Context, command string, args []string, env map[s
 		// Check if it's a command not found error
 		if strings.Contains(err.Error(), "executable file not found") ||
 			strings.Contains(err.Error(), "no such file or directory") {
-			logger.LogError("backend", "MCP backend command not found, command=%s", command)
+			logger.LogErrorMd("backend", "MCP backend command not found, command=%s", command)
 			log.Printf("   ⚠️  Command '%s' not found in PATH", command)
 			log.Printf("   ⚠️  Verify the command is installed and executable")
 		}
 
 		// Check if it's a connection/protocol error
 		if strings.Contains(err.Error(), "EOF") || strings.Contains(err.Error(), "broken pipe") {
-			logger.LogError("backend", "MCP backend connection/protocol error, command=%s", command)
+			logger.LogErrorMd("backend", "MCP backend connection/protocol error, command=%s", command)
 			log.Printf("   ⚠️  Process started but terminated unexpectedly")
 			log.Printf("   ⚠️  Check if the command supports MCP protocol over stdio")
 		}
@@ -90,7 +90,7 @@ func NewConnection(ctx context.Context, command string, args []string, env map[s
 		return nil, fmt.Errorf("failed to connect: %w", err)
 	}
 
-	logger.LogInfo("backend", "Successfully connected to MCP backend server, command=%s", command)
+	logger.LogInfoMd("backend", "Successfully connected to MCP backend server, command=%s", command)
 	logConn.Printf("Successfully connected to MCP server: command=%s", command)
 
 	conn := &Connection{
