@@ -838,3 +838,100 @@ func TestBinaryInvocation_LogFileCreation(t *testing.T) {
 
 	t.Log("✓ All log file checks passed")
 }
+
+// TestBinaryInvocation_LogDirEnvironmentVariable tests that MCP_GATEWAY_LOG_DIR environment variable works
+func TestBinaryInvocation_LogDirEnvironmentVariable(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping binary integration test in short mode")
+	}
+
+	// Find the binary
+	binaryPath := findBinary(t)
+	t.Logf("Using binary: %s", binaryPath)
+
+	// Create a temporary directory for logs
+	tmpLogDir := t.TempDir()
+	t.Logf("Using temporary log directory: %s", tmpLogDir)
+
+	// Create a temporary config file
+	configFile := createTempConfig(t, map[string]interface{}{
+		"testserver": map[string]interface{}{
+			"command": "echo",
+			"args":    []string{},
+		},
+	})
+	defer os.Remove(configFile)
+
+	// Start the server process with MCP_GATEWAY_LOG_DIR environment variable (no --log-dir flag)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	port := "13007"
+	cmd := exec.CommandContext(ctx, binaryPath,
+		"--config", configFile,
+		"--listen", "127.0.0.1:"+port,
+		"--routed",
+	)
+
+	// Set the MCP_GATEWAY_LOG_DIR environment variable
+	cmd.Env = append(os.Environ(), "MCP_GATEWAY_LOG_DIR="+tmpLogDir)
+
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+
+	if err := cmd.Start(); err != nil {
+		t.Fatalf("Failed to start server: %v", err)
+	}
+
+	defer func() {
+		if cmd.Process != nil {
+			cmd.Process.Kill()
+		}
+	}()
+
+	// Wait for server to start
+	serverURL := "http://127.0.0.1:" + port
+	if !waitForServer(t, serverURL+"/health", 5*time.Second) {
+		t.Logf("STDOUT: %s", stdout.String())
+		t.Logf("STDERR: %s", stderr.String())
+		t.Fatal("Server did not start in time")
+	}
+
+	t.Log("✓ Server started successfully with MCP_GATEWAY_LOG_DIR environment variable")
+
+	// Check that the log file was created in the directory specified by the environment variable
+	logFilePath := filepath.Join(tmpLogDir, "mcp-gateway.log")
+	if _, err := os.Stat(logFilePath); os.IsNotExist(err) {
+		t.Fatalf("Log file was not created at %s (from MCP_GATEWAY_LOG_DIR)", logFilePath)
+	}
+
+	t.Logf("✓ Log file created at: %s (from MCP_GATEWAY_LOG_DIR)", logFilePath)
+
+	// Read the log file to verify it contains log entries
+	logContent, err := os.ReadFile(logFilePath)
+	if err != nil {
+		t.Fatalf("Failed to read log file: %v", err)
+	}
+
+	if len(logContent) == 0 {
+		t.Error("Log file is empty")
+	} else {
+		t.Logf("✓ Log file contains %d bytes", len(logContent))
+	}
+
+	// Verify log file contains expected startup messages
+	expectedMessages := []string{
+		"startup",
+		"Starting MCPG",
+	}
+
+	for _, msg := range expectedMessages {
+		if !bytes.Contains(logContent, []byte(msg)) {
+			t.Errorf("Log file does not contain expected message: %q", msg)
+			t.Logf("Log content:\n%s", string(logContent))
+		}
+	}
+
+	t.Log("✓ MCP_GATEWAY_LOG_DIR environment variable test passed")
+}
