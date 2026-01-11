@@ -102,28 +102,36 @@ func getMapKeys(m map[string]interface{}) []string {
 
 // formatRPCMessage formats an RPC message for logging
 func formatRPCMessage(info *RPCMessageInfo) string {
-	// Format: [DIRECTION] [TYPE] server=<id> method=<method> size=<bytes> payload=<preview>
-	parts := []string{
-		fmt.Sprintf("[%s]", info.Direction),
-		fmt.Sprintf("[%s]", info.MessageType),
+	// Short format: server→method (or server←resp) size payload
+	var dir string
+	if info.Direction == RPCDirectionOutbound {
+		dir = "→"
+	} else {
+		dir = "←"
 	}
 
+	var parts []string
+
+	// Server and direction
 	if info.ServerID != "" {
-		parts = append(parts, fmt.Sprintf("server=%s", info.ServerID))
+		if info.Method != "" {
+			parts = append(parts, fmt.Sprintf("%s%s%s", info.ServerID, dir, info.Method))
+		} else {
+			parts = append(parts, fmt.Sprintf("%s%sresp", info.ServerID, dir))
+		}
 	}
 
-	if info.Method != "" {
-		parts = append(parts, fmt.Sprintf("method=%s", info.Method))
-	}
+	// Size
+	parts = append(parts, fmt.Sprintf("%db", info.PayloadSize))
 
-	parts = append(parts, fmt.Sprintf("size=%d", info.PayloadSize))
-
+	// Error (if present)
 	if info.Error != "" {
-		parts = append(parts, fmt.Sprintf("error=%s", info.Error))
+		parts = append(parts, fmt.Sprintf("err:%s", info.Error))
 	}
 
+	// Payload preview (if present)
 	if info.Payload != "" {
-		parts = append(parts, fmt.Sprintf("payload=%s", info.Payload))
+		parts = append(parts, info.Payload)
 	}
 
 	return strings.Join(parts, " ")
@@ -131,41 +139,33 @@ func formatRPCMessage(info *RPCMessageInfo) string {
 
 // formatRPCMessageMarkdown formats an RPC message for markdown logging
 func formatRPCMessageMarkdown(info *RPCMessageInfo) string {
-	// Format: Server **<id>** <direction> <type> `<method>` (<size> bytes)
-	var parts []string
-
-	// Start with server attribution
-	if info.ServerID != "" {
-		parts = append(parts, fmt.Sprintf("Server **%s**", info.ServerID))
-	}
-
-	// Add direction and type
-	directionSymbol := "→"
-	if info.Direction == RPCDirectionInbound {
-		directionSymbol = "←"
-	}
-	parts = append(parts, directionSymbol)
-
-	// Add method in code formatting
-	if info.Method != "" {
-		parts = append(parts, fmt.Sprintf("`%s`", info.Method))
+	// Concise format: **server**→method payload
+	var dir string
+	if info.Direction == RPCDirectionOutbound {
+		dir = "→"
 	} else {
-		parts = append(parts, string(info.MessageType))
+		dir = "←"
 	}
 
-	// Add size
-	parts = append(parts, fmt.Sprintf("(%d bytes)", info.PayloadSize))
+	var message string
 
-	message := strings.Join(parts, " ")
+	// Server, direction, and method/type
+	if info.ServerID != "" {
+		if info.Method != "" {
+			message = fmt.Sprintf("**%s**%s`%s`", info.ServerID, dir, info.Method)
+		} else {
+			message = fmt.Sprintf("**%s**%sresp", info.ServerID, dir)
+		}
+	}
 
-	// Add payload preview if available
+	// Add size and payload inline
 	if info.Payload != "" {
-		message += fmt.Sprintf("\n  ```\n  %s\n  ```", info.Payload)
+		message += fmt.Sprintf(" `%s`", info.Payload)
 	}
 
-	// Add error if present
+	// Error (if present)
 	if info.Error != "" {
-		message += fmt.Sprintf("\n  Error: %s", info.Error)
+		message += fmt.Sprintf(" ⚠️`%s`", info.Error)
 	}
 
 	return message

@@ -136,7 +136,7 @@ func TestFormatRPCMessage(t *testing.T) {
 				PayloadSize: 50,
 				Payload:     `{"jsonrpc":"2.0","method":"tools/list"}`,
 			},
-			want: []string{"[OUT]", "[REQUEST]", "server=github", "method=tools/list", "size=50", "payload="},
+			want: []string{"github→tools/list", "50b", `{"jsonrpc":"2.0","method":"tools/list"}`},
 		},
 		{
 			name: "inbound response with error",
@@ -148,7 +148,7 @@ func TestFormatRPCMessage(t *testing.T) {
 				Payload:     `{"jsonrpc":"2.0","error":{"code":-32600}}`,
 				Error:       "Invalid request",
 			},
-			want: []string{"[IN]", "[RESPONSE]", "server=github", "size=100", "error=Invalid request"},
+			want: []string{"github←resp", "100b", "err:Invalid request"},
 		},
 		{
 			name: "client request",
@@ -160,7 +160,7 @@ func TestFormatRPCMessage(t *testing.T) {
 				PayloadSize: 200,
 				Payload:     `{"method":"tools/call","params":{}}`,
 			},
-			want: []string{"[IN]", "[REQUEST]", "server=client", "method=tools/call", "size=200"},
+			want: []string{"client←tools/call", "200b"},
 		},
 	}
 
@@ -193,7 +193,7 @@ func TestFormatRPCMessageMarkdown(t *testing.T) {
 				PayloadSize: 50,
 				Payload:     `{"jsonrpc":"2.0"}`,
 			},
-			want: []string{"Server **github**", "→", "`tools/list`", "(50 bytes)", "```"},
+			want: []string{"**github**→`tools/list`", "`{\"jsonrpc\":\"2.0\"}`"},
 		},
 		{
 			name: "inbound response",
@@ -204,7 +204,7 @@ func TestFormatRPCMessageMarkdown(t *testing.T) {
 				PayloadSize: 100,
 				Payload:     `{"result":{}}`,
 			},
-			want: []string{"Server **github**", "←", "RESPONSE", "(100 bytes)", "```"},
+			want: []string{"**github**←resp", "`{\"result\":{}}`"},
 		},
 		{
 			name: "response with error",
@@ -215,7 +215,7 @@ func TestFormatRPCMessageMarkdown(t *testing.T) {
 				PayloadSize: 100,
 				Error:       "Connection timeout",
 			},
-			want: []string{"Server **github**", "Error: Connection timeout"},
+			want: []string{"**github**←resp", "⚠️`Connection timeout`"},
 		},
 	}
 
@@ -263,7 +263,7 @@ func TestLogRPCRequest(t *testing.T) {
 	}
 
 	textStr := string(textContent)
-	expectedInText := []string{"[OUT]", "[REQUEST]", "server=github", "method=tools/list", "size="}
+	expectedInText := []string{"github→tools/list", "58b"}
 	for _, expected := range expectedInText {
 		if !strings.Contains(textStr, expected) {
 			t.Errorf("Text log does not contain %q", expected)
@@ -278,7 +278,7 @@ func TestLogRPCRequest(t *testing.T) {
 	}
 
 	mdStr := string(mdContent)
-	expectedInMd := []string{"Server **github**", "→", "`tools/list`", "bytes"}
+	expectedInMd := []string{"**github**→`tools/list`"}
 	for _, expected := range expectedInMd {
 		if !strings.Contains(mdStr, expected) {
 			t.Errorf("Markdown log does not contain %q", expected)
@@ -318,7 +318,7 @@ func TestLogRPCResponse(t *testing.T) {
 	}
 
 	textStr := string(textContent)
-	expectedInText := []string{"[IN]", "[RESPONSE]", "server=github", "error=backend connection failed"}
+	expectedInText := []string{"github←resp", "err:backend connection failed"}
 	for _, expected := range expectedInText {
 		if !strings.Contains(textStr, expected) {
 			t.Errorf("Text log does not contain %q", expected)
@@ -333,7 +333,7 @@ func TestLogRPCResponse(t *testing.T) {
 	}
 
 	mdStr := string(mdContent)
-	expectedInMd := []string{"Server **github**", "←", "Error: backend connection failed"}
+	expectedInMd := []string{"**github**←resp", "⚠️`backend connection failed`"}
 	for _, expected := range expectedInMd {
 		if !strings.Contains(mdStr, expected) {
 			t.Errorf("Markdown log does not contain %q", expected)
