@@ -109,14 +109,28 @@ func CreateHTTPServerForRoutedMode(addr string, unifiedServer *UnifiedServer, ap
 		log.Printf("Registered route: %s", route)
 	}
 
-	// Health check
+	// Health check (spec 8.1.1)
 	healthHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
+		
+		// Get server status
+		serverStatus := unifiedServer.GetServerStatus()
+		
+		// Determine overall health based on server status
+		overallStatus := "healthy"
+		for _, status := range serverStatus {
+			if status.Status == "error" {
+				overallStatus = "unhealthy"
+				break
+			}
+		}
+		
 		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(map[string]string{
-			"status":          "ok",
-			"protocolVersion": MCPProtocolVersion,
-			"version":         gatewayVersion,
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"status":         overallStatus,
+			"specVersion":    MCPGatewaySpecVersion,
+			"gatewayVersion": gatewayVersion,
+			"servers":        serverStatus,
 		})
 	})
 	mux.Handle("/health", withResponseLogging(healthHandler))
