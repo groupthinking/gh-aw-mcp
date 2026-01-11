@@ -236,6 +236,53 @@ set_docker_api_version() {
     log_info "Set DOCKER_API_VERSION=$DOCKER_API_VERSION for $arch"
 }
 
+# Detect host IP and configure host.docker.internal DNS mapping
+configure_host_dns() {
+    log_info "Detecting host IP for container networking..."
+    
+    local HOST_IP=""
+    
+    # Method 1: Try to get the primary network interface IP (not loopback)
+    HOST_IP=$(ip -4 addr show 2>/dev/null | grep -oP '(?<=inet\s)\d+(\.\d+){3}' | grep -v '^127\.' | head -1)
+    if [ -n "$HOST_IP" ]; then
+        log_info "Method 1 (primary interface): $HOST_IP"
+    fi
+    
+    # Method 2: Try default gateway IP
+    if [ -z "$HOST_IP" ]; then
+        HOST_IP=$(ip route 2>/dev/null | grep default | awk '{print $3}' | head -1)
+        if [ -n "$HOST_IP" ]; then
+            log_info "Method 2 (default gateway): $HOST_IP"
+        fi
+    fi
+    
+    # Method 3: Try docker0 bridge IP
+    if [ -z "$HOST_IP" ]; then
+        HOST_IP=$(ip addr show docker0 2>/dev/null | grep 'inet ' | awk '{print $2}' | cut -d/ -f1)
+        if [ -n "$HOST_IP" ]; then
+            log_info "Method 3 (docker0 bridge): $HOST_IP"
+        fi
+    fi
+    
+    # Method 4: Last resort - common Docker bridge IP
+    if [ -z "$HOST_IP" ]; then
+        HOST_IP="172.17.0.1"
+        log_info "Method 4 (fallback): $HOST_IP"
+    fi
+    
+    log_info "Using host IP: $HOST_IP"
+    
+    # Add host.docker.internal mapping to /etc/hosts
+    # Check if the entry already exists to avoid duplicates
+    if ! grep -q "host.docker.internal" /etc/hosts 2>/dev/null; then
+        log_info "Adding host.docker.internal mapping to /etc/hosts"
+        echo "$HOST_IP   host.docker.internal" >> /etc/hosts
+        log_info "DNS mapping configured: $HOST_IP -> host.docker.internal"
+    else
+        log_info "host.docker.internal already exists in /etc/hosts"
+    fi
+}
+
 # Build command line arguments
 build_command_args() {
     local host="${MCP_GATEWAY_HOST:-0.0.0.0}"
@@ -284,6 +331,9 @@ main() {
         validate_container_config "$CONTAINER_ID"
         validate_log_directory_mount "$CONTAINER_ID"
     fi
+    
+    # Configure DNS for host.docker.internal
+    configure_host_dns
     
     # Build command
     FLAGS=$(build_command_args)
