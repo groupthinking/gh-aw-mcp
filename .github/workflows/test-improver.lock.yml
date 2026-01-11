@@ -19,12 +19,12 @@
 #   gh aw compile
 # For more information: https://github.com/githubnext/gh-aw/blob/main/.github/aw/github-agentic-workflows.md
 #
-# Analyzes and enhances Go logging practices across the codebase for improved debugging and observability
+# Daily analyzer that reviews test files and suggests improvements for better testify usage, increased coverage, and cleaner tests
 
-name: "Go Logger Enhancement"
+name: "Test Improver"
 "on":
   schedule:
-  - cron: "0 12 * * *"
+  - cron: "8 14 * * *"
     # Friendly format: daily (scattered)
   workflow_dispatch:
 
@@ -36,7 +36,7 @@ permissions:
 concurrency:
   group: "gh-aw-${{ github.workflow }}"
 
-run-name: "Go Logger Enhancement"
+run-name: "Test Improver"
 
 jobs:
   activation:
@@ -54,7 +54,7 @@ jobs:
       - name: Check workflow file timestamps
         uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
         env:
-          GH_AW_WORKFLOW_FILE: "go-logger.lock.yml"
+          GH_AW_WORKFLOW_FILE: "test-improver.lock.yml"
         with:
           script: |
             const { setupGlobals } = require('/opt/gh-aw/actions/setup_globals.cjs');
@@ -90,13 +90,20 @@ jobs:
         uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
         with:
           persist-credentials: false
+      - name: Setup Go
+        uses: actions/setup-go@4dc6199c7b1a012772edbd06daecab0f50c9053c # v6.1.0
+        with:
+          go-version: '1.25'
+      - name: Setup Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: '3.12'
+      - name: Setup uv
+        uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5.4.2
+      - name: Install Go language service (gopls)
+        run: go install golang.org/x/tools/gopls@latest
       - name: Create gh-aw temp directory
         run: bash /opt/gh-aw/actions/create_gh_aw_tmp_dir.sh
-      - name: Set up Go
-        uses: actions/setup-go@4dc6199c7b1a012772edbd06daecab0f50c9053c # v6
-        with:
-          cache: true
-          go-version-file: go.mod
 
       # Cache memory file share configuration from frontmatter processed below
       - name: Create cache-memory directory
@@ -179,7 +186,7 @@ jobs:
           cat > /opt/gh-aw/safeoutputs/tools.json << 'EOF'
           [
             {
-              "description": "Create a new GitHub pull request to propose code changes. Use this after making file edits to submit them for review and merging. The PR will be created from the current branch with your committed changes. For code review comments on an existing PR, use create_pull_request_review_comment instead. CONSTRAINTS: Maximum 1 pull request(s) can be created. Title will be prefixed with \"[log] \". Labels [enhancement automation] will be automatically added. PRs will be created as drafts.",
+              "description": "Create a new GitHub pull request to propose code changes. Use this after making file edits to submit them for review and merging. The PR will be created from the current branch with your committed changes. For code review comments on an existing PR, use create_pull_request_review_comment instead. CONSTRAINTS: Maximum 1 pull request(s) can be created. Title will be prefixed with \"[test-improver] \". Labels [testing improvement automation] will be automatically added. PRs will be created as drafts.",
               "inputSchema": {
                 "additionalProperties": false,
                 "properties": {
@@ -374,6 +381,12 @@ jobs:
                   "GITHUB_WORKSPACE": "\${GITHUB_WORKSPACE}",
                   "DEFAULT_BRANCH": "\${DEFAULT_BRANCH}"
                 }
+              },
+              "serena": {
+                "type": "local",
+                "command": "uvx",
+                "args": ["--from", "git+https://github.com/oraios/serena", "serena", "start-mcp-server", "--context", "codex", "--project", "${{ github.workspace }}"],
+                "tools": ["*"]
               }
             }
           }
@@ -399,7 +412,7 @@ jobs:
               version: "",
               agent_version: "0.0.375",
               cli_version: "v0.36.0",
-              workflow_name: "Go Logger Enhancement",
+              workflow_name: "Test Improver",
               experimental: false,
               supports_tools_allowlist: true,
               supports_http_transport: true,
@@ -440,282 +453,370 @@ jobs:
         env:
           GH_AW_PROMPT: /tmp/gh-aw/aw-prompts/prompt.txt
           GH_AW_SAFE_OUTPUTS: ${{ env.GH_AW_SAFE_OUTPUTS }}
+          GH_AW_GITHUB_WORKSPACE: ${{ github.workspace }}
         run: |
           bash /opt/gh-aw/actions/create_prompt_first.sh
           cat << 'PROMPT_EOF' > "$GH_AW_PROMPT"
-          # Go Logger Enhancement
+          # Test Improver 🧹
           
-          You are an AI agent that improves Go code by adding debug logging statements to help with troubleshooting and development.
-          
-          ## Efficiency First: Check Cache
-          
-          Before analyzing files:
-          
-          1. Check `/tmp/gh-aw/cache-memory/go-logger/` for previous logging sessions
-          2. Read `processed-files.json` to see which files were already enhanced
-          3. Read `last-run.json` for the last commit SHA processed
-          4. If current commit SHA matches and no new .go files exist, exit early with success
-          5. Update cache after processing:
-             - Save list of processed files to `processed-files.json`
-             - Save current commit SHA to `last-run.json`
-             - Save summary of changes made
-          
-          This prevents re-analyzing already-processed files and reduces token usage significantly.
+          You are an AI agent specialized in improving Go test files. Your mission is to review a single test file and suggest improvements focused on better testify library usage, increased coverage, and cleaner, more stable tests.
           
           ## Mission
           
-          Add meaningful debug logging calls to Go files in the `internal/` directory following the project's logging guidelines from AGENTS.md.
+          Select one test file from the codebase, analyze it thoroughly, and create improvements that focus on:
+          1. **Better idiomatic use of the testify library** - Use testify assertions instead of manual error checking
+          2. **Increase coverage** - Add missing test cases to cover untested code paths
+          3. **Stabler, cleaner tests** - Improve test structure, readability, and reliability
           
-          ## Important Constraints
+          ## Important: This project does NOT currently use testify
           
-          1. **Process exactly 1 file per pull request** - Focus deeply on a single file for thorough, reviewable changes
-          2. **Skip test files** - Never modify files ending in `_test.go`
-          3. **No side effects** - Logger arguments must NOT compute anything or cause side effects
-          4. **Follow logger naming convention** - Use `pkg:filename` pattern (e.g., `server:routed`)
-          5. **Reuse existing loggers** - If a file already has a logger declaration, preserve it and add new logging calls
+          **CRITICAL**: Before making any changes, check if the testify library is already in `go.mod`. If testify is NOT present:
+          1. DO NOT add testify to the project
+          2. Focus on improving tests using standard library testing patterns
+          3. Suggest improvements like:
+             - Better table-driven test structures
+             - More comprehensive edge case coverage
+             - Cleaner test organization and naming
+             - More robust error checking
+             - Better use of subtests with `t.Run()`
           
-          ## Logger Guidelines from AGENTS.md
+          ## Step 1: Find All Test Files
           
-          ### Logger Declaration
-          
-          If a file doesn't have a logger, add this at the top of the file (after imports):
-          
-          ```go
-          import "github.com/githubnext/gh-aw-mcpg/internal/logger"
-          
-          var log = logger.New("pkg:filename")
-          ```
-          
-          Replace `pkg:filename` with the actual package and filename:
-          - For `internal/server/routed.go` → `"server:routed"`
-          - For `internal/cmd/root.go` → `"cmd:root"`
-          - For `internal/launcher/docker.go` → `"launcher:docker"`
-          
-          **Note:** Debug loggers created with `logger.New()` write to both:
-          - **stderr** - Colorized output with time diffs (when `DEBUG` env var matches namespace)
-          - **file logger** - Text-only output (always logged when the logger is enabled)
-          
-          This dual output approach ensures all debug logs are captured to file for troubleshooting while providing real-time colored output during development.
-          
-          ### Logger Usage Patterns
-          
-          **Good logging examples:**
-          
-          ```go
-          // Log function entry with parameters (no side effects)
-          func ProcessRequest(path string, count int) error {
-              log.Printf("Processing request: path=%s, count=%d", path, count)
-              // ... function body ...
-          }
-          
-          // Log important state changes
-          log.Printf("Started %d MCP servers successfully", len(servers))
-          
-          // Log before expensive operations (check if enabled first)
-          if log.Enabled() {
-              log.Printf("Starting server with config: %+v", config)
-          }
-          
-          // Log control flow decisions
-          log.Print("Cache hit, skipping initialization")
-          log.Printf("No matching server found, using default: %s", defaultServer)
-          ```
-          
-          **What NOT to do:**
-          
-          ```go
-          // WRONG - causes side effects
-          log.Printf("Servers: %s", expensiveOperation())  // Don't call functions in log args
-          
-          // WRONG - not meaningful
-          log.Print("Here")  // Too vague
-          
-          // WRONG - duplicates user-facing messages
-          fmt.Fprintln(os.Stderr, "Starting server...")
-          log.Print("Starting server...")  // Redundant with user message above
-          ```
-          
-          ### When to Add Logging
-          
-          Add logging for:
-          1. **Function entry** - Especially for public functions with parameters
-          2. **Important control flow** - Branches, loops, error paths
-          3. **State changes** - Before/after modifying important state
-          4. **Performance-sensitive sections** - Before/after expensive operations
-          5. **Debugging context** - Information that would help troubleshoot issues
-          
-          Do NOT add logging for:
-          1. **Simple getters/setters** - Too verbose
-          2. **Already logged operations** - Don't duplicate existing logs
-          3. **User-facing messages** - Debug logs are separate from console output
-          4. **Test files** - Skip all `*_test.go` files
-          
-          ## Task Steps
-          
-          ### 1. Find Candidate Go Files
-          
-          Use bash to identify Go files that could benefit from additional logging:
+          List all test files in the codebase:
           
           ```bash
-          # Find all non-test Go files in internal/
-          find internal -name '*.go' -type f ! -name '*_test.go'
-          
-          # Check which files already have loggers
-          grep -r 'var log = logger.New' internal --include='*.go'
+          find internal -name '*_test.go' -type f
           ```
           
-          ### 2. Select File for Enhancement
+          Create an inventory of all test files with their:
+          - File path
+          - Package name
+          - Approximate line count
+          - Number of test functions
           
-          From the list of Go files:
-          1. Prioritize files without loggers or with minimal logging
-          2. Focus on files with complex logic (server, launcher, config)
-          3. Avoid trivial files with just simple functions
-          4. **Select exactly 1 file** for this PR - focus deeply on a single file for quality
-          5. **Check if the file already has a logger** - if it does, reuse it rather than creating a new one
+          ## Step 2: Select a Single Test File
           
-          ### 3. Analyze the Selected File
+          Use **Serena** to help select the best candidate test file. Consider:
           
-          For the selected file:
-          1. Read the file content to understand its structure
-          2. **Check if the file already has a logger declaration** (search for `var log = logger.New`)
-          3. If a logger exists, note its namespace and reuse it
-          4. Identify functions that would benefit from logging
-          5. Plan where to add logging calls
+          1. **Complexity vs. test quality**: Files with complex code but simple tests
+          2. **Coverage gaps**: Files where the corresponding code has low coverage
+          3. **Testing patterns**: Files that could benefit from better testing structure
+          4. **Size**: Medium-sized test files (not too small, not huge) that can be meaningfully improved
           
-          ### 4. Add Logger and Logging Calls
+          **Selection criteria** (prioritize in this order):
+          - Test files with manual error checking instead of proper assertions
+          - Test files with low coverage of the corresponding code
+          - Test files with repetitive test code that could be table-driven
+          - Test files with poor edge case coverage
+          - Test files without proper subtests
           
-          For the selected file:
+          **Avoid**:
+          - Test files that were recently modified (check git history)
+          - Test files that are already well-structured with comprehensive coverage
+          - Integration test files that are inherently complex
           
-          1. **Add logger declaration if missing:**
-             - Add import: `"github.com/githubnext/gh-aw-mcpg/internal/logger"`
-             - Add logger variable using correct naming: `var log = logger.New("pkg:filename")`
-             
-          2. **Reuse existing logger if present:**
-             - If the file already has a logger declaration (e.g., `var log = logger.New("server:routed")`), keep it as-is
-             - Do NOT create a duplicate logger
-             - Use the existing logger variable name for all new logging calls
+          Use Serena to analyze and rank test files, then select the top candidate.
           
-          3. **Add meaningful logging calls:**
-             - Add logging at function entry for important functions
-             - Add logging before/after state changes
-             - Add logging for control flow decisions
-             - Ensure log arguments don't have side effects
-             - Use `log.Enabled()` check for expensive debug info
+          ## Step 3: Deep Analysis of Selected Test File
           
-          4. **Keep it focused:**
-             - 3-7 logging calls for this single file is appropriate
-             - Don't over-log - focus on the most useful information
-             - Ensure messages are meaningful and helpful for debugging
+          Before making changes, thoroughly understand the selected test file:
           
-          ### 5. Validate Changes
+          1. **Read the test file completely**:
+             - What functions are being tested?
+             - What test patterns are used?
+             - Are there table-driven tests?
+             - How is error handling done?
+             - Are subtests used properly?
           
-          After adding logging to the selected files, **validate your changes** before creating a PR:
+          2. **Read the corresponding implementation file**:
+             - What functionality needs testing?
+             - What are the edge cases?
+             - What error conditions exist?
+             - What branches/conditionals need coverage?
           
-          1. **Build the project to ensure no compilation errors:**
+          3. **Run coverage analysis**:
              ```bash
-             go build -o awmg
+             go test -coverprofile=coverage.out ./...
+             go tool cover -func=coverage.out | grep "filename"
              ```
-             This will compile the Go code and catch any syntax errors or import issues.
+             Identify which functions/lines are not covered by the current tests.
           
-          2. **Run tests to ensure no regressions:**
-             ```bash
-             go test ./...
-             ```
-             This validates that your changes don't break existing functionality.
+          4. **Use Serena** to analyze:
+             - Code complexity in the implementation
+             - Test coverage gaps
+             - Potential edge cases
+             - Error handling paths
           
-          3. **Run vet to check for common mistakes:**
-             ```bash
-             go vet ./...
-             ```
-             This catches potential issues in your code.
+          ## Step 4: Plan Improvements
           
-          4. **Test the binary with debug logging enabled:**
-             ```bash
-             DEBUG=* ./awmg --config config.toml
-             ```
-             This validates that:
-             - The binary was built successfully
-             - Debug logging from your changes appears in the output
-             - The application runs correctly
+          Based on your analysis, create a concrete improvement plan. Focus on:
           
-          ### 6. Create Pull Request
+          ### A. Better Assertions (if applicable)
           
-          After validating your changes:
-          
-          1. The safe-outputs create-pull-request will automatically create a draft PR
-          2. Ensure your changes follow the guidelines above
-          3. The PR title will automatically have the "[log] " prefix
-          4. Since only one file is modified, the PR will be focused and easy to review
-          
-          ## Example Transformation
-          
-          **Before:**
+          **Current pattern** (manual checking):
           ```go
-          package server
-          
-          import (
-              "fmt"
-              "net/http"
-          )
-          
-          func StartServer(port int) error {
-              addr := fmt.Sprintf(":%d", port)
-              return http.ListenAndServe(addr, nil)
+          if err != nil {
+              t.Errorf("unexpected error: %v", err)
+          }
+          if got != want {
+              t.Errorf("got %v, want %v", got, want)
           }
           ```
           
-          **After:**
+          **Improved pattern** (only if testify is available):
           ```go
-          package server
+          require.NoError(t, err)
+          assert.Equal(t, want, got)
+          ```
           
-          import (
-              "fmt"
-              "net/http"
-              
-              "github.com/githubnext/gh-aw-mcpg/internal/logger"
-          )
-          
-          var log = logger.New("server:server")
-          
-          func StartServer(port int) error {
-              log.Printf("Starting server on port %d", port)
-              
-              addr := fmt.Sprintf(":%d", port)
-              
-              log.Printf("Listening on address: %s", addr)
-              return http.ListenAndServe(addr, nil)
+          **If testify is NOT available**, improve manual checks:
+          ```go
+          if err != nil {
+              t.Fatalf("unexpected error: %v", err)
+          }
+          if got != want {
+              t.Errorf("got %v, want %v", got, want)
           }
           ```
           
-          ## Quality Checklist
+          ### B. Increased Coverage
           
-          Before creating the PR, verify:
+          Identify missing test cases:
+          - **Edge cases**: nil inputs, empty values, boundary conditions
+          - **Error paths**: invalid inputs, error conditions
+          - **Branch coverage**: all if/else branches, switch cases
+          - **Loop coverage**: zero iterations, one iteration, many iterations
           
-          - [ ] Exactly 1 file modified (focused, single-file PR)
-          - [ ] No test files modified (`*_test.go`)
-          - [ ] File has logger declaration (added if missing, or reused if present)
-          - [ ] Logger naming follows the `pkg:filename` convention
-          - [ ] Logger arguments don't compute anything or cause side effects
-          - [ ] Logging messages are meaningful and helpful
-          - [ ] No duplicate logging with existing logs
-          - [ ] Import statements are properly formatted
-          - [ ] Changes validated with `go build -o awmg` (no compilation errors)
-          - [ ] Tests pass with `go test ./...`
-          - [ ] Code checked with `go vet ./...`
+          ### C. Cleaner Test Structure
           
-          ## Important Notes
+          Apply these improvements:
           
-          - You have access to the edit tool to modify files
-          - You have access to bash commands to explore the codebase
-          - The safe-outputs create-pull-request will automatically create a draft PR
-          - Focus on quality over quantity - 1 well-logged file with 3-7 meaningful logging calls is the goal
-          - Remember: debug logs are for developers, not end users
-          - **Always check for existing logger declarations** before adding a new one
-          - Reuse existing logger infrastructure when present
+          1. **Use table-driven tests** for multiple similar test cases:
+          ```go
+          tests := []struct {
+              name    string
+              input   InputType
+              want    OutputType
+              wantErr bool
+          }{
+              {
+                  name:    "valid input",
+                  input:   validInput,
+                  want:    expectedOutput,
+                  wantErr: false,
+              },
+              {
+                  name:    "empty input",
+                  input:   emptyInput,
+                  want:    zeroValue,
+                  wantErr: true,
+              },
+          }
           
-          Good luck enhancing the codebase with better logging!
+          for _, tt := range tests {
+              t.Run(tt.name, func(t *testing.T) {
+                  got, err := FunctionUnderTest(tt.input)
+                  if (err != nil) != tt.wantErr {
+                      t.Errorf("error = %v, wantErr %v", err, tt.wantErr)
+                      return
+                  }
+                  if got != tt.want {
+                      t.Errorf("got %v, want %v", got, tt.want)
+                  }
+              })
+          }
+          ```
+          
+          2. **Use descriptive test names**: `TestFunctionName_Scenario` format
+          
+          3. **Use t.Helper()** in test helper functions
+          
+          4. **Proper cleanup**: Use `t.Cleanup()` or `defer` for resource cleanup
+          
+          5. **Better error messages**: Include context in error messages
+          
+          6. **Avoid test interdependence**: Each test should be independent
+          
+          ### D. More Stable Tests
+          
+          Make tests more reliable:
+          - Avoid timing-dependent tests (use mocks/fakes for time)
+          - Don't depend on external state
+          - Use proper setup/teardown with `t.Cleanup()`
+          - Mock external dependencies consistently
+          - Use deterministic test data
+          
+          ## Step 5: Implement Improvements
+          
+          Make the improvements to the selected test file:
+          
+          1. **Preserve existing test coverage**: Don't remove working tests
+          2. **Add new test cases**: Fill coverage gaps
+          3. **Refactor existing tests**: Improve structure and clarity
+          4. **Follow project conventions**: Match the style of the codebase
+          5. **Update test utilities**: If needed, enhance or use existing test helpers in `internal/testutil/`
+          
+          ## Step 6: Verify Improvements
+          
+          After making changes:
+          
+          1. **Run the tests**:
+             ```bash
+             go test -v ./path/to/package
+             ```
+          
+          2. **Check coverage improvement**:
+             ```bash
+             go test -coverprofile=coverage.out ./path/to/package
+             go tool cover -func=coverage.out
+             ```
+          
+          3. **Run multiple times** to ensure stability:
+             ```bash
+             for i in {1..5}; do go test ./path/to/package || break; done
+             ```
+          
+          4. **Verify formatting**:
+             ```bash
+             gofmt -l path/to/test_file.go
+             ```
+          
+          5. **Run go vet**:
+             ```bash
+             go vet ./path/to/package
+             ```
+          
+          ## Step 7: Create Pull Request or Call Noop
+          
+          **If improvements were made**:
+          
+          Create a pull request using the `create-pull-request` safe output.
+          
+          **PR Title Format**: `Improve tests for [PackageName]`
+          
+          **Example**: `Improve tests for config package`
+          
+          **PR Body Structure**:
+          
+          ```markdown
+          # Test Improvements: [TestFileName]
+          
+          ## File Analyzed
+          
+          - **Test File**: `internal/[package]/[filename]_test.go`
+          - **Package**: `internal/[package]`
+          - **Lines of Code**: [X] → [Y] (if changed significantly)
+          
+          ## Improvements Made
+          
+          ### 1. Better Testing Patterns
+          - ✅ [Specific improvement, e.g., "Converted to table-driven tests"]
+          - ✅ [Specific improvement, e.g., "Added descriptive test names"]
+          - ✅ [Specific improvement, e.g., "Better error messages"]
+          
+          ### 2. Increased Coverage
+          - ✅ Added test for [edge case or scenario]
+          - ✅ Added test for [error condition]
+          - ✅ Added test for [branch/path]
+          - **Previous Coverage**: [X]%
+          - **New Coverage**: [Y]%
+          - **Improvement**: +[Z]%
+          
+          ### 3. Cleaner & More Stable Tests
+          - ✅ [Improvement, e.g., "Proper use of t.Cleanup()"]
+          - ✅ [Improvement, e.g., "Removed timing dependencies"]
+          - ✅ [Improvement, e.g., "Better test isolation"]
+          
+          ## Test Execution
+          
+          All tests pass:
+          ```
+          [Include test output showing PASS and coverage improvement]
+          ```
+          
+          ## Why These Changes?
+          
+          [Brief explanation of the rationale - why this test file was selected, what problems were addressed, and how the improvements make the tests better]
+          
+          ---
+          *Generated by Test Improver Workflow*
+          *Focuses on better patterns, increased coverage, and more stable tests*
+          ```
+          
+          **If NO improvements were made** (test file is already excellent):
+          
+          Call the `noop` safe output instead of creating a PR. This signals that no action was needed.
+          
+          **When to use noop**:
+          - All test files are already well-structured
+          - Selected test file is already at high quality
+          - No meaningful improvements can be made
+          - Coverage is already comprehensive
+          
+          ## Guidelines
+          
+          - **One test file per run**: Focus deeply on a single test file for quality improvements
+          - **Preserve working tests**: Don't break existing functionality
+          - **Follow conventions**: Match the testing patterns in the codebase
+          - **Use Serena**: Leverage Go analysis capabilities for intelligent file selection
+          - **Quality over quantity**: Better to make meaningful improvements to one file than superficial changes to many
+          - **Verify stability**: Run tests multiple times to ensure reliability
+          - **Standard library first**: If testify is not in the project, use standard library patterns
+          - **Cache memory**: Use cache to track which files were improved to avoid repetition
+          
+          ## Serena Configuration
+          
+          Serena is configured for Go code analysis:
+          - **Project Root**: __GH_AW_GITHUB_WORKSPACE__
+          - **Language**: Go
+          - **Capabilities**: Code complexity analysis, test quality assessment, coverage gap identification
+          
+          Use Serena to:
+          - Rank test files by improvement potential
+          - Identify coverage gaps
+          - Analyze test quality metrics
+          - Suggest specific improvements
+          
+          ## Cache Memory
+          
+          Use cache-memory to track progress:
+          - Save the last improved test file to avoid immediate repetition
+          - Track improvements over time
+          - Store analysis results for future reference
+          
+          ## Avoiding Duplicate PRs
+          
+          Before creating a PR, check if there's already an open PR with "[test-improver]" in the title using the GitHub tools. If one exists, call `noop` instead of creating a duplicate PR.
+          
+          ## Output Decision
+          
+          Your final action MUST be one of:
+          1. **Create a pull request** (via `create-pull-request` safe output) if improvements were made
+          2. **Call noop** (via `noop` safe output) if no improvements are needed
+          
+          Do not create a PR if the test file is already excellent and no meaningful improvements can be made.
+          
+          ---
+          
+          Begin your analysis! Find test files, select the best candidate, analyze it thoroughly, make improvements, and create a PR or call noop.
           
           PROMPT_EOF
+      - name: Substitute placeholders
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
+        env:
+          GH_AW_PROMPT: /tmp/gh-aw/aw-prompts/prompt.txt
+          GH_AW_GITHUB_WORKSPACE: ${{ github.workspace }}
+        with:
+          script: |
+            const substitutePlaceholders = require('/opt/gh-aw/actions/substitute_placeholders.cjs');
+            
+            // Call the substitution function
+            return await substitutePlaceholders({
+              file: process.env.GH_AW_PROMPT,
+              substitutions: {
+                GH_AW_GITHUB_WORKSPACE: process.env.GH_AW_GITHUB_WORKSPACE
+              }
+            });
       - name: Append XPIA security instructions to prompt
         env:
           GH_AW_PROMPT: /tmp/gh-aw/aw-prompts/prompt.txt
@@ -846,6 +947,7 @@ jobs:
         uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
         env:
           GH_AW_PROMPT: /tmp/gh-aw/aw-prompts/prompt.txt
+          GH_AW_GITHUB_WORKSPACE: ${{ github.workspace }}
         with:
           script: |
             const { setupGlobals } = require('/opt/gh-aw/actions/setup_globals.cjs');
@@ -861,10 +963,12 @@ jobs:
         # Copilot CLI tool arguments (sorted):
         # --allow-tool github
         # --allow-tool safeoutputs
+        # --allow-tool shell(cat internal/**/*.go)
+        # --allow-tool shell(cat internal/**/*_test.go)
         # --allow-tool shell(cat)
         # --allow-tool shell(date)
         # --allow-tool shell(echo)
-        # --allow-tool shell(find internal -name '*.go' -type f ! -name '*_test.go')
+        # --allow-tool shell(find internal -name '*_test.go' -type f)
         # --allow-tool shell(git add:*)
         # --allow-tool shell(git branch:*)
         # --allow-tool shell(git checkout:*)
@@ -873,28 +977,28 @@ jobs:
         # --allow-tool shell(git rm:*)
         # --allow-tool shell(git status)
         # --allow-tool shell(git switch:*)
-        # --allow-tool shell(go build -o awmg)
-        # --allow-tool shell(go test ./...)
+        # --allow-tool shell(go test -coverprofile=coverage.out ./...)
+        # --allow-tool shell(go test -v ./...)
+        # --allow-tool shell(go tool cover -func=coverage.out)
         # --allow-tool shell(go vet ./...)
-        # --allow-tool shell(grep -n 'func ' internal/*.go)
-        # --allow-tool shell(grep -r 'var log = logger.New' internal --include='*.go')
+        # --allow-tool shell(gofmt -l .)
+        # --allow-tool shell(grep -rn 'func Test' internal/)
         # --allow-tool shell(grep)
-        # --allow-tool shell(head -n * internal/**/*.go)
         # --allow-tool shell(head)
         # --allow-tool shell(ls)
         # --allow-tool shell(pwd)
         # --allow-tool shell(sort)
         # --allow-tool shell(tail)
         # --allow-tool shell(uniq)
-        # --allow-tool shell(wc -l internal/**/*.go)
+        # --allow-tool shell(wc -l internal/**/*_test.go)
         # --allow-tool shell(wc)
         # --allow-tool shell(yq)
         # --allow-tool write
-        timeout-minutes: 15
+        timeout-minutes: 30
         run: |
           set -o pipefail
           sudo -E awf --env-all --container-workdir "${GITHUB_WORKSPACE}" --mount /tmp:/tmp:rw --mount "${GITHUB_WORKSPACE}:${GITHUB_WORKSPACE}:rw" --mount /usr/bin/date:/usr/bin/date:ro --mount /usr/bin/gh:/usr/bin/gh:ro --mount /usr/bin/yq:/usr/bin/yq:ro --mount /usr/local/bin/copilot:/usr/local/bin/copilot:ro --mount /home/runner/.copilot:/home/runner/.copilot:rw --mount /opt/gh-aw:/opt/gh-aw:ro --allow-domains api.business.githubcopilot.com,api.enterprise.githubcopilot.com,api.github.com,api.githubcopilot.com,api.individual.githubcopilot.com,github.com,host.docker.internal,raw.githubusercontent.com,registry.npmjs.org --log-level info --proxy-logs-dir /tmp/gh-aw/sandbox/firewall/logs --image-tag 0.8.2 \
-            -- /usr/local/bin/copilot --add-dir /tmp/gh-aw/ --log-level all --log-dir /tmp/gh-aw/sandbox/agent/logs/ --add-dir "${GITHUB_WORKSPACE}" --disable-builtin-mcps --allow-tool github --allow-tool safeoutputs --allow-tool 'shell(cat)' --allow-tool 'shell(date)' --allow-tool 'shell(echo)' --allow-tool 'shell(find internal -name '\''*.go'\'' -type f ! -name '\''*_test.go'\'')' --allow-tool 'shell(git add:*)' --allow-tool 'shell(git branch:*)' --allow-tool 'shell(git checkout:*)' --allow-tool 'shell(git commit:*)' --allow-tool 'shell(git merge:*)' --allow-tool 'shell(git rm:*)' --allow-tool 'shell(git status)' --allow-tool 'shell(git switch:*)' --allow-tool 'shell(go build -o awmg)' --allow-tool 'shell(go test ./...)' --allow-tool 'shell(go vet ./...)' --allow-tool 'shell(grep -n '\''func '\'' internal/*.go)' --allow-tool 'shell(grep -r '\''var log = logger.New'\'' internal --include='\''*.go'\'')' --allow-tool 'shell(grep)' --allow-tool 'shell(head -n * internal/**/*.go)' --allow-tool 'shell(head)' --allow-tool 'shell(ls)' --allow-tool 'shell(pwd)' --allow-tool 'shell(sort)' --allow-tool 'shell(tail)' --allow-tool 'shell(uniq)' --allow-tool 'shell(wc -l internal/**/*.go)' --allow-tool 'shell(wc)' --allow-tool 'shell(yq)' --allow-tool write --add-dir /tmp/gh-aw/cache-memory/ --allow-all-paths --share /tmp/gh-aw/sandbox/agent/logs/conversation.md --prompt "$(cat /tmp/gh-aw/aw-prompts/prompt.txt)"${GH_AW_MODEL_AGENT_COPILOT:+ --model "$GH_AW_MODEL_AGENT_COPILOT"} \
+            -- /usr/local/bin/copilot --add-dir /tmp/gh-aw/ --log-level all --log-dir /tmp/gh-aw/sandbox/agent/logs/ --add-dir "${GITHUB_WORKSPACE}" --disable-builtin-mcps --allow-tool github --allow-tool safeoutputs --allow-tool 'shell(cat internal/**/*.go)' --allow-tool 'shell(cat internal/**/*_test.go)' --allow-tool 'shell(cat)' --allow-tool 'shell(date)' --allow-tool 'shell(echo)' --allow-tool 'shell(find internal -name '\''*_test.go'\'' -type f)' --allow-tool 'shell(git add:*)' --allow-tool 'shell(git branch:*)' --allow-tool 'shell(git checkout:*)' --allow-tool 'shell(git commit:*)' --allow-tool 'shell(git merge:*)' --allow-tool 'shell(git rm:*)' --allow-tool 'shell(git status)' --allow-tool 'shell(git switch:*)' --allow-tool 'shell(go test -coverprofile=coverage.out ./...)' --allow-tool 'shell(go test -v ./...)' --allow-tool 'shell(go tool cover -func=coverage.out)' --allow-tool 'shell(go vet ./...)' --allow-tool 'shell(gofmt -l .)' --allow-tool 'shell(grep -rn '\''func Test'\'' internal/)' --allow-tool 'shell(grep)' --allow-tool 'shell(head)' --allow-tool 'shell(ls)' --allow-tool 'shell(pwd)' --allow-tool 'shell(sort)' --allow-tool 'shell(tail)' --allow-tool 'shell(uniq)' --allow-tool 'shell(wc -l internal/**/*_test.go)' --allow-tool 'shell(wc)' --allow-tool 'shell(yq)' --allow-tool write --add-dir /tmp/gh-aw/cache-memory/ --allow-all-paths --share /tmp/gh-aw/sandbox/agent/logs/conversation.md --prompt "$(cat /tmp/gh-aw/aw-prompts/prompt.txt)"${GH_AW_MODEL_AGENT_COPILOT:+ --model "$GH_AW_MODEL_AGENT_COPILOT"} \
             2>&1 | tee /tmp/gh-aw/agent-stdio.log
         env:
           COPILOT_AGENT_RUNNER_TYPE: STANDALONE
@@ -1066,7 +1170,7 @@ jobs:
         env:
           GH_AW_AGENT_OUTPUT: ${{ env.GH_AW_AGENT_OUTPUT }}
           GH_AW_NOOP_MAX: 1
-          GH_AW_WORKFLOW_NAME: "Go Logger Enhancement"
+          GH_AW_WORKFLOW_NAME: "Test Improver"
         with:
           github-token: ${{ secrets.GH_AW_GITHUB_TOKEN || secrets.GITHUB_TOKEN }}
           script: |
@@ -1079,7 +1183,7 @@ jobs:
         uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
         env:
           GH_AW_AGENT_OUTPUT: ${{ env.GH_AW_AGENT_OUTPUT }}
-          GH_AW_WORKFLOW_NAME: "Go Logger Enhancement"
+          GH_AW_WORKFLOW_NAME: "Test Improver"
         with:
           github-token: ${{ secrets.GH_AW_GITHUB_TOKEN || secrets.GITHUB_TOKEN }}
           script: |
@@ -1095,7 +1199,7 @@ jobs:
           GH_AW_COMMENT_ID: ${{ needs.activation.outputs.comment_id }}
           GH_AW_COMMENT_REPO: ${{ needs.activation.outputs.comment_repo }}
           GH_AW_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-          GH_AW_WORKFLOW_NAME: "Go Logger Enhancement"
+          GH_AW_WORKFLOW_NAME: "Test Improver"
           GH_AW_AGENT_CONCLUSION: ${{ needs.agent.result }}
           GH_AW_DETECTION_CONCLUSION: ${{ needs.detection.result }}
         with:
@@ -1141,8 +1245,8 @@ jobs:
       - name: Setup threat detection
         uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
         env:
-          WORKFLOW_NAME: "Go Logger Enhancement"
-          WORKFLOW_DESCRIPTION: "Analyzes and enhances Go logging practices across the codebase for improved debugging and observability"
+          WORKFLOW_NAME: "Test Improver"
+          WORKFLOW_DESCRIPTION: "Daily analyzer that reviews test files and suggests improvements for better testify usage, increased coverage, and cleaner tests"
           HAS_PATCH: ${{ needs.agent.outputs.has_patch }}
         with:
           script: |
@@ -1273,8 +1377,8 @@ jobs:
     timeout-minutes: 15
     env:
       GH_AW_ENGINE_ID: "copilot"
-      GH_AW_WORKFLOW_ID: "go-logger"
-      GH_AW_WORKFLOW_NAME: "Go Logger Enhancement"
+      GH_AW_WORKFLOW_ID: "test-improver"
+      GH_AW_WORKFLOW_NAME: "Test Improver"
     outputs:
       process_safe_outputs_processed_count: ${{ steps.process_safe_outputs.outputs.processed_count }}
       process_safe_outputs_temporary_id_map: ${{ steps.process_safe_outputs.outputs.temporary_id_map }}
@@ -1324,7 +1428,7 @@ jobs:
         uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
         env:
           GH_AW_AGENT_OUTPUT: ${{ env.GH_AW_AGENT_OUTPUT }}
-          GH_AW_SAFE_OUTPUTS_HANDLER_CONFIG: "{\"create_pull_request\":{\"base_branch\":\"${{ github.ref_name }}\",\"draft\":true,\"labels\":[\"enhancement\",\"automation\"],\"max\":1,\"max_patch_size\":1024,\"title_prefix\":\"[log] \"}}"
+          GH_AW_SAFE_OUTPUTS_HANDLER_CONFIG: "{\"create_pull_request\":{\"base_branch\":\"${{ github.ref_name }}\",\"draft\":true,\"labels\":[\"testing\",\"improvement\",\"automation\"],\"max\":1,\"max_patch_size\":1024,\"title_prefix\":\"[test-improver] \"}}"
         with:
           github-token: ${{ secrets.GH_AW_GITHUB_TOKEN || secrets.GITHUB_TOKEN }}
           script: |
