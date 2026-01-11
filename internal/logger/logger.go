@@ -22,9 +22,6 @@ type Logger struct {
 }
 
 var (
-	// DEBUG environment variable value, read once at initialization.
-	debugEnv = os.Getenv("DEBUG")
-
 	// DEBUG_COLORS environment variable to control color output.
 	debugColors = os.Getenv("DEBUG_COLORS") != "0"
 
@@ -152,6 +149,8 @@ func (l *Logger) Print(args ...any) {
 
 // computeEnabled computes whether a namespace matches the DEBUG patterns
 func computeEnabled(namespace string) bool {
+	// Read DEBUG from environment each time to support t.Setenv() in tests
+	debugEnv := os.Getenv("DEBUG")
 	patterns := strings.Split(debugEnv, ",")
 
 	enabled := false
