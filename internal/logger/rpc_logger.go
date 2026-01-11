@@ -188,8 +188,8 @@ func formatRPCMessageMarkdown(info *RPCMessageInfo) string {
 		// Remove jsonrpc and method fields, then format
 		formatted, isValidJSON := formatJSONWithoutFields(info.Payload, []string{"jsonrpc", "method"})
 		if isValidJSON {
-			// Valid JSON: use code block for better readability
-			message += fmt.Sprintf(" \n~~~\n%s\n~~~", formatted)
+			// Valid JSON: use code block for better readability (compact formatting)
+			message += fmt.Sprintf(" ~~~\n%s\n~~~", formatted)
 		} else {
 			// Invalid JSON: use inline backticks to avoid malformed markdown
 			message += fmt.Sprintf(" `%s`", formatted)
