@@ -182,6 +182,7 @@ func TestFormatRPCMessageMarkdown(t *testing.T) {
 		name string
 		info *RPCMessageInfo
 		want []string // Strings that should be present in output
+		notWant []string // Strings that should NOT be present in output
 	}{
 		{
 			name: "outbound request",
@@ -191,9 +192,10 @@ func TestFormatRPCMessageMarkdown(t *testing.T) {
 				ServerID:    "github",
 				Method:      "tools/list",
 				PayloadSize: 50,
-				Payload:     `{"jsonrpc":"2.0"}`,
+				Payload:     `{"jsonrpc":"2.0","method":"tools/list","params":{}}`,
 			},
-			want: []string{"**github**→`tools/list`", "`{\"jsonrpc\":\"2.0\"}`"},
+			want: []string{"**github**→`tools/list`", "~~~", `"params"`, "{}"},
+			notWant: []string{`"jsonrpc"`, `"method"`},
 		},
 		{
 			name: "inbound response",
@@ -204,7 +206,8 @@ func TestFormatRPCMessageMarkdown(t *testing.T) {
 				PayloadSize: 100,
 				Payload:     `{"result":{}}`,
 			},
-			want: []string{"**github**←resp", "`{\"result\":{}}`"},
+			want: []string{"**github**←resp", "~~~", `"result"`},
+			notWant: []string{`"jsonrpc"`, `"method"`},
 		},
 		{
 			name: "response with error",
@@ -216,6 +219,7 @@ func TestFormatRPCMessageMarkdown(t *testing.T) {
 				Error:       "Connection timeout",
 			},
 			want: []string{"**github**←resp", "⚠️`Connection timeout`"},
+			notWant: []string{},
 		},
 	}
 
@@ -226,6 +230,69 @@ func TestFormatRPCMessageMarkdown(t *testing.T) {
 			for _, expected := range tt.want {
 				if !strings.Contains(result, expected) {
 					t.Errorf("Expected result to contain %q, got:\n%s", expected, result)
+				}
+			}
+
+			for _, notExpected := range tt.notWant {
+				if strings.Contains(result, notExpected) {
+					t.Errorf("Expected result NOT to contain %q, got:\n%s", notExpected, result)
+				}
+			}
+		})
+	}
+}
+
+func TestFormatJSONWithoutFields(t *testing.T) {
+	tests := []struct {
+		name           string
+		input          string
+		fieldsToRemove []string
+		wantContains   []string
+		wantNotContain []string
+	}{
+		{
+			name:           "remove jsonrpc and method",
+			input:          `{"jsonrpc":"2.0","method":"tools/call","params":{"arg":"value"},"id":1}`,
+			fieldsToRemove: []string{"jsonrpc", "method"},
+			wantContains:   []string{`"params"`, `"arg"`, `"value"`, `"id"`},
+			wantNotContain: []string{`"jsonrpc"`, `"method"`},
+		},
+		{
+			name:           "indent with 2 spaces",
+			input:          `{"a":"b","c":{"d":"e"}}`,
+			fieldsToRemove: []string{},
+			wantContains:   []string{"  \"a\"", "  \"c\"", "    \"d\""},
+			wantNotContain: []string{},
+		},
+		{
+			name:           "invalid JSON returns as-is",
+			input:          `{invalid json}`,
+			fieldsToRemove: []string{"jsonrpc"},
+			wantContains:   []string{`{invalid json}`},
+			wantNotContain: []string{},
+		},
+		{
+			name:           "empty object",
+			input:          `{}`,
+			fieldsToRemove: []string{"jsonrpc"},
+			wantContains:   []string{`{}`},
+			wantNotContain: []string{},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := formatJSONWithoutFields(tt.input, tt.fieldsToRemove)
+
+			for _, want := range tt.wantContains {
+				if !strings.Contains(result, want) {
+					t.Errorf("Expected result to contain %q, got:\n%s", want, result)
+				}
+			}
+
+			for _, notWant := range tt.wantNotContain {
+				if strings.Contains(result, notWant) {
+					t.Errorf("Expected result NOT to contain %q, got:\n%s", notWant, result)
 				}
 			}
 		})
@@ -410,7 +477,7 @@ func TestLogRPCRequestPayloadTruncation(t *testing.T) {
 	}
 	defer CloseMarkdownLogger()
 
-	// Create a large payload (> 10KB for text, > 120 chars for markdown)
+	// Create a large payload (> 10KB for text, > 512 chars for markdown)
 	largeData := strings.Repeat("x", 12*1024) // 12KB of x's
 	payload := []byte(`{"jsonrpc":"2.0","id":1,"method":"test","params":{"data":"` + largeData + `"}}`)
 	LogRPCRequest(RPCDirectionOutbound, "backend", "test", payload)
@@ -438,7 +505,7 @@ func TestLogRPCRequestPayloadTruncation(t *testing.T) {
 		t.Errorf("Text log contains more data than expected after truncation (should be ~10KB)")
 	}
 
-	// Check markdown log - should be truncated at 120 chars
+	// Check markdown log - should be truncated at 512 chars
 	mdLog := filepath.Join(logDir, "test.md")
 	mdContent, err := os.ReadFile(mdLog)
 	if err != nil {
@@ -450,9 +517,9 @@ func TestLogRPCRequestPayloadTruncation(t *testing.T) {
 		t.Errorf("Markdown log does not show truncation marker")
 	}
 
-	// Markdown should have much less data (truncated at 120 chars)
-	xCountMd := strings.Count(mdStr, strings.Repeat("x", 150))
+	// Markdown should have much less data (truncated at 512 chars)
+	xCountMd := strings.Count(mdStr, strings.Repeat("x", 600))
 	if xCountMd > 0 {
-		t.Errorf("Markdown log contains more data than expected after truncation (should be ~120 chars)")
+		t.Errorf("Markdown log contains more data than expected after truncation (should be ~512 chars)")
 	}
 }

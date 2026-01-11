@@ -30,7 +30,7 @@ const (
 	// MaxPayloadPreviewLengthText is the maximum number of characters to include in text log preview (10KB)
 	MaxPayloadPreviewLengthText = 10 * 1024 // 10KB
 	// MaxPayloadPreviewLengthMarkdown is the maximum number of characters to include in markdown log preview
-	MaxPayloadPreviewLengthMarkdown = 120
+	MaxPayloadPreviewLengthMarkdown = 512
 )
 
 // RPCMessageInfo contains information about an RPC message for logging
@@ -139,9 +139,31 @@ func formatRPCMessage(info *RPCMessageInfo) string {
 	return strings.Join(parts, " ")
 }
 
+// formatJSONWithoutFields formats JSON by removing specified fields and indenting with 2 spaces
+func formatJSONWithoutFields(jsonStr string, fieldsToRemove []string) string {
+	var data map[string]interface{}
+	if err := json.Unmarshal([]byte(jsonStr), &data); err != nil {
+		// If not valid JSON, return as-is
+		return jsonStr
+	}
+
+	// Remove specified fields
+	for _, field := range fieldsToRemove {
+		delete(data, field)
+	}
+
+	// Re-marshal with 2-space indentation
+	formatted, err := json.MarshalIndent(data, "", "  ")
+	if err != nil {
+		return jsonStr
+	}
+
+	return string(formatted)
+}
+
 // formatRPCMessageMarkdown formats an RPC message for markdown logging
 func formatRPCMessageMarkdown(info *RPCMessageInfo) string {
-	// Concise format: **server**→method payload
+	// Concise format: **server**→method \n~~~ \n{formatted json} \n~~~
 	var dir string
 	if info.Direction == RPCDirectionOutbound {
 		dir = "→"
@@ -160,9 +182,11 @@ func formatRPCMessageMarkdown(info *RPCMessageInfo) string {
 		}
 	}
 
-	// Add size and payload inline
+	// Add formatted payload in code block
 	if info.Payload != "" {
-		message += fmt.Sprintf(" `%s`", info.Payload)
+		// Remove jsonrpc and method fields, then format
+		formatted := formatJSONWithoutFields(info.Payload, []string{"jsonrpc", "method"})
+		message += fmt.Sprintf(" \n~~~\n%s\n~~~", formatted)
 	}
 
 	// Error (if present)
