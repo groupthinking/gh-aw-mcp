@@ -221,6 +221,19 @@ func TestFormatRPCMessageMarkdown(t *testing.T) {
 			want:    []string{"**github**←resp", "⚠️`Connection timeout`"},
 			notWant: []string{},
 		},
+		{
+			name: "invalid JSON payload uses inline backticks",
+			info: &RPCMessageInfo{
+				Direction:   RPCDirectionOutbound,
+				MessageType: RPCMessageRequest,
+				ServerID:    "github",
+				Method:      "tools/call",
+				PayloadSize: 30,
+				Payload:     `{invalid json syntax}`,
+			},
+			want:    []string{"**github**→`tools/call`", "`{invalid json syntax}`"},
+			notWant: []string{"~~~"}, // Should NOT use code blocks for invalid JSON
+		},
 	}
 
 	for _, tt := range tests {
@@ -249,6 +262,7 @@ func TestFormatJSONWithoutFields(t *testing.T) {
 		fieldsToRemove []string
 		wantContains   []string
 		wantNotContain []string
+		wantValid      bool
 	}{
 		{
 			name:           "remove jsonrpc and method",
@@ -256,6 +270,7 @@ func TestFormatJSONWithoutFields(t *testing.T) {
 			fieldsToRemove: []string{"jsonrpc", "method"},
 			wantContains:   []string{`"params"`, `"arg"`, `"value"`, `"id"`},
 			wantNotContain: []string{`"jsonrpc"`, `"method"`},
+			wantValid:      true,
 		},
 		{
 			name:           "indent with 2 spaces",
@@ -263,13 +278,15 @@ func TestFormatJSONWithoutFields(t *testing.T) {
 			fieldsToRemove: []string{},
 			wantContains:   []string{"  \"a\"", "  \"c\"", "    \"d\""},
 			wantNotContain: []string{},
+			wantValid:      true,
 		},
 		{
-			name:           "invalid JSON returns as-is",
+			name:           "invalid JSON returns as-is with false",
 			input:          `{invalid json}`,
 			fieldsToRemove: []string{"jsonrpc"},
 			wantContains:   []string{`{invalid json}`},
 			wantNotContain: []string{},
+			wantValid:      false,
 		},
 		{
 			name:           "empty object",
@@ -277,12 +294,17 @@ func TestFormatJSONWithoutFields(t *testing.T) {
 			fieldsToRemove: []string{"jsonrpc"},
 			wantContains:   []string{`{}`},
 			wantNotContain: []string{},
+			wantValid:      true,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := formatJSONWithoutFields(tt.input, tt.fieldsToRemove)
+			result, isValid := formatJSONWithoutFields(tt.input, tt.fieldsToRemove)
+
+			if isValid != tt.wantValid {
+				t.Errorf("Expected isValid=%v, got %v", tt.wantValid, isValid)
+			}
 
 			for _, want := range tt.wantContains {
 				if !strings.Contains(result, want) {

@@ -140,11 +140,12 @@ func formatRPCMessage(info *RPCMessageInfo) string {
 }
 
 // formatJSONWithoutFields formats JSON by removing specified fields and indenting with 2 spaces
-func formatJSONWithoutFields(jsonStr string, fieldsToRemove []string) string {
+// Returns the formatted string and a boolean indicating if the JSON was valid
+func formatJSONWithoutFields(jsonStr string, fieldsToRemove []string) (string, bool) {
 	var data map[string]interface{}
 	if err := json.Unmarshal([]byte(jsonStr), &data); err != nil {
-		// If not valid JSON, return as-is
-		return jsonStr
+		// If not valid JSON, return as-is with false
+		return jsonStr, false
 	}
 
 	// Remove specified fields
@@ -155,10 +156,10 @@ func formatJSONWithoutFields(jsonStr string, fieldsToRemove []string) string {
 	// Re-marshal with 2-space indentation
 	formatted, err := json.MarshalIndent(data, "", "  ")
 	if err != nil {
-		return jsonStr
+		return jsonStr, false
 	}
 
-	return string(formatted)
+	return string(formatted), true
 }
 
 // formatRPCMessageMarkdown formats an RPC message for markdown logging
@@ -185,8 +186,14 @@ func formatRPCMessageMarkdown(info *RPCMessageInfo) string {
 	// Add formatted payload in code block
 	if info.Payload != "" {
 		// Remove jsonrpc and method fields, then format
-		formatted := formatJSONWithoutFields(info.Payload, []string{"jsonrpc", "method"})
-		message += fmt.Sprintf(" \n~~~\n%s\n~~~", formatted)
+		formatted, isValidJSON := formatJSONWithoutFields(info.Payload, []string{"jsonrpc", "method"})
+		if isValidJSON {
+			// Valid JSON: use code block for better readability
+			message += fmt.Sprintf(" \n~~~\n%s\n~~~", formatted)
+		} else {
+			// Invalid JSON: use inline backticks to avoid malformed markdown
+			message += fmt.Sprintf(" `%s`", formatted)
+		}
 	}
 
 	// Error (if present)
