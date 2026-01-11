@@ -15,6 +15,8 @@ import (
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
+var logTransport = logger.New("server:transport")
+
 // HTTPTransport wraps the SDK's HTTP transport
 type HTTPTransport struct {
 	Addr string
@@ -76,6 +78,7 @@ func withResponseLogging(handler http.Handler) http.Handler {
 // CreateHTTPServerForMCP creates an HTTP server that handles MCP over SSE
 // If apiKey is provided, all requests except /health require authentication (spec 7.1)
 func CreateHTTPServerForMCP(addr string, unifiedServer *UnifiedServer, apiKey string) *http.Server {
+	logTransport.Printf("Creating HTTP server for MCP: addr=%s, apiKey configured=%v", addr, apiKey != "")
 	mux := http.NewServeMux()
 
 	// OAuth discovery endpoint - return 404 since we don't use OAuth
@@ -87,6 +90,7 @@ func CreateHTTPServerForMCP(addr string, unifiedServer *UnifiedServer, apiKey st
 
 	// Create StreamableHTTP handler for MCP protocol (supports POST requests)
 	// This is what Codex uses with transport = "streamablehttp"
+	logTransport.Print("Creating StreamableHTTP handler")
 	streamableHandler := sdk.NewStreamableHTTPHandler(func(r *http.Request) *sdk.Server {
 		// With SSE, this callback fires ONCE per HTTP connection establishment
 		// All subsequent JSON-RPC messages come over the same persistent connection
@@ -110,6 +114,7 @@ func CreateHTTPServerForMCP(addr string, unifiedServer *UnifiedServer, apiKey st
 
 		// Reject requests without Authorization header
 		if sessionID == "" {
+			logTransport.Printf("Connection rejected: no Authorization header, remote=%s", r.RemoteAddr)
 			logger.LogError("client", "MCP connection rejected: no Authorization header, remote=%s, path=%s", r.RemoteAddr, r.URL.Path)
 			log.Printf("[%s] %s %s - REJECTED: No Authorization header", r.RemoteAddr, r.Method, r.URL.Path)
 			// Return nil to reject the connection
@@ -117,6 +122,7 @@ func CreateHTTPServerForMCP(addr string, unifiedServer *UnifiedServer, apiKey st
 			return nil
 		}
 
+		logTransport.Printf("MCP connection established: sessionID=%s, remote=%s, path=%s", sessionID, r.RemoteAddr, r.URL.Path)
 		logger.LogInfo("client", "MCP connection established, remote=%s, method=%s, path=%s, session=%s", r.RemoteAddr, r.Method, r.URL.Path, sessionID)
 		log.Printf("=== NEW SSE CONNECTION ===")
 		log.Printf("[%s] %s %s", r.RemoteAddr, r.Method, r.URL.Path)

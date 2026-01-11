@@ -8,7 +8,11 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+
+	"github.com/githubnext/gh-aw-mcpg/internal/logger"
 )
+
+var logEnvValidation = logger.New("config:env_validation")
 
 // RequiredEnvVars lists the environment variables that must be set for the gateway to operate
 var RequiredEnvVars = []string{
@@ -50,13 +54,16 @@ func (r *EnvValidationResult) Error() string {
 // ValidateExecutionEnvironment performs comprehensive validation of the execution environment
 // It checks Docker accessibility, required environment variables, and containerization status
 func ValidateExecutionEnvironment() *EnvValidationResult {
+	logEnvValidation.Print("Starting execution environment validation")
 	result := &EnvValidationResult{}
 
 	// Check if running in a containerized environment
 	result.IsContainerized, result.ContainerID = detectContainerized()
+	logEnvValidation.Printf("Container detection: isContainerized=%v, containerID=%s", result.IsContainerized, result.ContainerID)
 
 	// Check Docker daemon accessibility
 	result.DockerAccessible = checkDockerAccessible()
+	logEnvValidation.Printf("Docker accessibility check: accessible=%v", result.DockerAccessible)
 	if !result.DockerAccessible {
 		result.ValidationErrors = append(result.ValidationErrors,
 			"Docker daemon is not accessible. Ensure the Docker socket is mounted or Docker is running.")
@@ -64,6 +71,7 @@ func ValidateExecutionEnvironment() *EnvValidationResult {
 
 	// Check required environment variables
 	result.MissingEnvVars = checkRequiredEnvVars()
+	logEnvValidation.Printf("Required env vars check: missing=%d", len(result.MissingEnvVars))
 	if len(result.MissingEnvVars) > 0 {
 		result.ValidationErrors = append(result.ValidationErrors,
 			fmt.Sprintf("Required environment variables not set: %s", strings.Join(result.MissingEnvVars, ", ")))
@@ -123,9 +131,11 @@ func ValidateContainerizedEnvironment(containerID string) *EnvValidationResult {
 // detectContainerized checks if we're running inside a Docker container
 // It examines /proc/self/cgroup to detect container environment and extract container ID
 func detectContainerized() (bool, string) {
+	logEnvValidation.Print("Checking if running in containerized environment")
 	file, err := os.Open("/proc/self/cgroup")
 	if err != nil {
 		// If we can't read cgroup, we're likely not in a container
+		logEnvValidation.Print("Could not read /proc/self/cgroup, assuming not containerized")
 		return false, ""
 	}
 	defer file.Close()

@@ -7,8 +7,11 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/githubnext/gh-aw-mcpg/internal/logger"
 	"github.com/santhosh-tekuri/jsonschema/v5"
 )
+
+var logSchemaValidation = logger.New("config:schema_validation")
 
 //go:embed schemas/mcp-gateway-config.schema.json
 var schemaJSON []byte
@@ -33,6 +36,7 @@ func SetVersion(version string) {
 
 // validateJSONSchema validates the raw JSON configuration against the JSON schema
 func validateJSONSchema(data []byte) error {
+	logSchemaValidation.Printf("Validating JSON schema, data length: %d bytes", len(data))
 	// Parse the schema
 	var schemaData interface{}
 	if err := json.Unmarshal(schemaJSON, &schemaData); err != nil {
@@ -40,6 +44,7 @@ func validateJSONSchema(data []byte) error {
 	}
 
 	// Compile the schema
+	logSchemaValidation.Print("Compiling JSON schema")
 	compiler := jsonschema.NewCompiler()
 	compiler.Draft = jsonschema.Draft7
 
@@ -61,10 +66,13 @@ func validateJSONSchema(data []byte) error {
 	}
 
 	// Validate the configuration
+	logSchemaValidation.Print("Validating configuration against schema")
 	if err := schema.Validate(configObj); err != nil {
+		logSchemaValidation.Printf("Schema validation failed: %v", err)
 		return formatSchemaError(err)
 	}
 
+	logSchemaValidation.Print("Schema validation successful")
 	return nil
 }
 

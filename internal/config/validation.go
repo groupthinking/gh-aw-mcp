@@ -5,7 +5,11 @@ import (
 	"os"
 	"regexp"
 	"strings"
+
+	"github.com/githubnext/gh-aw-mcpg/internal/logger"
 )
+
+var logValidation = logger.New("config:validation")
 
 // ValidationError represents a configuration validation error with context
 type ValidationError struct {
@@ -30,6 +34,7 @@ var varExprPattern = regexp.MustCompile(`\$\{([A-Za-z_][A-Za-z0-9_]*)\}`)
 // expandVariables expands variable expressions in a string
 // Returns the expanded string and error if any variable is undefined
 func expandVariables(value, jsonPath string) (string, error) {
+	logValidation.Printf("Expanding variables: jsonPath=%s, value=%s", jsonPath, value)
 	var undefinedVars []string
 
 	result := varExprPattern.ReplaceAllStringFunc(value, func(match string) string {
@@ -37,10 +42,12 @@ func expandVariables(value, jsonPath string) (string, error) {
 		varName := match[2 : len(match)-1]
 
 		if envValue, exists := os.LookupEnv(varName); exists {
+			logValidation.Printf("Variable expanded: %s=%s", varName, envValue)
 			return envValue
 		}
 
 		// Track undefined variable
+		logValidation.Printf("Undefined variable: %s", varName)
 		undefinedVars = append(undefinedVars, varName)
 		return match // Keep original if undefined
 	})
@@ -125,6 +132,7 @@ func validateMounts(mounts []string, jsonPath string) error {
 
 // validateStdioServer validates a stdio server configuration
 func validateStdioServer(name string, server *StdinServerConfig) error {
+	logValidation.Printf("Validating stdio server: name=%s, type=%s", name, server.Type)
 	jsonPath := fmt.Sprintf("mcpServers.%s", name)
 
 	// Validate type (empty defaults to stdio)
@@ -134,6 +142,7 @@ func validateStdioServer(name string, server *StdinServerConfig) error {
 
 	// Normalize "local" to "stdio"
 	if server.Type == "local" {
+		logValidation.Print("Normalizing 'local' type to 'stdio'")
 		server.Type = "stdio"
 	}
 
