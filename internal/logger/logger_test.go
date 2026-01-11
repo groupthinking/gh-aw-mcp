@@ -150,8 +150,8 @@ func TestNew(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Set environment for this test
-			debugEnv = tt.debugEnv
+			// Use t.Setenv to set environment variable for this test
+			t.Setenv("DEBUG", tt.debugEnv)
 
 			logger := New(tt.namespace)
 			if logger.Enabled() != tt.enabled {
@@ -191,8 +191,8 @@ func TestLogger_Printf(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Set environment
-			debugEnv = tt.debugEnv
+			// Use t.Setenv to set environment variable for this test
+			t.Setenv("DEBUG", tt.debugEnv)
 
 			logger := New(tt.namespace)
 
@@ -221,8 +221,8 @@ func TestLogger_Printf(t *testing.T) {
 }
 
 func TestLogger_Print(t *testing.T) {
-	// Set environment
-	debugEnv = "*"
+	// Use t.Setenv to set environment variable for this test
+	t.Setenv("DEBUG", "*")
 
 	logger := New("test:print")
 
@@ -243,8 +243,8 @@ func TestLogger_Print(t *testing.T) {
 }
 
 func TestLogger_TimeDiff(t *testing.T) {
-	// Set environment
-	debugEnv = "*"
+	// Use t.Setenv to set environment variable for this test
+	t.Setenv("DEBUG", "*")
 
 	logger := New("test:timediff")
 
@@ -382,8 +382,8 @@ func TestComputeEnabled(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Set DEBUG for this test
-			debugEnv = tt.debugEnv
+			// Use t.Setenv to set DEBUG for this test
+			t.Setenv("DEBUG", tt.debugEnv)
 			got := computeEnabled(tt.namespace)
 			if got != tt.want {
 				t.Errorf("computeEnabled(%q) with DEBUG=%q = %v, want %v",
@@ -406,8 +406,8 @@ func TestDebugLoggerWritesToFile(t *testing.T) {
 	}
 	defer CloseGlobalLogger()
 
-	// Enable all debug loggers
-	debugEnv = "*"
+	// Use t.Setenv to enable all debug loggers
+	t.Setenv("DEBUG", "*")
 
 	// Create a debug logger
 	log := New("test:debug")
@@ -475,8 +475,8 @@ func TestDebugLoggerDisabledNoFileWrite(t *testing.T) {
 	}
 	defer CloseGlobalLogger()
 
-	// Disable all debug loggers
-	debugEnv = ""
+	// Use t.Setenv to disable all debug loggers
+	t.Setenv("DEBUG", "")
 
 	// Create a debug logger (should be disabled)
 	log := New("test:disabled")
