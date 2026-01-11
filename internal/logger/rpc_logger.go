@@ -27,8 +27,10 @@ const (
 )
 
 const (
-	// MaxPayloadPreviewLength is the maximum number of characters to include in log preview
-	MaxPayloadPreviewLength = 120
+	// MaxPayloadPreviewLengthText is the maximum number of characters to include in text log preview (10KB)
+	MaxPayloadPreviewLengthText = 10 * 1024 // 10KB
+	// MaxPayloadPreviewLengthMarkdown is the maximum number of characters to include in markdown log preview
+	MaxPayloadPreviewLengthMarkdown = 120
 )
 
 // RPCMessageInfo contains information about an RPC message for logging
@@ -173,50 +175,75 @@ func formatRPCMessageMarkdown(info *RPCMessageInfo) string {
 
 // LogRPCRequest logs an RPC request message to both text and markdown logs
 func LogRPCRequest(direction RPCMessageDirection, serverID, method string, payload []byte) {
-	info := &RPCMessageInfo{
+	// Create info for text log (with larger payload preview)
+	infoText := &RPCMessageInfo{
 		Direction:   direction,
 		MessageType: RPCMessageRequest,
 		ServerID:    serverID,
 		Method:      method,
 		PayloadSize: len(payload),
-		Payload:     truncateAndSanitize(string(payload), MaxPayloadPreviewLength),
+		Payload:     truncateAndSanitize(string(payload), MaxPayloadPreviewLengthText),
 	}
 
 	// Log to text file
-	LogDebug("rpc", "%s", formatRPCMessage(info))
+	LogDebug("rpc", "%s", formatRPCMessage(infoText))
+
+	// Create info for markdown log (with shorter payload preview)
+	infoMarkdown := &RPCMessageInfo{
+		Direction:   direction,
+		MessageType: RPCMessageRequest,
+		ServerID:    serverID,
+		Method:      method,
+		PayloadSize: len(payload),
+		Payload:     truncateAndSanitize(string(payload), MaxPayloadPreviewLengthMarkdown),
+	}
 
 	// Log to markdown file
 	globalMarkdownMu.RLock()
 	defer globalMarkdownMu.RUnlock()
 
 	if globalMarkdownLogger != nil {
-		globalMarkdownLogger.Log(LogLevelDebug, "rpc", "%s", formatRPCMessageMarkdown(info))
+		globalMarkdownLogger.Log(LogLevelDebug, "rpc", "%s", formatRPCMessageMarkdown(infoMarkdown))
 	}
 }
 
 // LogRPCResponse logs an RPC response message to both text and markdown logs
 func LogRPCResponse(direction RPCMessageDirection, serverID string, payload []byte, err error) {
-	info := &RPCMessageInfo{
+	// Create info for text log (with larger payload preview)
+	infoText := &RPCMessageInfo{
 		Direction:   direction,
 		MessageType: RPCMessageResponse,
 		ServerID:    serverID,
 		PayloadSize: len(payload),
-		Payload:     truncateAndSanitize(string(payload), MaxPayloadPreviewLength),
+		Payload:     truncateAndSanitize(string(payload), MaxPayloadPreviewLengthText),
 	}
 
 	if err != nil {
-		info.Error = err.Error()
+		infoText.Error = err.Error()
 	}
 
 	// Log to text file
-	LogDebug("rpc", "%s", formatRPCMessage(info))
+	LogDebug("rpc", "%s", formatRPCMessage(infoText))
+
+	// Create info for markdown log (with shorter payload preview)
+	infoMarkdown := &RPCMessageInfo{
+		Direction:   direction,
+		MessageType: RPCMessageResponse,
+		ServerID:    serverID,
+		PayloadSize: len(payload),
+		Payload:     truncateAndSanitize(string(payload), MaxPayloadPreviewLengthMarkdown),
+	}
+
+	if err != nil {
+		infoMarkdown.Error = err.Error()
+	}
 
 	// Log to markdown file
 	globalMarkdownMu.RLock()
 	defer globalMarkdownMu.RUnlock()
 
 	if globalMarkdownLogger != nil {
-		globalMarkdownLogger.Log(LogLevelDebug, "rpc", "%s", formatRPCMessageMarkdown(info))
+		globalMarkdownLogger.Log(LogLevelDebug, "rpc", "%s", formatRPCMessageMarkdown(infoMarkdown))
 	}
 }
 

@@ -410,8 +410,8 @@ func TestLogRPCRequestPayloadTruncation(t *testing.T) {
 	}
 	defer CloseMarkdownLogger()
 
-	// Create a large payload (> 120 characters)
-	largeData := strings.Repeat("x", 200)
+	// Create a large payload (> 10KB for text, > 120 chars for markdown)
+	largeData := strings.Repeat("x", 12*1024) // 12KB of x's
 	payload := []byte(`{"jsonrpc":"2.0","id":1,"method":"test","params":{"data":"` + largeData + `"}}`)
 	LogRPCRequest(RPCDirectionOutbound, "backend", "test", payload)
 
@@ -419,7 +419,7 @@ func TestLogRPCRequestPayloadTruncation(t *testing.T) {
 	CloseGlobalLogger()
 	CloseMarkdownLogger()
 
-	// Check text log - payload should be truncated
+	// Check text log - payload should be truncated at 10KB
 	textLog := filepath.Join(logDir, "test.log")
 	textContent, err := os.ReadFile(textLog)
 	if err != nil {
@@ -431,10 +431,28 @@ func TestLogRPCRequestPayloadTruncation(t *testing.T) {
 		t.Errorf("Text log does not show truncation marker")
 	}
 
-	// The logged payload should not contain the full 200 x's
-	// (it should be truncated to 120 chars + "...")
-	xCount := strings.Count(textStr, strings.Repeat("x", 150))
+	// The logged payload should not contain the full 12KB of x's
+	// (it should be truncated to 10KB + "...")
+	xCount := strings.Count(textStr, strings.Repeat("x", 11*1024))
 	if xCount > 0 {
-		t.Errorf("Text log contains more data than expected after truncation")
+		t.Errorf("Text log contains more data than expected after truncation (should be ~10KB)")
+	}
+
+	// Check markdown log - should be truncated at 120 chars
+	mdLog := filepath.Join(logDir, "test.md")
+	mdContent, err := os.ReadFile(mdLog)
+	if err != nil {
+		t.Fatalf("Failed to read markdown log: %v", err)
+	}
+
+	mdStr := string(mdContent)
+	if !strings.Contains(mdStr, "...") {
+		t.Errorf("Markdown log does not show truncation marker")
+	}
+
+	// Markdown should have much less data (truncated at 120 chars)
+	xCountMd := strings.Count(mdStr, strings.Repeat("x", 150))
+	if xCountMd > 0 {
+		t.Errorf("Markdown log contains more data than expected after truncation (should be ~120 chars)")
 	}
 }
