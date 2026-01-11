@@ -30,7 +30,7 @@ const (
 	// MaxPayloadPreviewLengthText is the maximum number of characters to include in text log preview (10KB)
 	MaxPayloadPreviewLengthText = 10 * 1024 // 10KB
 	// MaxPayloadPreviewLengthMarkdown is the maximum number of characters to include in markdown log preview
-	MaxPayloadPreviewLengthMarkdown = 120
+	MaxPayloadPreviewLengthMarkdown = 512
 )
 
 // RPCMessageInfo contains information about an RPC message for logging
@@ -139,9 +139,42 @@ func formatRPCMessage(info *RPCMessageInfo) string {
 	return strings.Join(parts, " ")
 }
 
+// formatJSONWithoutFields formats JSON by removing specified fields and indenting with 2 spaces
+// Returns the formatted string and a boolean indicating if the JSON was valid
+func formatJSONWithoutFields(jsonStr string, fieldsToRemove []string) (string, bool) {
+	var data map[string]interface{}
+	if err := json.Unmarshal([]byte(jsonStr), &data); err != nil {
+		// If not valid JSON, return as-is with false
+		return jsonStr, false
+	}
+
+	// Remove specified fields
+	for _, field := range fieldsToRemove {
+		delete(data, field)
+	}
+
+	// Re-marshal with 2-space indentation
+	formatted, err := json.MarshalIndent(data, "", "  ")
+	if err != nil {
+		return jsonStr, false
+	}
+
+	// Compress JSON: remove newline after opening brace and before closing brace
+	result := string(formatted)
+	// Remove newline after opening brace
+	result = strings.Replace(result, "{\n", "{ ", 1)
+	// Remove newline before closing brace
+	lastNewline := strings.LastIndex(result, "\n}")
+	if lastNewline != -1 {
+		result = result[:lastNewline] + " }"
+	}
+
+	return result, true
+}
+
 // formatRPCMessageMarkdown formats an RPC message for markdown logging
 func formatRPCMessageMarkdown(info *RPCMessageInfo) string {
-	// Concise format: **server**→method payload
+	// Concise format: **server**→method \n~~~ \n{formatted json} \n~~~
 	var dir string
 	if info.Direction == RPCDirectionOutbound {
 		dir = "→"
@@ -160,9 +193,18 @@ func formatRPCMessageMarkdown(info *RPCMessageInfo) string {
 		}
 	}
 
-	// Add size and payload inline
+	// Add formatted payload in code block
 	if info.Payload != "" {
-		message += fmt.Sprintf(" `%s`", info.Payload)
+		// Remove jsonrpc and method fields, then format
+		formatted, isValidJSON := formatJSONWithoutFields(info.Payload, []string{"jsonrpc", "method"})
+		if isValidJSON {
+			// Valid JSON: use code block for better readability (compact formatting)
+			// Empty line before ~~~ per markdown convention
+			message += fmt.Sprintf(" \n\n~~~\n%s\n~~~", formatted)
+		} else {
+			// Invalid JSON: use inline backticks to avoid malformed markdown
+			message += fmt.Sprintf(" `%s`", formatted)
+		}
 	}
 
 	// Error (if present)
