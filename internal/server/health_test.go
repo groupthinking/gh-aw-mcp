@@ -46,22 +46,47 @@ func TestHealthEndpoint_RoutedMode(t *testing.T) {
 		t.Errorf("Expected Content-Type 'application/json', got '%s'", contentType)
 	}
 
-	// Check response body
-	var response map[string]string
+	// Check response body - use map[string]interface{} to handle mixed types
+	var response map[string]interface{}
 	if err := json.NewDecoder(w.Body).Decode(&response); err != nil {
 		t.Fatalf("Failed to decode JSON response: %v", err)
 	}
 
-	if response["status"] != "ok" {
-		t.Errorf("Expected status 'ok', got '%s'", response["status"])
+	// Check status field - should be "healthy" or "unhealthy"
+	status, ok := response["status"].(string)
+	if !ok {
+		t.Error("Expected 'status' field to be a string")
+	}
+	if status != "healthy" && status != "unhealthy" {
+		t.Errorf("Expected status 'healthy' or 'unhealthy', got '%s'", status)
 	}
 
-	if response["protocolVersion"] != MCPProtocolVersion {
-		t.Errorf("Expected protocolVersion '%s', got '%s'", MCPProtocolVersion, response["protocolVersion"])
+	// Check specVersion field (required by spec 8.1.1)
+	specVersion, ok := response["specVersion"].(string)
+	if !ok {
+		t.Error("Expected 'specVersion' field to be a string")
+	}
+	if specVersion != MCPGatewaySpecVersion {
+		t.Errorf("Expected specVersion '%s', got '%s'", MCPGatewaySpecVersion, specVersion)
 	}
 
-	if response["version"] == "" {
-		t.Error("Expected version to be non-empty")
+	// Check gatewayVersion field (required by spec 8.1.1)
+	gatewayVersion, ok := response["gatewayVersion"].(string)
+	if !ok {
+		t.Error("Expected 'gatewayVersion' field to be a string")
+	}
+	if gatewayVersion == "" {
+		t.Error("Expected gatewayVersion to be non-empty")
+	}
+
+	// Check servers field (required by spec 8.1.1)
+	servers, ok := response["servers"].(map[string]interface{})
+	if !ok {
+		t.Error("Expected 'servers' field to be an object")
+	}
+	// With empty config, servers map should be empty
+	if len(servers) != 0 {
+		t.Errorf("Expected empty servers map with no configured servers, got %d servers", len(servers))
 	}
 }
 
@@ -101,22 +126,47 @@ func TestHealthEndpoint_UnifiedMode(t *testing.T) {
 		t.Errorf("Expected Content-Type 'application/json', got '%s'", contentType)
 	}
 
-	// Check response body
-	var response map[string]string
+	// Check response body - use map[string]interface{} to handle mixed types
+	var response map[string]interface{}
 	if err := json.NewDecoder(w.Body).Decode(&response); err != nil {
 		t.Fatalf("Failed to decode JSON response: %v", err)
 	}
 
-	if response["status"] != "ok" {
-		t.Errorf("Expected status 'ok', got '%s'", response["status"])
+	// Check status field - should be "healthy" or "unhealthy"
+	status, ok := response["status"].(string)
+	if !ok {
+		t.Error("Expected 'status' field to be a string")
+	}
+	if status != "healthy" && status != "unhealthy" {
+		t.Errorf("Expected status 'healthy' or 'unhealthy', got '%s'", status)
 	}
 
-	if response["protocolVersion"] != MCPProtocolVersion {
-		t.Errorf("Expected protocolVersion '%s', got '%s'", MCPProtocolVersion, response["protocolVersion"])
+	// Check specVersion field (required by spec 8.1.1)
+	specVersion, ok := response["specVersion"].(string)
+	if !ok {
+		t.Error("Expected 'specVersion' field to be a string")
+	}
+	if specVersion != MCPGatewaySpecVersion {
+		t.Errorf("Expected specVersion '%s', got '%s'", MCPGatewaySpecVersion, specVersion)
 	}
 
-	if response["version"] == "" {
-		t.Error("Expected version to be non-empty")
+	// Check gatewayVersion field (required by spec 8.1.1)
+	gatewayVersion, ok := response["gatewayVersion"].(string)
+	if !ok {
+		t.Error("Expected 'gatewayVersion' field to be a string")
+	}
+	if gatewayVersion == "" {
+		t.Error("Expected gatewayVersion to be non-empty")
+	}
+
+	// Check servers field (required by spec 8.1.1)
+	servers, ok := response["servers"].(map[string]interface{})
+	if !ok {
+		t.Error("Expected 'servers' field to be an object")
+	}
+	// With empty config, servers map should be empty
+	if len(servers) != 0 {
+		t.Errorf("Expected empty servers map with no configured servers, got %d servers", len(servers))
 	}
 }
 
@@ -151,20 +201,35 @@ func TestHealthEndpoint_NoAuth(t *testing.T) {
 	}
 
 	// Verify JSON response
-	var response map[string]string
+	var response map[string]interface{}
 	if err := json.NewDecoder(w.Body).Decode(&response); err != nil {
 		t.Fatalf("Failed to decode JSON response: %v", err)
 	}
 
-	if response["status"] != "ok" {
-		t.Errorf("Expected status 'ok', got '%s'", response["status"])
+	// Check status field - should be "healthy" or "unhealthy"
+	status, ok := response["status"].(string)
+	if !ok {
+		t.Error("Expected 'status' field to be a string")
+	}
+	if status != "healthy" && status != "unhealthy" {
+		t.Errorf("Expected status 'healthy' or 'unhealthy', got '%s'", status)
 	}
 
-	if response["protocolVersion"] != MCPProtocolVersion {
-		t.Errorf("Expected protocolVersion '%s', got '%s'", MCPProtocolVersion, response["protocolVersion"])
+	// Check specVersion field (required by spec 8.1.1)
+	specVersion, ok := response["specVersion"].(string)
+	if !ok {
+		t.Error("Expected 'specVersion' field to be a string")
+	}
+	if specVersion != MCPGatewaySpecVersion {
+		t.Errorf("Expected specVersion '%s', got '%s'", MCPGatewaySpecVersion, specVersion)
 	}
 
-	if response["version"] == "" {
-		t.Error("Expected version to be non-empty")
+	// Check gatewayVersion field (required by spec 8.1.1)
+	gatewayVersion, ok := response["gatewayVersion"].(string)
+	if !ok {
+		t.Error("Expected 'gatewayVersion' field to be a string")
+	}
+	if gatewayVersion == "" {
+		t.Error("Expected gatewayVersion to be non-empty")
 	}
 }

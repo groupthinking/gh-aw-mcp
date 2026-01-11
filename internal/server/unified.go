@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"sync"
+	"time"
 
 	"github.com/githubnext/gh-aw-mcpg/internal/config"
 	"github.com/githubnext/gh-aw-mcpg/internal/difc"
@@ -21,6 +22,9 @@ var logUnified = logger.New("server:unified")
 // MCPProtocolVersion is the MCP protocol version supported by this gateway
 const MCPProtocolVersion = "2024-11-05"
 
+// MCPGatewaySpecVersion is the MCP Gateway Specification version this implementation conforms to
+const MCPGatewaySpecVersion = "1.3.0"
+
 // gatewayVersion stores the gateway version, set at startup
 var gatewayVersion = "dev"
 
@@ -35,6 +39,13 @@ func SetGatewayVersion(version string) {
 type Session struct {
 	Token     string
 	SessionID string
+	StartTime time.Time
+}
+
+// ServerStatus represents the health status of a backend server
+type ServerStatus struct {
+	Status string `json:"status"` // "running" | "stopped" | "error"
+	Uptime int    `json:"uptime"` // seconds since server was launched
 }
 
 // NewSession creates a new Session with the given session ID and optional token
@@ -42,6 +53,7 @@ func NewSession(sessionID, token string) *Session {
 	return &Session{
 		Token:     token,
 		SessionID: sessionID,
+		StartTime: time.Now(),
 	}
 }
 
@@ -635,6 +647,28 @@ func (us *UnifiedServer) getSessionKeys() []string {
 // GetServerIDs returns the list of backend server IDs
 func (us *UnifiedServer) GetServerIDs() []string {
 	return us.launcher.ServerIDs()
+}
+
+// GetServerStatus returns the status of all configured backend servers
+func (us *UnifiedServer) GetServerStatus() map[string]ServerStatus {
+	status := make(map[string]ServerStatus)
+
+	// Get all configured servers
+	serverIDs := us.launcher.ServerIDs()
+
+	for _, serverID := range serverIDs {
+		// Check if server has been launched by checking launcher connections
+		// For now, we'll return "running" for all configured servers
+		// and track uptime from when the gateway started
+		// This is a simple implementation - a more sophisticated version
+		// would track actual connection state per server
+		status[serverID] = ServerStatus{
+			Status: "running",
+			Uptime: 0, // Will be properly tracked when servers are actually launched
+		}
+	}
+
+	return status
 }
 
 // GetToolsForBackend returns tools for a specific backend with prefix stripped
