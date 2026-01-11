@@ -100,16 +100,12 @@ func (ml *MarkdownLogger) Close() error {
 		footer := "\n</details>\n"
 		if _, err := ml.logFile.WriteString(footer); err != nil {
 			// Sync any remaining buffered data before closing
-			if syncErr := ml.logFile.Sync(); syncErr != nil {
-				// Continue with close even if sync fails
-			}
+			_ = ml.logFile.Sync() // Continue with close even if sync fails
 			return ml.logFile.Close()
 		}
 
 		// Sync and close
-		if err := ml.logFile.Sync(); err != nil {
-			// Continue with close even if sync fails
-		}
+		_ = ml.logFile.Sync() // Continue with close even if sync fails
 		return ml.logFile.Close()
 	}
 	return nil
@@ -187,9 +183,7 @@ func (ml *MarkdownLogger) Log(level LogLevel, category, format string, args ...i
 			return
 		}
 		// Flush immediately
-		if err := ml.logFile.Sync(); err != nil {
-			// Ignore sync errors
-		}
+		_ = ml.logFile.Sync() // Ignore sync errors
 	}
 }
 
