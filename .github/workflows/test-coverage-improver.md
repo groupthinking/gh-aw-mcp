@@ -23,7 +23,7 @@ safe-outputs:
   create-pull-request:
     title-prefix: "[test] "
     labels: [testing, automation]
-    draft: false
+    draft: true
 
 tools:
   serena: ["go"]
