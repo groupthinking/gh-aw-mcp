@@ -125,7 +125,14 @@ Each logger tracks the time of its last log call to display elapsed time, simila
 
 ### Output Destination
 
-All log output goes to **stderr** to avoid interfering with stdout data (JSON, command output, etc.).
+Log output goes to **two destinations**:
+- **stderr** - Colorized output with time diffs (controlled by `DEBUG` environment variable)
+- **file logger** - Text-only output without colors or time diffs (always logged when enabled)
+
+This dual output approach allows:
+- Real-time debugging with colored, timestamped output during development
+- Persistent, parseable log files for production troubleshooting
+- All debug logs are captured to file, making it easier to diagnose issues after the fact
 
 ### Printf Interface
 
