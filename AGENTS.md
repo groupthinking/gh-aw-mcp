@@ -227,7 +227,7 @@ DEBUG_COLORS=0 DEBUG=* ./awmg --config config.toml
 
 **File Logging:**
 - Operational logs are always written to `mcp-gateway.log` in the configured log directory
-- Default log directory: `/tmp/gh-aw/sandbox/mcp` (configurable via `--log-dir` flag)
+- Default log directory: `/tmp/gh-aw/mcp-logs` (configurable via `--log-dir` flag)
 - Falls back to stdout if log directory cannot be created
 - Logs include: startup, client interactions, backend operations, auth events, errors
 

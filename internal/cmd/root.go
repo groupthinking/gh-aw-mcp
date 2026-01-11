@@ -33,7 +33,7 @@ const (
 	defaultUnifiedMode = false
 	defaultEnvFile     = ""
 	defaultEnableDIFC  = false
-	defaultLogDir      = "/tmp/gh-aw/sandbox/mcp"
+	defaultLogDir      = "/tmp/gh-aw/mcp-logs"
 )
 
 var (

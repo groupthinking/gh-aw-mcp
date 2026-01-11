@@ -53,7 +53,7 @@ For detailed setup instructions, building from source, and local development, se
      -e MCP_GATEWAY_DOMAIN=localhost \
      -e MCP_GATEWAY_API_KEY=your-secret-key \
      -v /var/run/docker.sock:/var/run/docker.sock \
-     -v /path/to/logs:/tmp/gh-aw/sandbox/mcp \
+     -v /path/to/logs:/tmp/gh-aw/mcp-logs \
      -p 8000:8000 \
      ghcr.io/githubnext/gh-aw-mcpg:latest < config.json
    ```
@@ -62,7 +62,7 @@ For detailed setup instructions, building from source, and local development, se
 - `-i`: Enables stdin for passing JSON configuration
 - `-e MCP_GATEWAY_*`: Required environment variables
 - `-v /var/run/docker.sock`: Required for spawning backend MCP servers
-- `-v /path/to/logs:/tmp/gh-aw/sandbox/mcp`: Mount for persistent gateway logs
+- `-v /path/to/logs:/tmp/gh-aw/mcp-logs`: Mount for persistent gateway logs
 - `-p 8000:8000`: Port mapping must match `MCP_GATEWAY_PORT`
 
 MCPG will start in routed mode on `http://0.0.0.0:8000` (using `MCP_GATEWAY_PORT`), proxying MCP requests to your configured backend servers.
@@ -194,7 +194,7 @@ Flags:
       --env string      Path to .env file to load environment variables
   -h, --help            help for awmg
   -l, --listen string   HTTP server listen address (default "127.0.0.1:3000")
-      --log-dir string  Directory for log files (falls back to stdout if directory cannot be created) (default "/tmp/gh-aw/sandbox/mcp")
+      --log-dir string  Directory for log files (falls back to stdout if directory cannot be created) (default "/tmp/gh-aw/mcp-logs")
       --routed          Run in routed mode (each backend at /mcp/<server>)
       --unified         Run in unified mode (all backends at /mcp)
       --validate-env    Validate execution environment (Docker, env vars) before starting
@@ -225,7 +225,7 @@ When running locally (`run.sh`), these variables are optional (warnings shown if
 | `MCP_GATEWAY_API_KEY` | API authentication key | (disabled) |
 | `MCP_GATEWAY_HOST` | Gateway bind address | `0.0.0.0` |
 | `MCP_GATEWAY_MODE` | Gateway mode | `--routed` |
-| `MCP_GATEWAY_LOG_DIR` | Log file directory | `/tmp/gh-aw/sandbox/mcp` |
+| `MCP_GATEWAY_LOG_DIR` | Log file directory | `/tmp/gh-aw/mcp-logs` |
 
 ### Docker Configuration
 
@@ -299,7 +299,7 @@ MCPG provides comprehensive logging of all gateway operations to help diagnose i
 
 ### Log File Location
 
-By default, logs are written to `/tmp/gh-aw/sandbox/mcp/mcp-gateway.log`. This location can be configured using the `--log-dir` flag or `MCP_GATEWAY_LOG_DIR` environment variable:
+By default, logs are written to `/tmp/gh-aw/mcp-logs/mcp-gateway.log`. This location can be configured using the `--log-dir` flag or `MCP_GATEWAY_LOG_DIR` environment variable:
 
 ```bash
 ./awmg --config config.toml --log-dir /var/log/mcp-gateway
@@ -307,7 +307,7 @@ By default, logs are written to `/tmp/gh-aw/sandbox/mcp/mcp-gateway.log`. This l
 
 **Important for containerized mode:** Mount the log directory to persist logs outside the container:
 ```bash
-docker run -v /path/on/host:/tmp/gh-aw/sandbox/mcp ...
+docker run -v /path/on/host:/tmp/gh-aw/mcp-logs ...
 ```
 
 If the log directory cannot be created or accessed, MCPG automatically falls back to logging to stdout.
@@ -333,7 +333,7 @@ Each log entry includes:
 
 Example log entries:
 ```
-[2026-01-08T23:00:00Z] [INFO] [startup] Starting MCPG with config: config.toml, listen: 127.0.0.1:3000, log-dir: /tmp/gh-aw/sandbox/mcp
+[2026-01-08T23:00:00Z] [INFO] [startup] Starting MCPG with config: config.toml, listen: 127.0.0.1:3000, log-dir: /tmp/gh-aw/mcp-logs
 [2026-01-08T23:00:01Z] [INFO] [backend] Launching MCP backend server: github, command=docker, args=[run --rm -i ghcr.io/github/github-mcp-server:latest]
 [2026-01-08T23:00:02Z] [INFO] [client] New MCP client connection, remote=127.0.0.1:54321, method=POST, path=/mcp/github, backend=github, session=abc123
 [2026-01-08T23:00:03Z] [ERROR] [auth] Authentication failed: invalid API key, remote=127.0.0.1:54322, path=/mcp/github
