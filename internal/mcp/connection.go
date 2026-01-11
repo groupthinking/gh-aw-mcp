@@ -1,13 +1,18 @@
 package mcp
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
+	"net/http"
 	"os"
 	"os/exec"
 	"strings"
+	"sync/atomic"
+	"time"
 
 	"github.com/githubnext/gh-aw-mcpg/internal/logger"
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
@@ -15,12 +20,20 @@ import (
 
 var logConn = logger.New("mcp:connection")
 
+// requestIDCounter is used to generate unique request IDs for HTTP requests
+var requestIDCounter uint64
+
 // Connection represents a connection to an MCP server using the official SDK
 type Connection struct {
 	client  *sdk.Client
 	session *sdk.ClientSession
 	ctx     context.Context
 	cancel  context.CancelFunc
+	// HTTP-specific fields
+	isHTTP     bool
+	httpURL    string
+	headers    map[string]string
+	httpClient *http.Client
 }
 
 // NewConnection creates a new MCP connection using the official SDK
@@ -98,10 +111,58 @@ func NewConnection(ctx context.Context, command string, args []string, env map[s
 		session: session,
 		ctx:     ctx,
 		cancel:  cancel,
+		isHTTP:  false,
 	}
 
 	log.Printf("Started MCP server: %s %v", command, args)
 	return conn, nil
+}
+
+// NewHTTPConnection creates a new HTTP-based MCP connection
+// For HTTP servers that are already running, we just store the connection info
+func NewHTTPConnection(ctx context.Context, url string, headers map[string]string) (*Connection, error) {
+	logger.LogInfo("backend", "Creating HTTP MCP connection, url=%s", url)
+	logConn.Printf("Creating HTTP MCP connection: url=%s", url)
+	ctx, cancel := context.WithCancel(ctx)
+
+	// Create an HTTP client with appropriate timeouts
+	httpClient := &http.Client{
+		Timeout: 120 * time.Second, // Overall request timeout
+		Transport: &http.Transport{
+			MaxIdleConns:        10,
+			IdleConnTimeout:     90 * time.Second,
+			TLSHandshakeTimeout: 10 * time.Second,
+		},
+	}
+
+	conn := &Connection{
+		ctx:        ctx,
+		cancel:     cancel,
+		isHTTP:     true,
+		httpURL:    url,
+		headers:    headers,
+		httpClient: httpClient,
+	}
+
+	logger.LogInfoMd("backend", "Successfully created HTTP MCP connection, url=%s", url)
+	logConn.Printf("HTTP connection created: url=%s", url)
+	log.Printf("Configured HTTP MCP server: %s", url)
+	return conn, nil
+}
+
+// IsHTTP returns true if this is an HTTP connection
+func (c *Connection) IsHTTP() bool {
+	return c.isHTTP
+}
+
+// GetHTTPURL returns the HTTP URL for this connection
+func (c *Connection) GetHTTPURL() string {
+	return c.httpURL
+}
+
+// GetHTTPHeaders returns the HTTP headers for this connection
+func (c *Connection) GetHTTPHeaders() map[string]string {
+	return c.headers
 }
 
 // SendRequest sends a JSON-RPC request and waits for the response
@@ -123,6 +184,19 @@ func (c *Connection) SendRequestWithServerID(method string, params interface{}, 
 	var result *Response
 	var err error
 
+	// Handle HTTP connections by proxying the request
+	if c.isHTTP {
+		result, err = c.sendHTTPRequest(method, params)
+		// Log the response from backend server
+		var responsePayload []byte
+		if result != nil {
+			responsePayload, _ = json.Marshal(result)
+		}
+		logger.LogRPCResponse(logger.RPCDirectionInbound, serverID, responsePayload, err)
+		return result, err
+	}
+
+	// Handle stdio connections using SDK client
 	switch method {
 	case "tools/list":
 		result, err = c.listTools()
@@ -148,6 +222,67 @@ func (c *Connection) SendRequestWithServerID(method string, params interface{}, 
 	logger.LogRPCResponse(logger.RPCDirectionInbound, serverID, responsePayload, err)
 
 	return result, err
+}
+
+// sendHTTPRequest sends a JSON-RPC request to an HTTP MCP server
+func (c *Connection) sendHTTPRequest(method string, params interface{}) (*Response, error) {
+	// Generate unique request ID using atomic counter
+	requestID := atomic.AddUint64(&requestIDCounter, 1)
+
+	// Create JSON-RPC request
+	request := map[string]interface{}{
+		"jsonrpc": "2.0",
+		"id":      requestID,
+		"method":  method,
+		"params":  params,
+	}
+
+	requestBody, err := json.Marshal(request)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal request: %w", err)
+	}
+
+	// Create HTTP request
+	httpReq, err := http.NewRequestWithContext(c.ctx, "POST", c.httpURL, bytes.NewReader(requestBody))
+	if err != nil {
+		return nil, fmt.Errorf("failed to create HTTP request: %w", err)
+	}
+
+	// Set headers
+	httpReq.Header.Set("Content-Type", "application/json")
+	for key, value := range c.headers {
+		httpReq.Header.Set(key, value)
+	}
+
+	logConn.Printf("Sending HTTP request to %s: method=%s, id=%d", c.httpURL, method, requestID)
+
+	// Send request using the reusable HTTP client
+	httpResp, err := c.httpClient.Do(httpReq)
+	if err != nil {
+		return nil, fmt.Errorf("failed to send HTTP request: %w", err)
+	}
+	defer httpResp.Body.Close()
+
+	// Read response
+	responseBody, err := io.ReadAll(httpResp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read HTTP response: %w", err)
+	}
+
+	logConn.Printf("Received HTTP response: status=%d, body_len=%d", httpResp.StatusCode, len(responseBody))
+
+	// Check for HTTP errors
+	if httpResp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("HTTP error: status=%d, body=%s", httpResp.StatusCode, string(responseBody))
+	}
+
+	// Parse JSON-RPC response
+	var rpcResponse Response
+	if err := json.Unmarshal(responseBody, &rpcResponse); err != nil {
+		return nil, fmt.Errorf("failed to parse JSON-RPC response: %w", err)
+	}
+
+	return &rpcResponse, nil
 }
 
 func (c *Connection) listTools() (*Response, error) {
