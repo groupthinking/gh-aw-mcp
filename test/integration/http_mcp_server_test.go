@@ -383,5 +383,3 @@ func TestHTTPMCPGatewayNoAuthRequired(t *testing.T) {
 		}
 	})
 }
-
-
