@@ -2,6 +2,9 @@ package launcher
 
 import (
 	"context"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"testing"
 
@@ -9,12 +12,31 @@ import (
 )
 
 func TestHTTPConnection(t *testing.T) {
+	// Create a mock HTTP server that handles initialize
+	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		response := map[string]interface{}{
+			"jsonrpc": "2.0",
+			"id":      1,
+			"result": map[string]interface{}{
+				"protocolVersion": "2024-11-05",
+				"capabilities":    map[string]interface{}{},
+				"serverInfo": map[string]interface{}{
+					"name":    "test-server",
+					"version": "1.0.0",
+				},
+			},
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(response)
+	}))
+	defer mockServer.Close()
+
 	// Create test config with HTTP server
 	jsonConfig := `{
 		"mcpServers": {
 			"safeinputs": {
 				"type": "http",
-				"url": "http://host.docker.internal:3000/",
+				"url": "` + mockServer.URL + `",
 				"headers": {
 					"Authorization": "test-auth-secret"
 				}
@@ -53,8 +75,8 @@ func TestHTTPConnection(t *testing.T) {
 		t.Errorf("Expected type 'http', got '%s'", httpServer.Type)
 	}
 
-	if httpServer.URL != "http://host.docker.internal:3000/" {
-		t.Errorf("Expected URL 'http://host.docker.internal:3000/', got '%s'", httpServer.URL)
+	if httpServer.URL != mockServer.URL {
+		t.Errorf("Expected URL '%s', got '%s'", mockServer.URL, httpServer.URL)
 	}
 
 	if httpServer.Headers["Authorization"] != "test-auth-secret" {
@@ -75,8 +97,8 @@ func TestHTTPConnection(t *testing.T) {
 		t.Error("Connection should be HTTP")
 	}
 
-	if conn.GetHTTPURL() != "http://host.docker.internal:3000/" {
-		t.Errorf("Expected URL 'http://host.docker.internal:3000/', got '%s'", conn.GetHTTPURL())
+	if conn.GetHTTPURL() != mockServer.URL {
+		t.Errorf("Expected URL '%s', got '%s'", mockServer.URL, conn.GetHTTPURL())
 	}
 
 	if conn.GetHTTPHeaders()["Authorization"] != "test-auth-secret" {
@@ -89,12 +111,31 @@ func TestHTTPConnectionWithVariableExpansion(t *testing.T) {
 	os.Setenv("TEST_AUTH_TOKEN", "secret-token-value")
 	defer os.Unsetenv("TEST_AUTH_TOKEN")
 
+	// Create a mock HTTP server that handles initialize
+	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		response := map[string]interface{}{
+			"jsonrpc": "2.0",
+			"id":      1,
+			"result": map[string]interface{}{
+				"protocolVersion": "2024-11-05",
+				"capabilities":    map[string]interface{}{},
+				"serverInfo": map[string]interface{}{
+					"name":    "test-server",
+					"version": "1.0.0",
+				},
+			},
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(response)
+	}))
+	defer mockServer.Close()
+
 	// Create test config with variable expansion
 	jsonConfig := `{
 		"mcpServers": {
 			"safeinputs": {
 				"type": "http",
-				"url": "http://host.docker.internal:3000/",
+				"url": "` + mockServer.URL + `",
 				"headers": {
 					"Authorization": "${TEST_AUTH_TOKEN}"
 				}
