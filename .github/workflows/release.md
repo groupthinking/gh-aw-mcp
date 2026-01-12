@@ -43,12 +43,12 @@ safe-outputs:
       description: "Publish the draft release"
       runs-on: ubuntu-latest
       output: "Release published successfully!"
-      needs: ["release", "safe_outputs"]
+      needs: ["draft_release", "safe_outputs"]
       steps:
         - name: Publish release
           run: |
-            # Get the release tag from the release job output
-            RELEASE_TAG="${{ needs.release.outputs.release_tag }}"
+            # Get the release tag from the draft_release job output
+            RELEASE_TAG="${{ needs.draft_release.outputs.release_tag }}"
             
             if [ -z "$RELEASE_TAG" ]; then
               echo "Error: Release tag not available from release job output"
@@ -124,7 +124,7 @@ jobs:
           echo "new_tag=$NEW_TAG" >> "$GITHUB_OUTPUT"
           echo "✓ Tag $NEW_TAG created and pushed"
 
-  release:
+  draft_release:
     needs: ["activation", "create-tag"]
     if: always() && needs.activation.result == 'success' && (needs.create-tag.result == 'success' || needs.create-tag.result == 'skipped')
     runs-on: ubuntu-latest
@@ -232,7 +232,7 @@ jobs:
           echo "✓ Release Tag: $RELEASE_TAG"
 
   docker:
-    needs: ["release"]
+    needs: ["draft_release"]
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -258,7 +258,7 @@ jobs:
       - name: Extract tag version
         id: tag_version
         run: |
-          RELEASE_TAG="${{ needs.release.outputs.release_tag }}"
+          RELEASE_TAG="${{ needs.draft_release.outputs.release_tag }}"
           echo "version=$RELEASE_TAG" >> "$GITHUB_OUTPUT"
           echo "✓ Version: $RELEASE_TAG"
 
@@ -278,7 +278,7 @@ jobs:
           cache-to: type=gha,mode=max
 
   generate-sbom:
-    needs: ["release"]
+    needs: ["draft_release"]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -330,7 +330,7 @@ jobs:
       - name: Attach SBOM to release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          RELEASE_TAG: ${{ needs.release.outputs.release_tag }}
+          RELEASE_TAG: ${{ needs.draft_release.outputs.release_tag }}
         run: |
           echo "Attaching SBOM files to release: $RELEASE_TAG"
           gh release upload "$RELEASE_TAG" sbom.spdx.json sbom.cdx.json --clobber
@@ -338,14 +338,14 @@ jobs:
 steps:
   - name: Setup environment and fetch release data
     env:
-      RELEASE_ID: ${{ needs.release.outputs.release_id }}
-      RELEASE_TAG: ${{ needs.release.outputs.release_tag }}
+      RELEASE_ID: ${{ needs.draft_release.outputs.release_id }}
+      RELEASE_TAG: ${{ needs.draft_release.outputs.release_tag }}
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     run: |
       set -e
       mkdir -p /tmp/gh-aw-mcpg/release-data
       
-      # Use the release ID and tag from the release job
+      # Use the release ID and tag from the draft_release job
       echo "Release ID from release job: $RELEASE_ID"
       echo "Release tag from release job: $RELEASE_TAG"
       
@@ -404,7 +404,7 @@ steps:
 
 Generate an engaging release highlights summary for **${{ github.repository }}** (MCP Gateway) release `${RELEASE_TAG}`.
 
-**Release ID**: ${{ needs.release.outputs.release_id }}
+**Release ID**: ${{ needs.draft_release.outputs.release_id }}
 
 ## Data Available
 
