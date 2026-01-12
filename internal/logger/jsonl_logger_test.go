@@ -179,13 +179,8 @@ func TestSanitizePayload(t *testing.T) {
 				t.Fatalf("sanitizePayload returned nil")
 			}
 
-			// Convert back to JSON to check if it contains secrets
-			sanitized, err := json.Marshal(result)
-			if err != nil {
-				t.Fatalf("Failed to marshal sanitized payload: %v", err)
-			}
-
-			sanitizedStr := string(sanitized)
+			// The result is already a sanitized string
+			sanitizedStr := string(result)
 
 			if tt.expectRedacted {
 				// Should contain [REDACTED]
@@ -230,12 +225,9 @@ func TestSanitizePayloadWithNestedStructures(t *testing.T) {
 	}`
 
 	result := sanitizePayload([]byte(input))
-	sanitized, err := json.Marshal(result)
-	if err != nil {
-		t.Fatalf("Failed to marshal sanitized payload: %v", err)
-	}
 
-	sanitizedStr := string(sanitized)
+	// The result is already a sanitized string
+	sanitizedStr := string(result)
 
 	// Should redact all secrets at all levels
 	if !strings.Contains(sanitizedStr, "[REDACTED]") {
@@ -324,9 +316,18 @@ func TestLogRPCMessageJSONLWithInvalidJSON(t *testing.T) {
 		t.Fatalf("Failed to parse JSONL: %v", err)
 	}
 
-	// Should have an error field in payload indicating parse failure
-	if entry.Payload["_error"] != "failed to parse JSON" {
-		t.Errorf("Expected parse error in payload, got: %v", entry.Payload)
+	// The payload should be wrapped in a valid JSON object with an error marker
+	var payloadObj map[string]interface{}
+	if err := json.Unmarshal(entry.Payload, &payloadObj); err != nil {
+		t.Fatalf("Failed to parse payload: %v", err)
+	}
+
+	if payloadObj["_error"] != "invalid JSON" {
+		t.Errorf("Expected _error field in payload, got: %v", payloadObj)
+	}
+
+	if !strings.Contains(fmt.Sprintf("%v", payloadObj["_raw"]), "invalid") {
+		t.Errorf("Expected _raw field to contain original invalid JSON, got: %v", payloadObj["_raw"])
 	}
 }
 

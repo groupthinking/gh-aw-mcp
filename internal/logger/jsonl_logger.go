@@ -25,13 +25,13 @@ var (
 
 // JSONLRPCMessage represents a single RPC message log entry in JSONL format
 type JSONLRPCMessage struct {
-	Timestamp string                 `json:"timestamp"`
-	Direction string                 `json:"direction"` // "IN" or "OUT"
-	Type      string                 `json:"type"`      // "REQUEST" or "RESPONSE"
-	ServerID  string                 `json:"server_id"`
-	Method    string                 `json:"method,omitempty"`
-	Error     string                 `json:"error,omitempty"`
-	Payload   map[string]interface{} `json:"payload"` // Full sanitized payload
+	Timestamp string          `json:"timestamp"`
+	Direction string          `json:"direction"` // "IN" or "OUT"
+	Type      string          `json:"type"`      // "REQUEST" or "RESPONSE"
+	ServerID  string          `json:"server_id"`
+	Method    string          `json:"method,omitempty"`
+	Error     string          `json:"error,omitempty"`
+	Payload   json.RawMessage `json:"payload"` // Full sanitized payload as raw JSON
 }
 
 // InitJSONLLogger initializes the global JSONL logger
@@ -86,23 +86,25 @@ func (jl *JSONLLogger) Close() error {
 	return nil
 }
 
-// sanitizePayload sanitizes a JSON payload by applying regex patterns to the entire JSON string
-// It takes raw bytes, sanitizes using regex patterns, then parses back to a map
-func sanitizePayload(payloadBytes []byte) map[string]interface{} {
-	// Apply regex sanitization to the entire JSON string
+// sanitizePayload sanitizes a payload by applying regex patterns to the entire string
+// It takes raw bytes, applies regex sanitization in one pass, and returns sanitized bytes
+func sanitizePayload(payloadBytes []byte) json.RawMessage {
+	// Apply regex sanitization to the entire string in one pass
 	sanitized := sanitizeSecrets(string(payloadBytes))
 
-	// Parse the sanitized JSON back into a map
-	var payload map[string]interface{}
-	if err := json.Unmarshal([]byte(sanitized), &payload); err != nil {
-		// If we can't parse the payload, return an error object
-		return map[string]interface{}{
-			"_error": "failed to parse JSON",
+	// Validate that the result is valid JSON for RawMessage
+	// If not valid, wrap it in a JSON object
+	if !json.Valid([]byte(sanitized)) {
+		// Create a valid JSON object with the invalid content as a string
+		wrapped := map[string]string{
+			"_error": "invalid JSON",
 			"_raw":   sanitized,
 		}
+		wrappedBytes, _ := json.Marshal(wrapped)
+		return json.RawMessage(wrappedBytes)
 	}
 
-	return payload
+	return json.RawMessage(sanitized)
 }
 
 // LogMessage logs an RPC message to the JSONL file
