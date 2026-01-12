@@ -143,12 +143,14 @@ func NewConnection(ctx context.Context, command string, args []string, env map[s
 // For HTTP servers that are already running, we connect and initialize a session
 //
 // This function implements a fallback strategy for HTTP transports:
-// 1. First tries streamable HTTP (2025-03-26 spec) using SDK's StreamableClientTransport
-// 2. Falls back to SSE (2024-11-05 spec) using SDK's SSEClientTransport
-// 3. Falls back to plain JSON-RPC 2.0 over HTTP POST (non-standard, used by safeinputs)
+//  1. If custom headers are provided, skip SDK transports (they don't support custom headers)
+//     and use plain JSON-RPC 2.0 over HTTP POST (for safeinputs compatibility)
+//  2. Otherwise, try standard transports:
+//     a. Streamable HTTP (2025-03-26 spec) using SDK's StreamableClientTransport
+//     b. SSE (2024-11-05 spec) using SDK's SSEClientTransport
+//     c. Plain JSON-RPC 2.0 over HTTP POST as final fallback
 //
-// This ensures compatibility with all types of HTTP MCP servers, including those
-// that implement custom transports like safeinputs.
+// This ensures compatibility with all types of HTTP MCP servers.
 func NewHTTPConnection(ctx context.Context, url string, headers map[string]string) (*Connection, error) {
 	logger.LogInfo("backend", "Creating HTTP MCP connection with transport fallback, url=%s", url)
 	logConn.Printf("Creating HTTP MCP connection: url=%s", url)
@@ -164,8 +166,24 @@ func NewHTTPConnection(ctx context.Context, url string, headers map[string]strin
 		},
 	}
 
-	// Try transport types in order: streamable HTTP → SSE → plain JSON-RPC
-	
+	// If custom headers are provided, skip SDK transports as they don't support headers
+	// This is typical for backends like safeinputs that require authentication
+	if len(headers) > 0 {
+		logConn.Printf("Custom headers detected, using plain JSON-RPC transport for %s", url)
+		conn, err := tryPlainJSONTransport(ctx, cancel, url, headers, httpClient)
+		if err == nil {
+			logger.LogInfo("backend", "Successfully connected using plain JSON-RPC transport, url=%s", url)
+			log.Printf("Configured HTTP MCP server with plain JSON-RPC transport: %s", url)
+			return conn, nil
+		}
+		cancel()
+		logger.LogError("backend", "Plain JSON-RPC transport failed for url=%s, error=%v", url, err)
+		return nil, fmt.Errorf("failed to connect with plain JSON-RPC transport: %w", err)
+	}
+
+	// Try standard transports in order: streamable HTTP → SSE → plain JSON-RPC
+	var lastErr error
+
 	// Try 1: Streamable HTTP (2025-03-26 spec)
 	logConn.Printf("Attempting streamable HTTP transport for %s", url)
 	conn, err := tryStreamableHTTPTransport(ctx, cancel, url, headers, httpClient)
@@ -175,6 +193,7 @@ func NewHTTPConnection(ctx context.Context, url string, headers map[string]strin
 		return conn, nil
 	}
 	logConn.Printf("Streamable HTTP failed: %v", err)
+	lastErr = err
 
 	// Try 2: SSE (2024-11-05 spec)
 	logConn.Printf("Attempting SSE transport for %s", url)
@@ -185,8 +204,9 @@ func NewHTTPConnection(ctx context.Context, url string, headers map[string]strin
 		return conn, nil
 	}
 	logConn.Printf("SSE transport failed: %v", err)
+	lastErr = err
 
-	// Try 3: Plain JSON-RPC over HTTP (non-standard, for safeinputs compatibility)
+	// Try 3: Plain JSON-RPC over HTTP (non-standard, for fallback)
 	logConn.Printf("Attempting plain JSON-RPC transport for %s", url)
 	conn, err = tryPlainJSONTransport(ctx, cancel, url, headers, httpClient)
 	if err == nil {
@@ -195,11 +215,12 @@ func NewHTTPConnection(ctx context.Context, url string, headers map[string]strin
 		return conn, nil
 	}
 	logConn.Printf("Plain JSON-RPC transport failed: %v", err)
+	lastErr = err
 
 	// All transports failed
 	cancel()
 	logger.LogError("backend", "All HTTP transports failed for url=%s", url)
-	return nil, fmt.Errorf("failed to connect using any HTTP transport (tried streamable, SSE, and plain JSON-RPC): last error: %w", err)
+	return nil, fmt.Errorf("failed to connect using any HTTP transport (tried streamable, SSE, and plain JSON-RPC): last error: %w", lastErr)
 }
 
 // tryStreamableHTTPTransport attempts to connect using the streamable HTTP transport (2025-03-26 spec)
