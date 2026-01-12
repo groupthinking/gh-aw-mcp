@@ -128,6 +128,16 @@ func NewConnection(ctx context.Context, command string, args []string, env map[s
 
 // NewHTTPConnection creates a new HTTP-based MCP connection
 // For HTTP servers that are already running, we connect and initialize a session
+//
+// NOTE: This currently implements the MCP HTTP protocol manually instead of using
+// the SDK's SSEClientTransport. This is because:
+// 1. SSEClientTransport requires Server-Sent Events (SSE) format
+// 2. Some HTTP MCP servers (like safeinputs) use plain JSON-RPC over HTTP POST
+// 3. The MCP spec allows both SSE and plain HTTP transports
+//
+// TODO: Migrate to sdk.SSEClientTransport once we confirm all target HTTP backends
+// support the SSE format, or extend the SDK to support both transport formats.
+// This would eliminate manual JSON-RPC handling and improve maintainability.
 func NewHTTPConnection(ctx context.Context, url string, headers map[string]string) (*Connection, error) {
 	logger.LogInfo("backend", "Creating HTTP MCP connection, url=%s", url)
 	logConn.Printf("Creating HTTP MCP connection: url=%s", url)
