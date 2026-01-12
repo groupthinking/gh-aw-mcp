@@ -21,7 +21,7 @@ func TestHTTPBackendInitialization(t *testing.T) {
 	// Create a mock HTTP MCP server that requires Mcp-Session-Id header
 	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		receivedSessionID = r.Header.Get("Mcp-Session-Id")
-		
+
 		// Parse the JSON-RPC request to get the method
 		var req struct {
 			Method string `json:"method"`
@@ -108,7 +108,7 @@ func TestHTTPBackendInitializationWithSessionIDRequirement(t *testing.T) {
 	// Create a strict HTTP MCP server that fails without Mcp-Session-Id header
 	strictServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		sessionID := r.Header.Get("Mcp-Session-Id")
-		
+
 		if sessionID == "" {
 			// Return the exact error from the problem statement
 			w.WriteHeader(http.StatusBadRequest)
@@ -178,7 +178,7 @@ func TestHTTPBackend_SessionIDPropagation(t *testing.T) {
 	// Create a mock HTTP MCP server
 	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		sessionID := r.Header.Get("Mcp-Session-Id")
-		
+
 		var req struct {
 			Method string      `json:"method"`
 			Params interface{} `json:"params"`
@@ -249,7 +249,7 @@ func TestHTTPBackend_SessionIDPropagation(t *testing.T) {
 
 	clientSessionID := "client-session-12345"
 	ctxWithSession := context.WithValue(context.Background(), mcp.SessionIDContextKey, clientSessionID)
-	
+
 	_, err = conn.SendRequestWithServerID(ctxWithSession, "tools/call", map[string]interface{}{
 		"name":      "echo",
 		"arguments": map[string]interface{}{"message": "test"},
