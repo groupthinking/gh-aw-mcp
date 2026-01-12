@@ -185,7 +185,8 @@ func TestHTTPBackend_SessionIDPropagation(t *testing.T) {
 		}
 		json.NewDecoder(r.Body).Decode(&req)
 
-		if req.Method == "tools/list" {
+		switch req.Method {
+		case "tools/list":
 			initSessionID = sessionID
 			// Return tools list
 			response := map[string]interface{}{
@@ -202,7 +203,7 @@ func TestHTTPBackend_SessionIDPropagation(t *testing.T) {
 			}
 			w.Header().Set("Content-Type", "application/json")
 			json.NewEncoder(w).Encode(response)
-		} else if req.Method == "tools/call" {
+		case "tools/call":
 			toolCallSessionID = sessionID
 			// Return tool result
 			response := map[string]interface{}{
