@@ -616,7 +616,22 @@ jobs:
           
           ## Output Format
           
-          Generate the release highlights in markdown format as described above. The highlights will be automatically prepended to the release notes, and the release will be published once complete.
+          **CRITICAL**: You MUST call the `update_release` tool to update the release with the generated highlights:
+          
+          ```javascript
+          update_release({
+            tag: "${RELEASE_TAG}",
+            operation: "prepend",
+            body: "## 🌟 Release Highlights\n\n[Your complete markdown highlights here]"
+          })
+          ```
+          
+          **Required Parameters:**
+          - `tag` - Release tag from `${RELEASE_TAG}` environment variable (e.g., "v0.1.0")
+          - `operation` - Must be `"prepend"` to add before existing notes
+          - `body` - Complete markdown content (include all formatting, emojis, links)
+          
+          **Note**: The release will be automatically published after the highlights are added.
           
           **Documentation Base URL:**
           - Repository docs: `https://github.com/githubnext/gh-aw-mcpg/blob/main/docs/`
