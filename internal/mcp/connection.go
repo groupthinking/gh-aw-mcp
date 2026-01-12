@@ -460,6 +460,7 @@ func (c *Connection) initializeHTTPSession() (string, error) {
 
 	// Set headers
 	httpReq.Header.Set("Content-Type", "application/json")
+	httpReq.Header.Set("Accept", "application/json, text/event-stream")
 
 	// Generate a temporary session ID for the initialize request
 	// Some backends may require this header even during initialization
@@ -545,6 +546,7 @@ func (c *Connection) sendHTTPRequest(ctx context.Context, method string, params 
 
 	// Set headers
 	httpReq.Header.Set("Content-Type", "application/json")
+	httpReq.Header.Set("Accept", "application/json, text/event-stream")
 
 	// Add Mcp-Session-Id header with priority:
 	// 1) Context session ID (if explicitly provided for this request)
