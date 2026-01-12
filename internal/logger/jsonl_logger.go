@@ -104,7 +104,19 @@ func sanitizePayload(payloadBytes []byte) json.RawMessage {
 		return json.RawMessage(wrappedBytes)
 	}
 
-	return json.RawMessage(sanitized)
+	// Marshal and unmarshal to ensure single-line JSON (removes newlines/whitespace)
+	var tmp interface{}
+	if err := json.Unmarshal([]byte(sanitized), &tmp); err != nil {
+		// Should not happen since we validated above, but handle gracefully
+		wrapped := map[string]string{
+			"_error": "failed to parse JSON",
+			"_raw":   sanitized,
+		}
+		wrappedBytes, _ := json.Marshal(wrapped)
+		return json.RawMessage(wrappedBytes)
+	}
+	compactBytes, _ := json.Marshal(tmp)
+	return json.RawMessage(compactBytes)
 }
 
 // LogMessage logs an RPC message to the JSONL file

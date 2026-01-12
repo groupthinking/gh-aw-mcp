@@ -402,3 +402,35 @@ func TestMultipleMessagesInJSONL(t *testing.T) {
 		t.Errorf("Expected %d log entries, got %d", len(messages), lineCount)
 	}
 }
+
+func TestSanitizePayloadCompactsJSON(t *testing.T) {
+	// Test that multi-line JSON is compacted to a single line
+	multilineJSON := `{
+		"jsonrpc": "2.0",
+		"method": "test",
+		"params": {
+			"nested": {
+				"value": "test"
+			}
+		}
+	}`
+
+	result := sanitizePayload([]byte(multilineJSON))
+
+	// The result should not contain newlines
+	resultStr := string(result)
+	if strings.Contains(resultStr, "\n") {
+		t.Errorf("Result contains newlines, should be single-line JSON: %s", resultStr)
+	}
+
+	// Should still be valid JSON
+	var tmp interface{}
+	if err := json.Unmarshal(result, &tmp); err != nil {
+		t.Errorf("Result is not valid JSON: %v", err)
+	}
+
+	// Should contain the expected values
+	if !strings.Contains(resultStr, "jsonrpc") || !strings.Contains(resultStr, "test") {
+		t.Errorf("Result missing expected content: %s", resultStr)
+	}
+}
