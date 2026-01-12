@@ -375,24 +375,7 @@ func (c *Connection) SendRequestWithServerID(ctx context.Context, method string,
 		}
 
 		// For streamable and SSE transports, use SDK session methods
-		// These transports are managed by the SDK, so we use the session directly
-		switch method {
-		case "tools/list":
-			result, err = c.listTools()
-		case "tools/call":
-			result, err = c.callTool(params)
-		case "resources/list":
-			result, err = c.listResources()
-		case "resources/read":
-			result, err = c.readResource(params)
-		case "prompts/list":
-			result, err = c.listPrompts()
-		case "prompts/get":
-			result, err = c.getPrompt(params)
-		default:
-			err = fmt.Errorf("unsupported method: %s", method)
-		}
-
+		result, err = c.callSDKMethod(method, params)
 		// Log the response from backend server
 		var responsePayload []byte
 		if result != nil {
@@ -403,22 +386,7 @@ func (c *Connection) SendRequestWithServerID(ctx context.Context, method string,
 	}
 
 	// Handle stdio connections using SDK client
-	switch method {
-	case "tools/list":
-		result, err = c.listTools()
-	case "tools/call":
-		result, err = c.callTool(params)
-	case "resources/list":
-		result, err = c.listResources()
-	case "resources/read":
-		result, err = c.readResource(params)
-	case "prompts/list":
-		result, err = c.listPrompts()
-	case "prompts/get":
-		result, err = c.getPrompt(params)
-	default:
-		err = fmt.Errorf("unsupported method: %s", method)
-	}
+	result, err = c.callSDKMethod(method, params)
 
 	// Log the response from backend server
 	var responsePayload []byte
@@ -428,6 +396,27 @@ func (c *Connection) SendRequestWithServerID(ctx context.Context, method string,
 	logger.LogRPCResponse(logger.RPCDirectionInbound, serverID, responsePayload, err)
 
 	return result, err
+}
+
+// callSDKMethod calls the appropriate SDK method based on the method name
+// This centralizes the method dispatch logic used by both HTTP SDK transports and stdio
+func (c *Connection) callSDKMethod(method string, params interface{}) (*Response, error) {
+	switch method {
+	case "tools/list":
+		return c.listTools()
+	case "tools/call":
+		return c.callTool(params)
+	case "resources/list":
+		return c.listResources()
+	case "resources/read":
+		return c.readResource(params)
+	case "prompts/list":
+		return c.listPrompts()
+	case "prompts/get":
+		return c.getPrompt(params)
+	default:
+		return nil, fmt.Errorf("unsupported method: %s", method)
+	}
 }
 
 // initializeHTTPSession sends an initialize request to the HTTP backend and captures the session ID
@@ -608,6 +597,9 @@ func (c *Connection) sendHTTPRequest(ctx context.Context, method string, params 
 }
 
 func (c *Connection) listTools() (*Response, error) {
+	if c.session == nil {
+		return nil, fmt.Errorf("SDK session not available for plain JSON-RPC transport")
+	}
 	result, err := c.session.ListTools(c.ctx, &sdk.ListToolsParams{})
 	if err != nil {
 		return nil, err
@@ -626,6 +618,9 @@ func (c *Connection) listTools() (*Response, error) {
 }
 
 func (c *Connection) callTool(params interface{}) (*Response, error) {
+	if c.session == nil {
+		return nil, fmt.Errorf("SDK session not available for plain JSON-RPC transport")
+	}
 	var callParams CallToolParams
 	paramsJSON, _ := json.Marshal(params)
 	if err := json.Unmarshal(paramsJSON, &callParams); err != nil {
@@ -653,6 +648,9 @@ func (c *Connection) callTool(params interface{}) (*Response, error) {
 }
 
 func (c *Connection) listResources() (*Response, error) {
+	if c.session == nil {
+		return nil, fmt.Errorf("SDK session not available for plain JSON-RPC transport")
+	}
 	result, err := c.session.ListResources(c.ctx, &sdk.ListResourcesParams{})
 	if err != nil {
 		return nil, err
@@ -671,6 +669,9 @@ func (c *Connection) listResources() (*Response, error) {
 }
 
 func (c *Connection) readResource(params interface{}) (*Response, error) {
+	if c.session == nil {
+		return nil, fmt.Errorf("SDK session not available for plain JSON-RPC transport")
+	}
 	var readParams struct {
 		URI string `json:"uri"`
 	}
@@ -699,6 +700,9 @@ func (c *Connection) readResource(params interface{}) (*Response, error) {
 }
 
 func (c *Connection) listPrompts() (*Response, error) {
+	if c.session == nil {
+		return nil, fmt.Errorf("SDK session not available for plain JSON-RPC transport")
+	}
 	result, err := c.session.ListPrompts(c.ctx, &sdk.ListPromptsParams{})
 	if err != nil {
 		return nil, err
@@ -717,6 +721,9 @@ func (c *Connection) listPrompts() (*Response, error) {
 }
 
 func (c *Connection) getPrompt(params interface{}) (*Response, error) {
+	if c.session == nil {
+		return nil, fmt.Errorf("SDK session not available for plain JSON-RPC transport")
+	}
 	var getParams struct {
 		Name      string            `json:"name"`
 		Arguments map[string]string `json:"arguments"`
