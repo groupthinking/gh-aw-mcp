@@ -238,7 +238,7 @@ func tryStreamableHTTPTransport(ctx context.Context, cancel context.CancelFunc, 
 	// Use a short timeout to fail fast and try other transports
 	connectCtx, connectCancel := context.WithTimeout(ctx, 5*time.Second)
 	defer connectCancel()
-	
+
 	session, err := client.Connect(connectCtx, transport, nil)
 	if err != nil {
 		return nil, fmt.Errorf("streamable HTTP transport connect failed: %w", err)
@@ -279,7 +279,7 @@ func trySSETransport(ctx context.Context, cancel context.CancelFunc, url string,
 	// Use a short timeout to fail fast and try other transports
 	connectCtx, connectCancel := context.WithTimeout(ctx, 5*time.Second)
 	defer connectCancel()
-	
+
 	session, err := client.Connect(connectCtx, transport, nil)
 	if err != nil {
 		return nil, fmt.Errorf("SSE transport connect failed: %w", err)
