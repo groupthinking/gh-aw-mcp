@@ -25,7 +25,7 @@ func NewSysServer(serverIDs []string) *SysServer {
 // HandleRequest processes MCP requests for system tools
 func (s *SysServer) HandleRequest(method string, params json.RawMessage) (interface{}, error) {
 	log.Printf("Handling request: method=%s", method)
-	
+
 	switch method {
 	case "tools/list":
 		return s.listTools()
@@ -71,7 +71,7 @@ func (s *SysServer) listTools() (interface{}, error) {
 
 func (s *SysServer) callTool(name string, args map[string]interface{}) (interface{}, error) {
 	log.Printf("Executing tool: name=%s", name)
-	
+
 	switch name {
 	case "sys_init":
 		return s.sysInit()

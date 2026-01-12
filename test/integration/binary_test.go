@@ -500,7 +500,7 @@ func TestBinaryInvocation_NoConfigRequired(t *testing.T) {
 	// Test running without any config flag
 	cmd := exec.Command(binaryPath)
 	output, err := cmd.CombinedOutput()
-	
+
 	// Should exit with error
 	if err == nil {
 		t.Fatal("Expected error when running without config flags, but command succeeded")
@@ -511,7 +511,7 @@ func TestBinaryInvocation_NoConfigRequired(t *testing.T) {
 	if !bytes.Contains(output, []byte("configuration source required")) {
 		t.Errorf("Expected 'configuration source required' error message, got: %s", outputStr)
 	}
-	
+
 	// Should mention both --config and --config-stdin
 	if !bytes.Contains(output, []byte("--config")) || !bytes.Contains(output, []byte("--config-stdin")) {
 		t.Errorf("Expected error message to mention both --config and --config-stdin, got: %s", outputStr)

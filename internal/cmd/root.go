@@ -115,7 +115,7 @@ func run(cmd *cobra.Command, args []string) error {
 	defer logger.CloseJSONLLogger()
 
 	logger.LogInfoMd("startup", "MCPG Gateway version: %s", version)
-	
+
 	// Log config source based on what was provided
 	configSource := configFile
 	if configStdin {
