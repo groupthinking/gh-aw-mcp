@@ -180,21 +180,21 @@ func (s *Server) proxyToServer(w http.ResponseWriter, r *http.Request, serverID 
 
 	switch req.Method {
 	case "tools/list":
-		resp, err = conn.SendRequestWithServerID("tools/list", nil, serverID)
+		resp, err = conn.SendRequestWithServerID(r.Context(), "tools/list", nil, serverID)
 	case "tools/call":
 		var params mcp.CallToolParams
 		if err := json.Unmarshal(req.Params, &params); err != nil {
 			s.sendError(w, -32602, "Invalid params", nil)
 			return
 		}
-		resp, err = conn.SendRequestWithServerID("tools/call", params, serverID)
+		resp, err = conn.SendRequestWithServerID(r.Context(), "tools/call", params, serverID)
 	default:
 		// Forward as-is
 		var params interface{}
 		if len(req.Params) > 0 {
 			json.Unmarshal(req.Params, &params)
 		}
-		resp, err = conn.SendRequestWithServerID(req.Method, params, serverID)
+		resp, err = conn.SendRequestWithServerID(r.Context(), req.Method, params, serverID)
 	}
 
 	if err != nil {

@@ -20,6 +20,13 @@ import (
 
 var logConn = logger.New("mcp:connection")
 
+// ContextKey for session ID
+type ContextKey string
+
+// SessionIDContextKey is used to store MCP session ID in context
+// This is the same key used in the server package to avoid circular dependencies
+const SessionIDContextKey ContextKey = "awmg-session-id"
+
 // requestIDCounter is used to generate unique request IDs for HTTP requests
 var requestIDCounter uint64
 
@@ -168,11 +175,12 @@ func (c *Connection) GetHTTPHeaders() map[string]string {
 // SendRequest sends a JSON-RPC request and waits for the response
 // The serverID parameter is used for logging to associate the request with a backend server
 func (c *Connection) SendRequest(method string, params interface{}) (*Response, error) {
-	return c.SendRequestWithServerID(method, params, "unknown")
+	return c.SendRequestWithServerID(context.Background(), method, params, "unknown")
 }
 
 // SendRequestWithServerID sends a JSON-RPC request with server ID for logging
-func (c *Connection) SendRequestWithServerID(method string, params interface{}, serverID string) (*Response, error) {
+// The ctx parameter is used to extract session ID for HTTP MCP servers
+func (c *Connection) SendRequestWithServerID(ctx context.Context, method string, params interface{}, serverID string) (*Response, error) {
 	// Log the outbound request to backend server
 	requestPayload, _ := json.Marshal(map[string]interface{}{
 		"jsonrpc": "2.0",
@@ -186,7 +194,7 @@ func (c *Connection) SendRequestWithServerID(method string, params interface{}, 
 
 	// Handle HTTP connections by proxying the request
 	if c.isHTTP {
-		result, err = c.sendHTTPRequest(method, params)
+		result, err = c.sendHTTPRequest(ctx, method, params)
 		// Log the response from backend server
 		var responsePayload []byte
 		if result != nil {
@@ -225,7 +233,8 @@ func (c *Connection) SendRequestWithServerID(method string, params interface{}, 
 }
 
 // sendHTTPRequest sends a JSON-RPC request to an HTTP MCP server
-func (c *Connection) sendHTTPRequest(method string, params interface{}) (*Response, error) {
+// The ctx parameter is used to extract session ID for the Mcp-Session-Id header
+func (c *Connection) sendHTTPRequest(ctx context.Context, method string, params interface{}) (*Response, error) {
 	// Generate unique request ID using atomic counter
 	requestID := atomic.AddUint64(&requestIDCounter, 1)
 
@@ -243,13 +252,21 @@ func (c *Connection) sendHTTPRequest(method string, params interface{}) (*Respon
 	}
 
 	// Create HTTP request
-	httpReq, err := http.NewRequestWithContext(c.ctx, "POST", c.httpURL, bytes.NewReader(requestBody))
+	httpReq, err := http.NewRequestWithContext(ctx, "POST", c.httpURL, bytes.NewReader(requestBody))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create HTTP request: %w", err)
 	}
 
 	// Set headers
 	httpReq.Header.Set("Content-Type", "application/json")
+	
+	// Extract session ID from context and add Mcp-Session-Id header
+	if sessionID, ok := ctx.Value(SessionIDContextKey).(string); ok && sessionID != "" {
+		httpReq.Header.Set("Mcp-Session-Id", sessionID)
+		logConn.Printf("Added Mcp-Session-Id header: %s", sessionID)
+	}
+	
+	// Add configured headers
 	for key, value := range c.headers {
 		httpReq.Header.Set(key, value)
 	}
