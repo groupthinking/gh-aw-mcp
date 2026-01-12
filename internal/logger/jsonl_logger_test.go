@@ -106,7 +106,8 @@ func TestLogRPCMessageJSONL(t *testing.T) {
 		}
 
 		// Verify line-specific fields
-		if lineCount == 1 {
+		switch lineCount {
+		case 1:
 			// First line should be a REQUEST
 			if entry.Type != "REQUEST" {
 				t.Errorf("Line 1: expected type REQUEST, got %s", entry.Type)
@@ -117,7 +118,7 @@ func TestLogRPCMessageJSONL(t *testing.T) {
 			if entry.Direction != "OUT" {
 				t.Errorf("Line 1: expected direction OUT, got %s", entry.Direction)
 			}
-		} else if lineCount == 2 {
+		case 2:
 			// Second line should be a RESPONSE
 			if entry.Type != "RESPONSE" {
 				t.Errorf("Line 2: expected type RESPONSE, got %s", entry.Type)
