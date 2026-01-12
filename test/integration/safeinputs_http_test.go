@@ -67,6 +67,19 @@ func TestSafeinputsHTTPBackend(t *testing.T) {
 		// Return appropriate response based on method
 		var response map[string]interface{}
 		switch rpcReq.Method {
+		case "initialize":
+			response = map[string]interface{}{
+				"jsonrpc": "2.0",
+				"id":      rpcReq.ID,
+				"result": map[string]interface{}{
+					"protocolVersion": "2024-11-05",
+					"capabilities":    map[string]interface{}{},
+					"serverInfo": map[string]interface{}{
+						"name":    "safeinputs-server",
+						"version": "1.0.0",
+					},
+				},
+			}
 		case "tools/list":
 			response = map[string]interface{}{
 				"jsonrpc": "2.0",
@@ -231,7 +244,8 @@ func TestSafeinputsHTTPBackend(t *testing.T) {
 			t.Logf("Request #%d session ID: %s", i+1, headers["Mcp-Session-Id"])
 
 			// Verify the session ID follows the expected pattern for initialization
-			if strings.HasPrefix(headers["Mcp-Session-Id"], "gateway-init-") {
+			if strings.HasPrefix(headers["Mcp-Session-Id"], "awmg-init-") ||
+				strings.HasPrefix(headers["Mcp-Session-Id"], "gateway-init-") {
 				t.Logf("✓ Request #%d has correct gateway initialization session ID pattern", i+1)
 			}
 		}

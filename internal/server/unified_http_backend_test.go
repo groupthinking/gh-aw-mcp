@@ -172,6 +172,7 @@ func TestHTTPBackendInitializationWithSessionIDRequirement(t *testing.T) {
 // TestHTTPBackend_SessionIDPropagation tests that session ID is propagated through tool calls
 func TestHTTPBackend_SessionIDPropagation(t *testing.T) {
 	// Track session IDs received at different stages
+	initializeSessionID := ""
 	initSessionID := ""
 	toolCallSessionID := ""
 
@@ -186,6 +187,23 @@ func TestHTTPBackend_SessionIDPropagation(t *testing.T) {
 		json.NewDecoder(r.Body).Decode(&req)
 
 		switch req.Method {
+		case "initialize":
+			initializeSessionID = sessionID
+			// Return initialize response
+			response := map[string]interface{}{
+				"jsonrpc": "2.0",
+				"id":      1,
+				"result": map[string]interface{}{
+					"protocolVersion": "2024-11-05",
+					"capabilities":    map[string]interface{}{},
+					"serverInfo": map[string]interface{}{
+						"name":    "test-http-server",
+						"version": "1.0.0",
+					},
+				},
+			}
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(response)
 		case "tools/list":
 			initSessionID = sessionID
 			// Return tools list
@@ -260,8 +278,14 @@ func TestHTTPBackend_SessionIDPropagation(t *testing.T) {
 	}
 
 	// Verify session IDs were received
+	if initializeSessionID == "" {
+		t.Errorf("No session ID received during initialize")
+	} else {
+		t.Logf("Initialize session ID: %s", initializeSessionID)
+	}
+
 	if initSessionID == "" {
-		t.Errorf("No session ID received during initialization")
+		t.Errorf("No session ID received during tools/list (initialization)")
 	} else {
 		t.Logf("Init session ID: %s", initSessionID)
 	}
