@@ -13,6 +13,7 @@ import (
 	"github.com/githubnext/gh-aw-mcpg/internal/guard"
 	"github.com/githubnext/gh-aw-mcpg/internal/launcher"
 	"github.com/githubnext/gh-aw-mcpg/internal/logger"
+	"github.com/githubnext/gh-aw-mcpg/internal/mcp"
 	"github.com/githubnext/gh-aw-mcpg/internal/sys"
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 )
@@ -57,11 +58,9 @@ func NewSession(sessionID, token string) *Session {
 	}
 }
 
-// ContextKey for session ID (exported so transport can use it)
-type ContextKey string
-
 // SessionIDContextKey is used to store MCP session ID in context
-const SessionIDContextKey ContextKey = "awmg-session-id"
+// This is re-exported from mcp package for backward compatibility
+const SessionIDContextKey = mcp.SessionIDContextKey
 
 // ToolInfo stores metadata about a registered tool
 type ToolInfo struct {
@@ -181,7 +180,7 @@ func (us *UnifiedServer) registerToolsFromBackend(serverID string) error {
 	}
 
 	// List tools from backend
-	result, err := conn.SendRequestWithServerID("tools/list", nil, serverID)
+	result, err := conn.SendRequestWithServerID(context.Background(), "tools/list", nil, serverID)
 	if err != nil {
 		return fmt.Errorf("failed to list tools: %w", err)
 	}
@@ -427,7 +426,7 @@ func (g *guardBackendCaller) CallTool(ctx context.Context, toolName string, args
 		return nil, fmt.Errorf("failed to connect: %w", err)
 	}
 
-	response, err := conn.SendRequestWithServerID("tools/call", map[string]interface{}{
+	response, err := conn.SendRequestWithServerID(g.ctx, "tools/call", map[string]interface{}{
 		"name":      toolName,
 		"arguments": args,
 	}, g.serverID)
@@ -502,7 +501,7 @@ func (us *UnifiedServer) callBackendTool(ctx context.Context, serverID, toolName
 		return &sdk.CallToolResult{IsError: true}, nil, fmt.Errorf("failed to connect: %w", err)
 	}
 
-	response, err := conn.SendRequestWithServerID("tools/call", map[string]interface{}{
+	response, err := conn.SendRequestWithServerID(ctx, "tools/call", map[string]interface{}{
 		"name":      toolName,
 		"arguments": args,
 	}, serverID)
