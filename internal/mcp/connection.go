@@ -259,13 +259,13 @@ func (c *Connection) sendHTTPRequest(ctx context.Context, method string, params 
 
 	// Set headers
 	httpReq.Header.Set("Content-Type", "application/json")
-	
+
 	// Extract session ID from context and add Mcp-Session-Id header
 	if sessionID, ok := ctx.Value(SessionIDContextKey).(string); ok && sessionID != "" {
 		httpReq.Header.Set("Mcp-Session-Id", sessionID)
 		logConn.Printf("Added Mcp-Session-Id header: %s", sessionID)
 	}
-	
+
 	// Add configured headers
 	for key, value := range c.headers {
 		httpReq.Header.Set(key, value)
