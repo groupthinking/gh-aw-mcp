@@ -206,7 +206,7 @@ func TestFormatRPCMessageMarkdown(t *testing.T) {
 				PayloadSize: 100,
 				Payload:     `{"result":{}}`,
 			},
-			want:    []string{"**github**←resp", "~~~", `"result"`},
+			want:    []string{"**github**←`resp`", "~~~", `"result"`},
 			notWant: []string{`"jsonrpc"`, `"method"`},
 		},
 		{
@@ -218,7 +218,7 @@ func TestFormatRPCMessageMarkdown(t *testing.T) {
 				PayloadSize: 100,
 				Error:       "Connection timeout",
 			},
-			want:    []string{"**github**←resp", "⚠️`Connection timeout`"},
+			want:    []string{"**github**←`resp`", "⚠️`Connection timeout`"},
 			notWant: []string{},
 		},
 		{
@@ -475,7 +475,7 @@ func TestLogRPCResponse(t *testing.T) {
 	}
 
 	mdStr := string(mdContent)
-	expectedInMd := []string{"**github**←resp", "⚠️`backend connection failed`"}
+	expectedInMd := []string{"**github**←`resp`", "⚠️`backend connection failed`"}
 	for _, expected := range expectedInMd {
 		if !strings.Contains(mdStr, expected) {
 			t.Errorf("Markdown log does not contain %q", expected)

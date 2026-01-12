@@ -199,7 +199,7 @@ func formatRPCMessageMarkdown(info *RPCMessageInfo) string {
 		if info.Method != "" {
 			message = fmt.Sprintf("**%s**%s`%s`", info.ServerID, dir, info.Method)
 		} else {
-			message = fmt.Sprintf("**%s**%sresp", info.ServerID, dir)
+			message = fmt.Sprintf("**%s**%s`resp`", info.ServerID, dir)
 		}
 	}
 
@@ -212,7 +212,7 @@ func formatRPCMessageMarkdown(info *RPCMessageInfo) string {
 			if !isEmpty {
 				// Valid JSON: use code block for better readability (pretty printed)
 				// Empty line before ~~~ per markdown convention
-				message += fmt.Sprintf(" \n\n~~~\n%s\n~~~", formatted)
+				message += fmt.Sprintf("\n\n~~~\n%s\n~~~", formatted)
 			}
 		} else {
 			// Invalid JSON: use inline backticks to avoid malformed markdown
