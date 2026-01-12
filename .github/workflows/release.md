@@ -44,6 +44,8 @@ safe-outputs:
       runs-on: ubuntu-latest
       output: "Release published successfully!"
       needs: ["draft_release", "safe_outputs"]
+      permissions:
+        contents: write
       steps:
         - name: Publish release
           run: |
