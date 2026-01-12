@@ -243,7 +243,7 @@ configure_host_dns() {
     local HOST_IP=""
     
     # Method 1: Try to get the primary network interface IP (not loopback)
-    HOST_IP=$(ip -4 addr show 2>/dev/null | grep -oP '(?<=inet\s)\d+(\.\d+){3}' | grep -v '^127\.' | head -1)
+    HOST_IP=$(ip -4 addr show 2>/dev/null | grep 'inet ' | awk '{print $2}' | cut -d/ -f1 | grep -v '^127\.' | head -1)
     if [ -n "$HOST_IP" ]; then
         log_info "Method 1 (primary interface): $HOST_IP"
     fi

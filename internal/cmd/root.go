@@ -103,6 +103,12 @@ func run(cmd *cobra.Command, args []string) error {
 	}
 	defer logger.CloseMarkdownLogger()
 
+	// Initialize JSONL logger for RPC message logging
+	if err := logger.InitJSONLLogger(logDir, "rpc-messages.jsonl"); err != nil {
+		log.Printf("Warning: Failed to initialize JSONL logger: %v", err)
+	}
+	defer logger.CloseJSONLLogger()
+
 	logger.LogInfoMd("startup", "MCPG Gateway version: %s", version)
 	logger.LogInfoMd("startup", "Starting MCPG with config: %s, listen: %s, log-dir: %s", configFile, listenAddr, logDir)
 	debugLog.Printf("Starting MCPG with config: %s, listen: %s", configFile, listenAddr)
