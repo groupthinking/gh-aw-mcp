@@ -489,6 +489,37 @@ func TestBinaryInvocation_PipeInputOutput(t *testing.T) {
 	t.Logf("Parsed gateway config: %+v", gatewayConfig)
 }
 
+// TestBinaryInvocation_NoConfigRequired tests that the binary requires either --config or --config-stdin
+func TestBinaryInvocation_NoConfigRequired(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping binary integration test in short mode")
+	}
+
+	binaryPath := findBinary(t)
+
+	// Test running without any config flag
+	cmd := exec.Command(binaryPath)
+	output, err := cmd.CombinedOutput()
+	
+	// Should exit with error
+	if err == nil {
+		t.Fatal("Expected error when running without config flags, but command succeeded")
+	}
+
+	outputStr := string(output)
+	// Should contain the error message about requiring config
+	if !bytes.Contains(output, []byte("configuration source required")) {
+		t.Errorf("Expected 'configuration source required' error message, got: %s", outputStr)
+	}
+	
+	// Should mention both --config and --config-stdin
+	if !bytes.Contains(output, []byte("--config")) || !bytes.Contains(output, []byte("--config-stdin")) {
+		t.Errorf("Expected error message to mention both --config and --config-stdin, got: %s", outputStr)
+	}
+
+	t.Logf("✓ Binary correctly requires config source: %s", outputStr)
+}
+
 // TestBinaryInvocation_Version tests the version flag
 func TestBinaryInvocation_Version(t *testing.T) {
 	if testing.Short() {
