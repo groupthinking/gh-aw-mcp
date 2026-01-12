@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/githubnext/gh-aw-mcpg/internal/logger"
+	"github.com/githubnext/gh-aw-mcpg/internal/mcp"
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -86,7 +87,7 @@ func CreateHTTPServerForRoutedMode(addr string, unifiedServer *UnifiedServer, ap
 
 			// Store session ID and backend ID in request context
 			ctx := context.WithValue(r.Context(), SessionIDContextKey, sessionID)
-			ctx = context.WithValue(ctx, ContextKey("backend-id"), backendID)
+			ctx = context.WithValue(ctx, mcp.ContextKey("backend-id"), backendID)
 			*r = *r.WithContext(ctx)
 			log.Printf("✓ Injected session ID and backend ID into context")
 			log.Printf("===================================\n")
