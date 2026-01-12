@@ -182,7 +182,6 @@ func NewHTTPConnection(ctx context.Context, url string, headers map[string]strin
 	}
 
 	// Try standard transports in order: streamable HTTP → SSE → plain JSON-RPC
-	var lastErr error
 
 	// Try 1: Streamable HTTP (2025-03-26 spec)
 	logConn.Printf("Attempting streamable HTTP transport for %s", url)
@@ -193,7 +192,6 @@ func NewHTTPConnection(ctx context.Context, url string, headers map[string]strin
 		return conn, nil
 	}
 	logConn.Printf("Streamable HTTP failed: %v", err)
-	lastErr = err
 
 	// Try 2: SSE (2024-11-05 spec)
 	logConn.Printf("Attempting SSE transport for %s", url)
@@ -204,7 +202,6 @@ func NewHTTPConnection(ctx context.Context, url string, headers map[string]strin
 		return conn, nil
 	}
 	logConn.Printf("SSE transport failed: %v", err)
-	lastErr = err
 
 	// Try 3: Plain JSON-RPC over HTTP (non-standard, for fallback)
 	logConn.Printf("Attempting plain JSON-RPC transport for %s", url)
@@ -215,12 +212,11 @@ func NewHTTPConnection(ctx context.Context, url string, headers map[string]strin
 		return conn, nil
 	}
 	logConn.Printf("Plain JSON-RPC transport failed: %v", err)
-	lastErr = err
 
 	// All transports failed
 	cancel()
 	logger.LogError("backend", "All HTTP transports failed for url=%s", url)
-	return nil, fmt.Errorf("failed to connect using any HTTP transport (tried streamable, SSE, and plain JSON-RPC): last error: %w", lastErr)
+	return nil, fmt.Errorf("failed to connect using any HTTP transport (tried streamable, SSE, and plain JSON-RPC): last error: %w", err)
 }
 
 // tryStreamableHTTPTransport attempts to connect using the streamable HTTP transport (2025-03-26 spec)
