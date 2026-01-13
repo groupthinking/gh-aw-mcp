@@ -232,12 +232,12 @@ func TestExpandDockerEnvArgs(t *testing.T) {
 // TestHTTPRequest_ErrorResponses tests handling of various error conditions
 func TestHTTPRequest_ErrorResponses(t *testing.T) {
 	tests := []struct {
-		name                 string
-		statusCode           int
-		responseBody         map[string]interface{}
-		expectError          bool
-		errorSubstring       string
-		needSuccessfulInit   bool // If true, return success for initialize requests
+		name               string
+		statusCode         int
+		responseBody       map[string]interface{}
+		expectError        bool
+		errorSubstring     string
+		needSuccessfulInit bool // If true, return success for initialize requests
 	}{
 		{
 			name:       "HTTP 200 success",
