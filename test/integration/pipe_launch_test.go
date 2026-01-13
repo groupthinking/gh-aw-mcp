@@ -228,9 +228,9 @@ func TestPipeBasedLaunch(t *testing.T) {
 				// Try to parse as JSON
 				var result map[string]interface{}
 				if err := json.Unmarshal(body, &result); err != nil {
-					// Could be SSE format, try parsing that
+					// Could be SSE-formatted (streamable HTTP transport uses SSE formatting)
 					if strings.Contains(resp.Header.Get("Content-Type"), "text/event-stream") {
-						t.Log("Response is SSE format")
+						t.Log("Response uses SSE-formatted streaming (streamable HTTP transport)")
 					} else {
 						t.Logf("Could not parse response as JSON: %v", err)
 					}

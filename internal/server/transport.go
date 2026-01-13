@@ -73,7 +73,7 @@ func withResponseLogging(handler http.Handler) http.Handler {
 	})
 }
 
-// CreateHTTPServerForMCP creates an HTTP server that handles MCP over SSE
+// CreateHTTPServerForMCP creates an HTTP server that handles MCP over streamable HTTP transport
 // If apiKey is provided, all requests except /health require authentication (spec 7.1)
 func CreateHTTPServerForMCP(addr string, unifiedServer *UnifiedServer, apiKey string) *http.Server {
 	mux := http.NewServeMux()
@@ -88,8 +88,8 @@ func CreateHTTPServerForMCP(addr string, unifiedServer *UnifiedServer, apiKey st
 	// Create StreamableHTTP handler for MCP protocol (supports POST requests)
 	// This is what Codex uses with transport = "streamablehttp"
 	streamableHandler := sdk.NewStreamableHTTPHandler(func(r *http.Request) *sdk.Server {
-		// With SSE, this callback fires ONCE per HTTP connection establishment
-		// All subsequent JSON-RPC messages come over the same persistent connection
+		// With streamable HTTP, this callback fires for each new session establishment
+		// Subsequent JSON-RPC messages in the same session are handled by the SDK
 		// We use the Authorization header value as the session ID
 		// This groups all requests from the same agent (same auth value) into one session
 
@@ -118,7 +118,7 @@ func CreateHTTPServerForMCP(addr string, unifiedServer *UnifiedServer, apiKey st
 		}
 
 		logger.LogInfo("client", "MCP connection established, remote=%s, method=%s, path=%s, session=%s", r.RemoteAddr, r.Method, r.URL.Path, sessionID)
-		log.Printf("=== NEW SSE CONNECTION ===")
+		log.Printf("=== NEW STREAMABLE HTTP CONNECTION ===")
 		log.Printf("[%s] %s %s", r.RemoteAddr, r.Method, r.URL.Path)
 		log.Printf("Authorization (Session ID): %s", sessionID)
 
