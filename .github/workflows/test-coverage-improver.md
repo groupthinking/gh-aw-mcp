@@ -215,11 +215,28 @@ Ensure your tests cover:
 
 ### Testing Best Practices
 
-Follow the project's Go conventions:
+Follow the project's Go conventions and best practices:
 
+**Use Go standard testing package**:
 - Use **table-driven tests** (as shown above)
 - Use **descriptive test names** in the format `TestFunctionName_Scenario`
 - Use **sub-tests** with `t.Run()` for each test case
+- Use `t.Fatal()` for fatal errors that prevent further testing
+- Use `t.Error()` for non-fatal errors where test can continue
+- Use `t.Cleanup()` for proper resource cleanup
+
+**Write deterministic, fast, small tests**:
+- **Deterministic**: Use fixed random seeds, no `time.Now()`, no external state dependencies
+- **Fast**: Mock external dependencies (network, database, filesystem), avoid `time.Sleep()`
+- **Small**: One concept per test, focused and readable
+
+**Assume the worst - test edge cases**:
+- Nil inputs, empty strings, zero values
+- Boundary conditions (max, min, zero, negative)
+- Error paths and edge cases
+- All if/else branches and switch cases
+
+**Additional conventions**:
 - **Mock external dependencies** appropriately
 - Check the `internal/testutil/` directory for existing test helpers
 - Use the `mcptest` package if testing MCP-related functionality
@@ -306,6 +323,10 @@ All tests pass:
 - **Use Serena**: Leverage Serena's code analysis for complexity measurement
 - **Verify coverage**: Always confirm tests actually improve coverage
 - **Table-driven tests**: Use Go's table-driven test pattern consistently
+- **Go standard library only**: Use only Go's standard testing package
+- **Deterministic tests**: Fixed seeds, no timing dependencies, no external state
+- **Fast tests**: Mock dependencies, avoid network/filesystem, no sleep
+- **Proper assertions**: Use t.Fatal for fatal errors, t.Error for non-fatal
 
 ## Serena Configuration
 
