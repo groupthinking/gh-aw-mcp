@@ -39,9 +39,49 @@ tools:
 safe-outputs:
   update-release:
 jobs:
-  create-tag:
+  # Pre-tag validation: Run tests BEFORE creating the tag (workflow_dispatch only)
+  # This prevents tag creation if build or tests fail
+  # Note: release job also runs tests for direct tag pushes and as defense-in-depth
+  test:
     if: github.event_name == 'workflow_dispatch'
     needs: ["activation"]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+          
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: false
+
+      - name: Download Go modules
+        run: go mod download
+
+      - name: Run unit tests
+        run: |
+          echo "Running unit tests (excluding integration tests)..."
+          make test-unit
+          echo "✓ Unit tests passed"
+
+      - name: Build binary
+        run: |
+          echo "Building binary for integration tests..."
+          make build
+          echo "✓ Binary built successfully"
+
+      - name: Run integration tests
+        run: |
+          echo "Running integration tests with built binary..."
+          make test-integration
+          echo "✓ Integration tests passed"
+
+  create-tag:
+    if: github.event_name == 'workflow_dispatch'
+    needs: ["activation", "test"]
     runs-on: ubuntu-latest
     permissions:
       contents: write
