@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+
+	"github.com/githubnext/gh-aw-mcpg/internal/logger/sanitize"
 )
 
 // RPCMessageType represents the direction of an RPC message
@@ -47,7 +49,7 @@ type RPCMessageInfo struct {
 // truncateAndSanitize truncates the payload to max length and sanitizes secrets
 func truncateAndSanitize(payload string, maxLength int) string {
 	// First sanitize secrets
-	sanitized := sanitizeSecrets(payload)
+	sanitized := sanitize.SanitizeString(payload)
 
 	// Then truncate if needed
 	if len(sanitized) > maxLength {
