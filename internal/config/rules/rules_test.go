@@ -314,3 +314,252 @@ func TestValidationError_Error(t *testing.T) {
 		})
 	}
 }
+
+func TestUnsupportedType(t *testing.T) {
+	tests := []struct {
+		name       string
+		fieldName  string
+		actualType string
+		jsonPath   string
+		suggestion string
+		wantSubstr []string
+	}{
+		{
+			name:       "unsupported server type",
+			fieldName:  "type",
+			actualType: "grpc",
+			jsonPath:   "mcpServers.github",
+			suggestion: "Use 'stdio' for standard input/output transport or 'http' for HTTP transport",
+			wantSubstr: []string{
+				"type",
+				"unsupported server type 'grpc'",
+				"mcpServers.github.type",
+				"Use 'stdio'",
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := UnsupportedType(tt.fieldName, tt.actualType, tt.jsonPath, tt.suggestion)
+
+			if err.Field != tt.fieldName {
+				t.Errorf("Expected Field %q, got %q", tt.fieldName, err.Field)
+			}
+			if !strings.Contains(err.Message, tt.actualType) {
+				t.Errorf("Expected Message to contain %q, got %q", tt.actualType, err.Message)
+			}
+			if !strings.Contains(err.JSONPath, tt.jsonPath) {
+				t.Errorf("Expected JSONPath to contain %q, got %q", tt.jsonPath, err.JSONPath)
+			}
+			if err.Suggestion != tt.suggestion {
+				t.Errorf("Expected Suggestion %q, got %q", tt.suggestion, err.Suggestion)
+			}
+
+			errStr := err.Error()
+			for _, substr := range tt.wantSubstr {
+				if !strings.Contains(errStr, substr) {
+					t.Errorf("Error string should contain %q, got: %s", substr, errStr)
+				}
+			}
+		})
+	}
+}
+
+func TestUndefinedVariable(t *testing.T) {
+	tests := []struct {
+		name       string
+		varName    string
+		jsonPath   string
+		wantSubstr []string
+	}{
+		{
+			name:     "undefined env variable",
+			varName:  "MY_VAR",
+			jsonPath: "mcpServers.github.env.TOKEN",
+			wantSubstr: []string{
+				"undefined environment variable referenced: MY_VAR",
+				"mcpServers.github.env.TOKEN",
+				"Set the environment variable MY_VAR",
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := UndefinedVariable(tt.varName, tt.jsonPath)
+
+			if err.Field != "env variable" {
+				t.Errorf("Expected Field 'env variable', got %q", err.Field)
+			}
+			if !strings.Contains(err.Message, tt.varName) {
+				t.Errorf("Expected Message to contain %q, got %q", tt.varName, err.Message)
+			}
+			if err.JSONPath != tt.jsonPath {
+				t.Errorf("Expected JSONPath %q, got %q", tt.jsonPath, err.JSONPath)
+			}
+			if !strings.Contains(err.Suggestion, tt.varName) {
+				t.Errorf("Expected Suggestion to contain %q, got %q", tt.varName, err.Suggestion)
+			}
+
+			errStr := err.Error()
+			for _, substr := range tt.wantSubstr {
+				if !strings.Contains(errStr, substr) {
+					t.Errorf("Error string should contain %q, got: %s", substr, errStr)
+				}
+			}
+		})
+	}
+}
+
+func TestMissingRequired(t *testing.T) {
+	tests := []struct {
+		name       string
+		fieldName  string
+		serverType string
+		jsonPath   string
+		suggestion string
+		wantSubstr []string
+	}{
+		{
+			name:       "missing container field",
+			fieldName:  "container",
+			serverType: "stdio",
+			jsonPath:   "mcpServers.github",
+			suggestion: "Add a 'container' field (e.g., \"ghcr.io/owner/image:tag\")",
+			wantSubstr: []string{
+				"container",
+				"'container' is required",
+				"stdio servers",
+				"mcpServers.github",
+			},
+		},
+		{
+			name:       "missing url field",
+			fieldName:  "url",
+			serverType: "HTTP",
+			jsonPath:   "mcpServers.httpServer",
+			suggestion: "Add a 'url' field (e.g., \"https://example.com/mcp\")",
+			wantSubstr: []string{
+				"url",
+				"'url' is required",
+				"HTTP servers",
+				"mcpServers.httpServer",
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := MissingRequired(tt.fieldName, tt.serverType, tt.jsonPath, tt.suggestion)
+
+			if err.Field != tt.fieldName {
+				t.Errorf("Expected Field %q, got %q", tt.fieldName, err.Field)
+			}
+			if !strings.Contains(err.Message, tt.fieldName) {
+				t.Errorf("Expected Message to contain %q, got %q", tt.fieldName, err.Message)
+			}
+			if !strings.Contains(err.Message, tt.serverType) {
+				t.Errorf("Expected Message to contain %q, got %q", tt.serverType, err.Message)
+			}
+			if err.JSONPath != tt.jsonPath {
+				t.Errorf("Expected JSONPath %q, got %q", tt.jsonPath, err.JSONPath)
+			}
+			if err.Suggestion != tt.suggestion {
+				t.Errorf("Expected Suggestion %q, got %q", tt.suggestion, err.Suggestion)
+			}
+
+			errStr := err.Error()
+			for _, substr := range tt.wantSubstr {
+				if !strings.Contains(errStr, substr) {
+					t.Errorf("Error string should contain %q, got: %s", substr, errStr)
+				}
+			}
+		})
+	}
+}
+
+func TestUnsupportedField(t *testing.T) {
+	tests := []struct {
+		name       string
+		fieldName  string
+		message    string
+		jsonPath   string
+		suggestion string
+		wantSubstr []string
+	}{
+		{
+			name:       "unsupported command field",
+			fieldName:  "command",
+			message:    "'command' field is not supported (stdio servers must use 'container')",
+			jsonPath:   "mcpServers.github",
+			suggestion: "Remove 'command' field and use 'container' instead",
+			wantSubstr: []string{
+				"command",
+				"not supported",
+				"mcpServers.github",
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := UnsupportedField(tt.fieldName, tt.message, tt.jsonPath, tt.suggestion)
+
+			if err.Field != tt.fieldName {
+				t.Errorf("Expected Field %q, got %q", tt.fieldName, err.Field)
+			}
+			if err.Message != tt.message {
+				t.Errorf("Expected Message %q, got %q", tt.message, err.Message)
+			}
+			if err.JSONPath != tt.jsonPath {
+				t.Errorf("Expected JSONPath %q, got %q", tt.jsonPath, err.JSONPath)
+			}
+			if err.Suggestion != tt.suggestion {
+				t.Errorf("Expected Suggestion %q, got %q", tt.suggestion, err.Suggestion)
+			}
+
+			errStr := err.Error()
+			for _, substr := range tt.wantSubstr {
+				if !strings.Contains(errStr, substr) {
+					t.Errorf("Error string should contain %q, got: %s", substr, errStr)
+				}
+			}
+		})
+	}
+}
+
+func TestAppendConfigDocsFooter(t *testing.T) {
+	var sb strings.Builder
+	AppendConfigDocsFooter(&sb)
+
+	result := sb.String()
+
+	wantSubstr := []string{
+		"Please check your configuration",
+		ConfigSpecURL,
+		"JSON Schema reference",
+		SchemaURL,
+	}
+
+	for _, substr := range wantSubstr {
+		if !strings.Contains(result, substr) {
+			t.Errorf("Footer should contain %q, got: %s", substr, result)
+		}
+	}
+}
+
+func TestDocumentationURLConstants(t *testing.T) {
+	if ConfigSpecURL == "" {
+		t.Error("ConfigSpecURL should not be empty")
+	}
+	if SchemaURL == "" {
+		t.Error("SchemaURL should not be empty")
+	}
+	if !strings.HasPrefix(ConfigSpecURL, "https://") {
+		t.Errorf("ConfigSpecURL should start with https://, got: %s", ConfigSpecURL)
+	}
+	if !strings.HasPrefix(SchemaURL, "https://") {
+		t.Errorf("SchemaURL should start with https://, got: %s", SchemaURL)
+	}
+}

@@ -40,12 +40,7 @@ func expandVariables(value, jsonPath string) (string, error) {
 
 	if len(undefinedVars) > 0 {
 		logValidation.Printf("Variable expansion failed: undefined variables=%v", undefinedVars)
-		return "", &ValidationError{
-			Field:      "env variable",
-			Message:    fmt.Sprintf("undefined environment variable referenced: %s", undefinedVars[0]),
-			JSONPath:   jsonPath,
-			Suggestion: fmt.Sprintf("Set the environment variable %s before starting the gateway", undefinedVars[0]),
-		}
+		return "", rules.UndefinedVariable(undefinedVars[0], jsonPath)
 	}
 
 	logValidation.Print("Variable expansion completed successfully")
@@ -102,35 +97,20 @@ func validateServerConfig(name string, server *StdinServerConfig) error {
 	// Validate known types
 	if server.Type != "stdio" && server.Type != "http" {
 		logValidation.Printf("Invalid server type: name=%s, type=%s", name, server.Type)
-		return &ValidationError{
-			Field:      "type",
-			Message:    fmt.Sprintf("unsupported server type '%s'", server.Type),
-			JSONPath:   fmt.Sprintf("%s.type", jsonPath),
-			Suggestion: "Use 'stdio' for standard input/output transport or 'http' for HTTP transport",
-		}
+		return rules.UnsupportedType("type", server.Type, jsonPath, "Use 'stdio' for standard input/output transport or 'http' for HTTP transport")
 	}
 
 	// For stdio servers, container is required
 	if server.Type == "stdio" || server.Type == "local" {
 		if server.Container == "" {
 			logValidation.Printf("Validation failed: stdio server missing container field, name=%s", name)
-			return &ValidationError{
-				Field:      "container",
-				Message:    "'container' is required for stdio servers",
-				JSONPath:   jsonPath,
-				Suggestion: "Add a 'container' field (e.g., \"ghcr.io/owner/image:tag\")",
-			}
+			return rules.MissingRequired("container", "stdio", jsonPath, "Add a 'container' field (e.g., \"ghcr.io/owner/image:tag\")")
 		}
 
 		// Reject unsupported 'command' field
 		if server.Command != "" {
 			logValidation.Printf("Validation failed: stdio server has unsupported command field, name=%s", name)
-			return &ValidationError{
-				Field:      "command",
-				Message:    "'command' field is not supported (stdio servers must use 'container')",
-				JSONPath:   jsonPath,
-				Suggestion: "Remove 'command' field and use 'container' instead",
-			}
+			return rules.UnsupportedField("command", "'command' field is not supported (stdio servers must use 'container')", jsonPath, "Remove 'command' field and use 'container' instead")
 		}
 
 		// Validate mounts if provided
@@ -146,12 +126,7 @@ func validateServerConfig(name string, server *StdinServerConfig) error {
 	if server.Type == "http" {
 		if server.URL == "" {
 			logValidation.Printf("Validation failed: HTTP server missing url field, name=%s", name)
-			return &ValidationError{
-				Field:      "url",
-				Message:    "'url' is required for HTTP servers",
-				JSONPath:   jsonPath,
-				Suggestion: "Add a 'url' field (e.g., \"https://example.com/mcp\")",
-			}
+			return rules.MissingRequired("url", "HTTP", jsonPath, "Add a 'url' field (e.g., \"https://example.com/mcp\")")
 		}
 	}
 

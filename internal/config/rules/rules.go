@@ -5,6 +5,12 @@ import (
 	"strings"
 )
 
+// Documentation URL constants
+const (
+	ConfigSpecURL = "https://github.com/githubnext/gh-aw/blob/main/docs/src/content/docs/reference/mcp-gateway.md"
+	SchemaURL     = "https://github.com/githubnext/gh-aw/blob/main/docs/public/schemas/mcp-gateway-config.schema.json"
+)
+
 // ValidationError represents a configuration validation error with context
 type ValidationError struct {
 	Field      string
@@ -20,6 +26,54 @@ func (e *ValidationError) Error() string {
 		sb.WriteString(fmt.Sprintf("\nSuggestion: %s", e.Suggestion))
 	}
 	return sb.String()
+}
+
+// UnsupportedType creates a ValidationError for unsupported type values
+func UnsupportedType(fieldName, actualType, jsonPath, suggestion string) *ValidationError {
+	return &ValidationError{
+		Field:      fieldName,
+		Message:    fmt.Sprintf("unsupported server type '%s'", actualType),
+		JSONPath:   fmt.Sprintf("%s.%s", jsonPath, fieldName),
+		Suggestion: suggestion,
+	}
+}
+
+// UndefinedVariable creates a ValidationError for undefined environment variables
+func UndefinedVariable(varName, jsonPath string) *ValidationError {
+	return &ValidationError{
+		Field:      "env variable",
+		Message:    fmt.Sprintf("undefined environment variable referenced: %s", varName),
+		JSONPath:   jsonPath,
+		Suggestion: fmt.Sprintf("Set the environment variable %s before starting the gateway", varName),
+	}
+}
+
+// MissingRequired creates a ValidationError for missing required fields
+func MissingRequired(fieldName, serverType, jsonPath, suggestion string) *ValidationError {
+	return &ValidationError{
+		Field:      fieldName,
+		Message:    fmt.Sprintf("'%s' is required for %s servers", fieldName, serverType),
+		JSONPath:   jsonPath,
+		Suggestion: suggestion,
+	}
+}
+
+// UnsupportedField creates a ValidationError for unsupported fields
+func UnsupportedField(fieldName, message, jsonPath, suggestion string) *ValidationError {
+	return &ValidationError{
+		Field:      fieldName,
+		Message:    message,
+		JSONPath:   jsonPath,
+		Suggestion: suggestion,
+	}
+}
+
+// AppendConfigDocsFooter appends standard documentation links to an error message
+func AppendConfigDocsFooter(sb *strings.Builder) {
+	sb.WriteString("\n\nPlease check your configuration against the MCP Gateway specification at:")
+	sb.WriteString("\n" + ConfigSpecURL)
+	sb.WriteString("\n\nJSON Schema reference:")
+	sb.WriteString("\n" + SchemaURL)
 }
 
 // PortRange validates that a port is in the valid range (1-65535)

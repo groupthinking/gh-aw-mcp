@@ -83,10 +83,7 @@ func formatSchemaError(err error) error {
 		// Recursively format all errors
 		formatValidationErrorRecursive(ve, &sb, 0)
 
-		sb.WriteString("\n\nPlease check your configuration against the MCP Gateway specification at:")
-		sb.WriteString("\nhttps://github.com/githubnext/gh-aw/blob/main/docs/src/content/docs/reference/mcp-gateway.md")
-		sb.WriteString("\n\nJSON Schema reference:")
-		sb.WriteString("\nhttps://github.com/githubnext/gh-aw/blob/main/docs/public/schemas/mcp-gateway-config.schema.json")
+		rules.AppendConfigDocsFooter(&sb)
 
 		return fmt.Errorf("%s", sb.String())
 	}
