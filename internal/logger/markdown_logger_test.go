@@ -364,3 +364,64 @@ func TestMarkdownLoggerRPCFormatting(t *testing.T) {
 		t.Errorf("Found nested code blocks - RPC messages should not be double-wrapped")
 	}
 }
+
+func TestMarkdownLoggerMultiLineErrors(t *testing.T) {
+	tmpDir := t.TempDir()
+	logDir := filepath.Join(tmpDir, "logs")
+	fileName := "error-test.md"
+
+	err := InitMarkdownLogger(logDir, fileName)
+	if err != nil {
+		t.Fatalf("InitMarkdownLogger failed: %v", err)
+	}
+
+	// Test multi-line error message (like JSON schema validation errors)
+	errorMsg := `Configuration validation error (MCP Gateway version: dev):
+
+Location: <root>
+Error: doesn't validate with schema
+  Location: <root>
+  Error: missing properties: 'gateway'
+  Details: Required field(s) are missing
+    → Add the required field(s) to your configuration
+  Schema location: /required
+
+Please check your configuration`
+
+	LogErrorMd("startup", "Configuration validation failed:\n%s", errorMsg)
+
+	CloseMarkdownLogger()
+
+	// Read the log file
+	logPath := filepath.Join(logDir, fileName)
+	content, err := os.ReadFile(logPath)
+	if err != nil {
+		t.Fatalf("Failed to read log file: %v", err)
+	}
+
+	logContent := string(content)
+
+	// Check for error emoji
+	if !strings.Contains(logContent, "✗") {
+		t.Errorf("Log file does not contain error emoji")
+	}
+
+	// Check for startup category
+	if !strings.Contains(logContent, "startup") {
+		t.Errorf("Log file does not contain startup category")
+	}
+
+	// Check for code block formatting (multi-line errors should use code blocks)
+	if !strings.Contains(logContent, "```") {
+		t.Errorf("Log file does not contain code block markers for multi-line error")
+	}
+
+	// Check that the error message content is present
+	if !strings.Contains(logContent, "Configuration validation error") {
+		t.Errorf("Log file does not contain error message content")
+	}
+
+	if !strings.Contains(logContent, "missing properties") {
+		t.Errorf("Log file does not contain error details")
+	}
+}
