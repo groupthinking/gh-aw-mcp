@@ -24,7 +24,7 @@ var logUnified = logger.New("server:unified")
 const MCPProtocolVersion = "2024-11-05"
 
 // MCPGatewaySpecVersion is the MCP Gateway Specification version this implementation conforms to
-const MCPGatewaySpecVersion = "1.3.0"
+const MCPGatewaySpecVersion = "1.5.0"
 
 // gatewayVersion stores the gateway version, set at startup
 var gatewayVersion = "dev"
