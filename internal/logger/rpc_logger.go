@@ -141,7 +141,7 @@ func formatRPCMessage(info *RPCMessageInfo) string {
 	return strings.Join(parts, " ")
 }
 
-// formatJSONWithoutFields formats JSON by removing specified fields and indenting with 2 spaces
+// formatJSONWithoutFields formats JSON by removing specified fields and compacting to single line
 // Returns the formatted string, a boolean indicating if the JSON was valid, and a boolean indicating if empty
 func formatJSONWithoutFields(jsonStr string, fieldsToRemove []string) (string, bool, bool) {
 	var data map[string]interface{}
@@ -158,8 +158,8 @@ func formatJSONWithoutFields(jsonStr string, fieldsToRemove []string) (string, b
 	// Check if only "params": null remains (or equivalent empty state)
 	isEmpty := isEffectivelyEmpty(data)
 
-	// Re-marshal with 2-space indentation (pretty print)
-	formatted, err := json.MarshalIndent(data, "", "  ")
+	// Re-marshal as compact single line
+	formatted, err := json.Marshal(data)
 	if err != nil {
 		return jsonStr, false, false
 	}
@@ -212,8 +212,9 @@ func formatRPCMessageMarkdown(info *RPCMessageInfo) string {
 		if isValidJSON {
 			// Don't show JSON block if it's effectively empty (only params: null)
 			if !isEmpty {
-				// Valid JSON: use json code block for syntax highlighting (pretty printed)
+				// Valid JSON: use json code block for syntax highlighting (compact single line)
 				// Empty line before code block per markdown convention
+				// Code fences on their own lines with compact JSON content
 				message += fmt.Sprintf("\n\n```json\n%s\n```", formatted)
 			}
 		} else {
