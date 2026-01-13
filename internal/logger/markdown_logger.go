@@ -85,17 +85,15 @@ func (ml *MarkdownLogger) Close() error {
 	defer ml.mu.Unlock()
 
 	if ml.logFile != nil {
-		// Write closing details tag
+		// Write closing details tag before closing
 		footer := "\n</details>\n"
 		if _, err := ml.logFile.WriteString(footer); err != nil {
-			// Sync any remaining buffered data before closing
-			_ = ml.logFile.Sync() // Continue with close even if sync fails
-			return ml.logFile.Close()
+			// Even if footer write fails, try to close the file properly
+			return closeLogFile(ml.logFile, &ml.mu, "markdown")
 		}
 
-		// Sync and close
-		_ = ml.logFile.Sync() // Continue with close even if sync fails
-		return ml.logFile.Close()
+		// Footer written successfully, now close
+		return closeLogFile(ml.logFile, &ml.mu, "markdown")
 	}
 	return nil
 }
