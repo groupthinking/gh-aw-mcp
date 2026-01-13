@@ -4,9 +4,10 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"regexp"
 	"strings"
 	"sync"
+
+	"github.com/githubnext/gh-aw-mcpg/internal/logger/sanitize"
 )
 
 // MarkdownLogger manages logging to a markdown file for GitHub workflow previews
@@ -22,20 +23,6 @@ type MarkdownLogger struct {
 var (
 	globalMarkdownLogger *MarkdownLogger
 	globalMarkdownMu     sync.RWMutex
-	// Patterns for detecting potential secrets (simple heuristics)
-	secretPatterns = []*regexp.Regexp{
-		regexp.MustCompile(`(?i)(token|key|secret|password|auth)[=:]\s*[^\s]{8,}`),
-		regexp.MustCompile(`ghp_[a-zA-Z0-9]{36,}`),                                  // GitHub PATs
-		regexp.MustCompile(`github_pat_[a-zA-Z0-9]{22}_[a-zA-Z0-9]{59}`),            // GitHub fine-grained PATs
-		regexp.MustCompile(`(?i)bearer\s+[a-zA-Z0-9\-._~+/]+=*`),                    // Bearer tokens
-		regexp.MustCompile(`(?i)authorization:\s*[a-zA-Z0-9\-._~+/]+=*`),            // Auth headers
-		regexp.MustCompile(`[a-f0-9]{32,}`),                                         // Long hex strings (API keys)
-		regexp.MustCompile(`(?i)(apikey|api_key|access_key)[=:]\s*[^\s]{8,}`),       // API keys
-		regexp.MustCompile(`(?i)(client_secret|client_id)[=:]\s*[^\s]{8,}`),         // OAuth secrets
-		regexp.MustCompile(`[a-zA-Z0-9_-]{20,}\.eyJ[a-zA-Z0-9_-]+\.[a-zA-Z0-9_-]+`), // JWT tokens
-		// JSON-specific patterns for field:value pairs
-		regexp.MustCompile(`(?i)"(token|password|passwd|pwd|apikey|api_key|api-key|secret|client_secret|api_secret|authorization|auth|key|private_key|public_key|credentials|credential|access_token|refresh_token|bearer_token)"\s*:\s*"[^"]{1,}"`),
-	}
 )
 
 // InitMarkdownLogger initializes the global markdown logger
@@ -114,22 +101,10 @@ func (ml *MarkdownLogger) Close() error {
 }
 
 // sanitizeSecrets replaces potential secrets with [REDACTED]
+// This function is deprecated and will be removed in a future version.
+// Use sanitize.SanitizeString() directly instead.
 func sanitizeSecrets(message string) string {
-	result := message
-	for _, pattern := range secretPatterns {
-		result = pattern.ReplaceAllStringFunc(result, func(match string) string {
-			// Keep the prefix (key name) but redact the value
-			if strings.Contains(match, "=") || strings.Contains(match, ":") {
-				parts := regexp.MustCompile(`[=:]\s*`).Split(match, 2)
-				if len(parts) == 2 {
-					return parts[0] + "=[REDACTED]"
-				}
-			}
-			// For tokens without key=value format, redact entirely
-			return "[REDACTED]"
-		})
-	}
-	return result
+	return sanitize.SanitizeString(message)
 }
 
 // getEmojiForLevel returns the appropriate emoji for the log level
