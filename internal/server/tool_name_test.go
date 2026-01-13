@@ -5,6 +5,9 @@ import (
 	"encoding/json"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/githubnext/gh-aw-mcpg/internal/config"
@@ -22,9 +25,7 @@ func TestToolNamePreservation_RoutedMode(t *testing.T) {
 
 	ctx := context.Background()
 	us, err := NewUnified(ctx, cfg)
-	if err != nil {
-		t.Fatalf("NewUnified() failed: %v", err)
-	}
+	require.NoError(t, err, "NewUnified() failed")
 	defer us.Close()
 
 	// Define test cases with various tool name formats that backends might use
@@ -88,9 +89,7 @@ func TestToolNamePreservation_RoutedMode(t *testing.T) {
 	toolsForBackend := us.GetToolsForBackend("testbackend")
 
 	// Verify we got all the tools
-	if len(toolsForBackend) != len(testCases) {
-		t.Fatalf("Expected %d tools, got %d", len(testCases), len(toolsForBackend))
-	}
+	assert.Len(t, toolsForBackend, len(testCases))
 
 	// Create a map for easy lookup
 	exposedTools := make(map[string]ToolInfo)
@@ -138,9 +137,7 @@ func TestToolNameWithPrefix_UnifiedMode(t *testing.T) {
 
 	ctx := context.Background()
 	us, err := NewUnified(ctx, cfg)
-	if err != nil {
-		t.Fatalf("NewUnified() failed: %v", err)
-	}
+	require.NoError(t, err, "NewUnified() failed")
 	defer us.Close()
 
 	// Register tools with the same name in different backends
@@ -206,9 +203,7 @@ func TestCreateFilteredServer_ToolNamesExactlyMatchBackend(t *testing.T) {
 
 	ctx := context.Background()
 	us, err := NewUnified(ctx, cfg)
-	if err != nil {
-		t.Fatalf("NewUnified() failed: %v", err)
-	}
+	require.NoError(t, err, "NewUnified() failed")
 	defer us.Close()
 
 	// Simulate backend tools with exact names as they would come from a real MCP server
@@ -238,9 +233,7 @@ func TestCreateFilteredServer_ToolNamesExactlyMatchBackend(t *testing.T) {
 	exposedTools := us.GetToolsForBackend("github")
 
 	// Verify count matches
-	if len(exposedTools) != len(backendTools) {
-		t.Fatalf("Expected %d tools, got %d", len(backendTools), len(exposedTools))
-	}
+	assert.Len(t, exposedTools, len(backendTools))
 
 	// Verify each tool name is exactly as it would come from backend
 	exposedToolNames := getToolNames(exposedTools)
@@ -270,9 +263,7 @@ func TestToolNamePreservation_SpecialCharacters(t *testing.T) {
 
 	ctx := context.Background()
 	us, err := NewUnified(ctx, cfg)
-	if err != nil {
-		t.Fatalf("NewUnified() failed: %v", err)
-	}
+	require.NoError(t, err, "NewUnified() failed")
 	defer us.Close()
 
 	// Test various special character combinations that might appear in tool names
@@ -336,9 +327,7 @@ func TestToolNamePreservation_HandlerIntegration(t *testing.T) {
 
 	ctx := context.Background()
 	us, err := NewUnified(ctx, cfg)
-	if err != nil {
-		t.Fatalf("NewUnified() failed: %v", err)
-	}
+	require.NoError(t, err, "NewUnified() failed")
 	defer us.Close()
 
 	backendToolName := "test_tool_handler"
@@ -401,9 +390,7 @@ func TestToolNameJSON_Serialization(t *testing.T) {
 
 	ctx := context.Background()
 	us, err := NewUnified(ctx, cfg)
-	if err != nil {
-		t.Fatalf("NewUnified() failed: %v", err)
-	}
+	require.NoError(t, err, "NewUnified() failed")
 	defer us.Close()
 
 	toolNames := []string{"tool_one", "tool-two", "toolThree"}
@@ -450,9 +437,7 @@ func TestToolNameJSON_Serialization(t *testing.T) {
 	}
 
 	jsonData, err := json.Marshal(response)
-	if err != nil {
-		t.Fatalf("Failed to marshal tools to JSON: %v", err)
-	}
+	require.NoError(t, err, "Failed to marshal tools to JSON")
 
 	// Unmarshal and verify names are preserved
 	var decoded ToolListResponse

@@ -7,6 +7,9 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"github.com/githubnext/gh-aw-mcpg/internal/config"
 	"github.com/githubnext/gh-aw-mcpg/internal/launcher"
 	"github.com/githubnext/gh-aw-mcpg/internal/mcp"
@@ -79,15 +82,11 @@ func TestHTTPBackendInitialization(t *testing.T) {
 	// Create unified server - this should call tools/list during initialization
 	ctx := context.Background()
 	us, err := NewUnified(ctx, cfg)
-	if err != nil {
-		t.Fatalf("Failed to create unified server: %v", err)
-	}
+	require.NoError(t, err, "Failed to create unified server")
 	defer us.Close()
 
 	// Verify that the session ID was sent
-	if receivedSessionID == "" {
-		t.Errorf("Expected Mcp-Session-Id header to be sent during initialization, but it was empty")
-	}
+	assert.False(t, receivedSessionID == "", "Expected Mcp-Session-Id header to be sent during initialization, but it was empty")
 
 	// Verify the session ID follows the gateway-init pattern
 	expectedPrefix := "gateway-init-"
@@ -96,9 +95,7 @@ func TestHTTPBackendInitialization(t *testing.T) {
 	}
 
 	// Verify it was a tools/list request
-	if requestMethod != "tools/list" {
-		t.Errorf("Expected method 'tools/list', got '%s'", requestMethod)
-	}
+	assert.Equal(t, "tools/list", requestMethod, "method 'tools/list', got '%s'")
 
 	t.Logf("Successfully initialized HTTP backend with session ID: %s", receivedSessionID)
 }
@@ -162,9 +159,7 @@ func TestHTTPBackendInitializationWithSessionIDRequirement(t *testing.T) {
 
 	// Verify tools were registered
 	tools := us.GetToolsForBackend("safeinputs")
-	if len(tools) == 0 {
-		t.Errorf("Expected tools to be registered from safeinputs backend, got none")
-	}
+	assert.False(t, len(tools) == 0, "Expected tools to be registered from safeinputs backend, got none")
 
 	t.Logf("Successfully initialized strict HTTP backend 'safeinputs' with %d tools", len(tools))
 }
@@ -258,16 +253,12 @@ func TestHTTPBackend_SessionIDPropagation(t *testing.T) {
 	// Create unified server
 	ctx := context.Background()
 	us, err := NewUnified(ctx, cfg)
-	if err != nil {
-		t.Fatalf("Failed to create unified server: %v", err)
-	}
+	require.NoError(t, err, "Failed to create unified server")
 	defer us.Close()
 
 	// Create a connection and call a tool with a specific session ID
 	conn, err := launcher.GetOrLaunch(us.launcher, "test-http")
-	if err != nil {
-		t.Fatalf("Failed to get connection: %v", err)
-	}
+	require.NoError(t, err, "Failed to get connection")
 
 	clientSessionID := "client-session-12345"
 	ctxWithSession := context.WithValue(context.Background(), mcp.SessionIDContextKey, clientSessionID)
@@ -276,9 +267,7 @@ func TestHTTPBackend_SessionIDPropagation(t *testing.T) {
 		"name":      "echo",
 		"arguments": map[string]interface{}{"message": "test"},
 	}, "test-http")
-	if err != nil {
-		t.Fatalf("Failed to call tool: %v", err)
-	}
+	require.NoError(t, err, "Failed to call tool")
 
 	// Verify session IDs were received
 	if initializeSessionID == "" {
@@ -295,8 +284,8 @@ func TestHTTPBackend_SessionIDPropagation(t *testing.T) {
 
 	if toolCallSessionID == "" {
 		t.Errorf("No session ID received during tool call")
-	} else if toolCallSessionID != clientSessionID {
-		t.Errorf("Expected tool call session ID to be '%s', got '%s'", clientSessionID, toolCallSessionID)
+	} else {
+		assert.Equal(t, clientSessionID, toolCallSessionID)
 	}
 
 	t.Logf("Session ID propagation test passed")

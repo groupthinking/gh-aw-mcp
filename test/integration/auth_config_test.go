@@ -9,6 +9,9 @@ import (
 	"net/http"
 	"os/exec"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"time"
 )
 
@@ -42,9 +45,7 @@ func TestOutputConfigWithAuthHeaders(t *testing.T) {
 		},
 	}
 	configBytes, err := json.Marshal(configJSON)
-	if err != nil {
-		t.Fatalf("Failed to marshal config: %v", err)
-	}
+	require.NoError(t, err, "Failed to marshal config")
 
 	cmd := exec.CommandContext(ctx, binaryPath,
 		"--config-stdin",
@@ -113,9 +114,7 @@ func TestOutputConfigWithAuthHeaders(t *testing.T) {
 		}
 
 		expectedURL := fmt.Sprintf("http://127.0.0.1:%d/mcp/echoserver", port)
-		if url != expectedURL {
-			t.Errorf("Expected url = %q, got: %q", expectedURL, url)
-		}
+		assert.Equal(t, expectedURL, url, "url = %q, got: %q")
 
 		// Verify headers object is present per spec section 5.4
 		headers, ok := echoserver["headers"].(map[string]interface{})
@@ -129,9 +128,7 @@ func TestOutputConfigWithAuthHeaders(t *testing.T) {
 			t.Fatalf("Expected 'Authorization' header in headers object")
 		}
 
-		if authHeader != apiKey {
-			t.Errorf("Expected Authorization header = %q, got: %q", apiKey, authHeader)
-		}
+		assert.Equal(t, apiKey, authHeader, "Authorization header = %q, got: %q")
 
 		t.Log("✓ Output config structure is correct per spec section 5.4")
 		t.Log("✓ Headers object includes Authorization with API key directly (not Bearer scheme)")
@@ -165,9 +162,7 @@ func TestOutputConfigWithAuthHeaders(t *testing.T) {
 
 		client := &http.Client{Timeout: 5 * time.Second}
 		resp, err := client.Do(req)
-		if err != nil {
-			t.Fatalf("Request failed: %v", err)
-		}
+		require.NoError(t, err, "Request failed")
 		defer resp.Body.Close()
 
 		// Should get 401 Unauthorized
@@ -209,9 +204,7 @@ func TestOutputConfigWithAuthHeaders(t *testing.T) {
 
 		client := &http.Client{Timeout: 5 * time.Second}
 		resp, err := client.Do(req)
-		if err != nil {
-			t.Fatalf("Request failed: %v", err)
-		}
+		require.NoError(t, err, "Request failed")
 		defer resp.Body.Close()
 
 		// Should NOT get 401 (auth passed, though server may return error for other reasons)
@@ -260,9 +253,7 @@ func TestOutputConfigUnifiedMode(t *testing.T) {
 		},
 	}
 	configBytes, err := json.Marshal(configJSON)
-	if err != nil {
-		t.Fatalf("Failed to marshal config: %v", err)
-	}
+	require.NoError(t, err, "Failed to marshal config")
 
 	cmd := exec.CommandContext(ctx, binaryPath,
 		"--config-stdin",

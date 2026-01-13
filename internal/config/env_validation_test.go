@@ -3,6 +3,8 @@ package config
 import (
 	"os"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestValidateContainerID(t *testing.T) {
@@ -71,9 +73,7 @@ func TestValidateContainerID(t *testing.T) {
 					t.Error("Expected error but got none")
 				}
 			} else {
-				if err != nil {
-					t.Errorf("Unexpected error: %v", err)
-				}
+				assert.NoError(t, err, "Unexpected error")
 			}
 		})
 	}
@@ -273,12 +273,8 @@ func TestGetGatewayPortFromEnv(t *testing.T) {
 					t.Error("Expected error but got none")
 				}
 			} else {
-				if err != nil {
-					t.Errorf("Unexpected error: %v", err)
-				}
-				if port != tt.expected {
-					t.Errorf("Expected port %d, got %d", tt.expected, port)
-				}
+				assert.NoError(t, err, "Unexpected error")
+				assert.Equal(t, tt.expected, port, "port %d, got %d")
 			}
 		})
 	}
@@ -475,9 +471,7 @@ func TestValidateExecutionEnvironment(t *testing.T) {
 		result := ValidateExecutionEnvironment()
 
 		// Should not have missing env vars
-		if len(result.MissingEnvVars) > 0 {
-			t.Errorf("Expected no missing env vars, got %v", result.MissingEnvVars)
-		}
+		assert.False(t, len(result.MissingEnvVars) > 0, "Expected no missing env vars, got %v")
 	})
 
 	t.Run("with missing env vars", func(t *testing.T) {

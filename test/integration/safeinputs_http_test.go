@@ -11,6 +11,9 @@ import (
 	"os/exec"
 	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+
 	"time"
 )
 
@@ -230,11 +233,8 @@ func TestSafeinputsHTTPBackend(t *testing.T) {
 	}
 
 	// Verify request count and session IDs
-	if requestCount == 0 {
-		t.Errorf("Expected at least one request to safeinputs server during initialization")
-	} else {
-		t.Logf("✓ Received %d request(s) to safeinputs server", requestCount)
-	}
+	assert.False(t, requestCount == 0, "Expected at least one request to safeinputs server during initialization")
+	t.Logf("✓ Received %d request(s) to safeinputs server", requestCount)
 
 	// Verify all requests had session IDs
 	for i, headers := range receivedHeaders {

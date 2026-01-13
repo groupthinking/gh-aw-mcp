@@ -9,6 +9,8 @@ import (
 	"os/exec"
 	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 	"time"
 )
 
@@ -73,9 +75,7 @@ func TestPlaywrightMCPServer(t *testing.T) {
 	}
 
 	configJSON, err := json.Marshal(config)
-	if err != nil {
-		t.Fatalf("Failed to marshal config: %v", err)
-	}
+	require.NoError(t, err, "Failed to marshal config")
 
 	// Start the server process with stdin config
 	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
@@ -132,9 +132,7 @@ func TestPlaywrightMCPServer(t *testing.T) {
 	// Test 1: Health check
 	t.Run("HealthCheck", func(t *testing.T) {
 		resp, err := http.Get(serverURL + "/health")
-		if err != nil {
-			t.Fatalf("Health check failed: %v", err)
-		}
+		require.NoError(t, err, "Health check failed")
 		defer resp.Body.Close()
 
 		if resp.StatusCode != http.StatusOK {
@@ -241,9 +239,7 @@ func TestPlaywrightWithLocalDockerfile(t *testing.T) {
 
 	// Create a temporary directory for test Dockerfile
 	tmpDir, err := os.MkdirTemp("", "playwright-mcp-test-*")
-	if err != nil {
-		t.Fatalf("Failed to create temp dir: %v", err)
-	}
+	require.NoError(t, err, "Failed to create temp dir")
 	defer os.RemoveAll(tmpDir)
 
 	// Create a mock MCP server that sends tool definitions with draft-07 schema
@@ -418,9 +414,7 @@ CMD ["node", "mock-mcp-server.js"]
 	}
 
 	configJSON, err := json.Marshal(config)
-	if err != nil {
-		t.Fatalf("Failed to marshal config: %v", err)
-	}
+	require.NoError(t, err, "Failed to marshal config")
 
 	// Start the server
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)

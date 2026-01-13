@@ -6,6 +6,9 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"time"
 )
 
@@ -401,9 +404,7 @@ func TestDebugLoggerWritesToFile(t *testing.T) {
 
 	// Initialize the file logger
 	err := InitFileLogger(logDir, fileName)
-	if err != nil {
-		t.Fatalf("InitFileLogger failed: %v", err)
-	}
+	require.NoError(t, err, "InitFileLogger failed")
 	defer CloseGlobalLogger()
 
 	// Use t.Setenv to enable all debug loggers
@@ -432,9 +433,7 @@ func TestDebugLoggerWritesToFile(t *testing.T) {
 	// Read the log file
 	logPath := filepath.Join(logDir, fileName)
 	content, err := os.ReadFile(logPath)
-	if err != nil {
-		t.Fatalf("Failed to read log file: %v", err)
-	}
+	require.NoError(t, err, "Failed to read log file")
 
 	logContent := string(content)
 
@@ -470,9 +469,7 @@ func TestDebugLoggerDisabledNoFileWrite(t *testing.T) {
 
 	// Initialize the file logger
 	err := InitFileLogger(logDir, fileName)
-	if err != nil {
-		t.Fatalf("InitFileLogger failed: %v", err)
-	}
+	require.NoError(t, err, "InitFileLogger failed")
 	defer CloseGlobalLogger()
 
 	// Use t.Setenv to disable all debug loggers
@@ -495,9 +492,7 @@ func TestDebugLoggerDisabledNoFileWrite(t *testing.T) {
 	// Read the log file
 	logPath := filepath.Join(logDir, fileName)
 	content, err := os.ReadFile(logPath)
-	if err != nil {
-		t.Fatalf("Failed to read log file: %v", err)
-	}
+	require.NoError(t, err, "Failed to read log file")
 
 	logContent := string(content)
 
@@ -579,9 +574,7 @@ func TestLogger_Printf_WithDebug(t *testing.T) {
 	t.Setenv("DEBUG", "*")
 
 	log := New("test:feature")
-	if !log.Enabled() {
-		t.Error("Logger should be enabled with DEBUG=*")
-	}
+	assert.True(t, log.Enabled(), "Logger should be enabled with DEBUG=*")
 
 	// Note: Printf writes to stderr, so we can't easily capture the output
 	// in an example test. This test just verifies it doesn't panic.
@@ -594,9 +587,7 @@ func TestLogger_Print_WithDebug(t *testing.T) {
 	t.Setenv("DEBUG", "*")
 
 	log := New("test:feature")
-	if !log.Enabled() {
-		t.Error("Logger should be enabled with DEBUG=*")
-	}
+	assert.True(t, log.Enabled(), "Logger should be enabled with DEBUG=*")
 
 	// Note: Print writes to stderr, so we can't easily capture the output
 	// in an example test. This test just verifies it doesn't panic.

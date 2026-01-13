@@ -6,6 +6,9 @@ import (
 	"os"
 	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestLoadFromStdin_ValidJSON(t *testing.T) {
@@ -40,13 +43,9 @@ func TestLoadFromStdin_ValidJSON(t *testing.T) {
 	cfg, err := LoadFromStdin()
 	os.Stdin = oldStdin
 
-	if err != nil {
-		t.Fatalf("LoadFromStdin() failed: %v", err)
-	}
+	require.NoError(t, err, "LoadFromStdin() failed")
 
-	if cfg == nil {
-		t.Fatal("LoadFromStdin() returned nil config")
-	}
+	require.NotNil(t, cfg, "LoadFromStdin() returned nil config")
 
 	if len(cfg.Servers) != 1 {
 		t.Errorf("Expected 1 server, got %d", len(cfg.Servers))
@@ -104,9 +103,7 @@ func TestLoadFromStdin_ValidJSON(t *testing.T) {
 	}
 
 	// Check that container name is in args
-	if !contains(server.Args, "test/container:latest") {
-		t.Error("Container name not found in args")
-	}
+	assert.True(t, contains(server.Args, "test/container:latest"), "Container name not found in args")
 
 	// Check that entrypoint args are included
 	if !contains(server.Args, "arg1") || !contains(server.Args, "arg2") {
@@ -141,9 +138,7 @@ func TestLoadFromStdin_WithGateway(t *testing.T) {
 	_, err := LoadFromStdin()
 	os.Stdin = oldStdin
 
-	if err != nil {
-		t.Fatalf("LoadFromStdin() failed: %v", err)
-	}
+	require.NoError(t, err, "LoadFromStdin() failed")
 
 	// Gateway should be parsed but not affect server config
 	var stdinCfg StdinConfig
@@ -191,9 +186,7 @@ func TestLoadFromStdin_UnsupportedType(t *testing.T) {
 	os.Stdin = oldStdin
 
 	// Should fail validation for unsupported type
-	if err == nil {
-		t.Fatal("Expected error for unsupported type 'remote'")
-	}
+	require.Error(t, err)
 
 	// Error should mention validation issue
 	if !strings.Contains(err.Error(), "validation error") {
@@ -237,9 +230,7 @@ func TestLoadFromStdin_DirectCommand(t *testing.T) {
 	os.Stdin = oldStdin
 
 	// Command field is no longer supported - should cause validation error
-	if err == nil {
-		t.Fatal("Expected error for deprecated 'command' field, got nil")
-	}
+	require.Error(t, err)
 
 	if !strings.Contains(err.Error(), "validation error") {
 		t.Errorf("Expected validation error, got: %v", err)
@@ -305,9 +296,7 @@ func TestLoadFromStdin_StdioType(t *testing.T) {
 	cfg, err := LoadFromStdin()
 	os.Stdin = oldStdin
 
-	if err != nil {
-		t.Fatalf("LoadFromStdin() failed: %v", err)
-	}
+	require.NoError(t, err, "LoadFromStdin() failed")
 
 	if len(cfg.Servers) != 1 {
 		t.Errorf("Expected 1 server, got %d", len(cfg.Servers))
@@ -322,13 +311,9 @@ func TestLoadFromStdin_StdioType(t *testing.T) {
 		t.Errorf("Expected command 'docker', got '%s'", server.Command)
 	}
 
-	if !contains(server.Args, "test/server:latest") {
-		t.Error("Container not found in args")
-	}
+	assert.True(t, contains(server.Args, "test/server:latest"), "Container not found in args")
 
-	if !contains(server.Args, "server.js") {
-		t.Error("Entrypoint args not preserved for stdio type")
-	}
+	assert.True(t, contains(server.Args, "server.js"), "Entrypoint args not preserved for stdio type")
 
 	// Check env vars
 	hasNodeEnv := false
@@ -379,9 +364,7 @@ func TestLoadFromStdin_HttpType(t *testing.T) {
 	cfg, err := LoadFromStdin()
 	os.Stdin = oldStdin
 
-	if err != nil {
-		t.Fatalf("LoadFromStdin() failed: %v", err)
-	}
+	require.NoError(t, err, "LoadFromStdin() failed")
 
 	// Both HTTP and stdio servers should be loaded
 	if len(cfg.Servers) != 2 {
@@ -437,9 +420,7 @@ func TestLoadFromStdin_LocalTypeBackwardCompatibility(t *testing.T) {
 	cfg, err := LoadFromStdin()
 	os.Stdin = oldStdin
 
-	if err != nil {
-		t.Fatalf("LoadFromStdin() failed: %v", err)
-	}
+	require.NoError(t, err, "LoadFromStdin() failed")
 
 	// "local" type should work as alias for "stdio"
 	if len(cfg.Servers) != 1 {
@@ -455,9 +436,7 @@ func TestLoadFromStdin_LocalTypeBackwardCompatibility(t *testing.T) {
 		t.Errorf("Expected command 'docker', got '%s'", server.Command)
 	}
 
-	if !contains(server.Args, "test/server:latest") {
-		t.Error("Container not found in args")
-	}
+	assert.True(t, contains(server.Args, "test/server:latest"), "Container not found in args")
 }
 
 func TestLoadFromStdin_GatewayWithAllFields(t *testing.T) {
@@ -492,9 +471,7 @@ func TestLoadFromStdin_GatewayWithAllFields(t *testing.T) {
 	_, err := LoadFromStdin()
 	os.Stdin = oldStdin
 
-	if err != nil {
-		t.Fatalf("LoadFromStdin() failed: %v", err)
-	}
+	require.NoError(t, err, "LoadFromStdin() failed")
 
 	// Parse gateway config to verify all fields
 	var stdinCfg StdinConfig
@@ -551,9 +528,7 @@ func TestLoadFromStdin_ServerWithURL(t *testing.T) {
 	_, err := LoadFromStdin()
 	os.Stdin = oldStdin
 
-	if err != nil {
-		t.Fatalf("LoadFromStdin() failed: %v", err)
-	}
+	require.NoError(t, err, "LoadFromStdin() failed")
 
 	// Parse to verify URL field
 	var stdinCfg StdinConfig
@@ -607,9 +582,7 @@ func TestLoadFromStdin_MixedServerTypes(t *testing.T) {
 	cfg, err := LoadFromStdin()
 	os.Stdin = oldStdin
 
-	if err != nil {
-		t.Fatalf("LoadFromStdin() failed: %v", err)
-	}
+	require.NoError(t, err, "LoadFromStdin() failed")
 
 	// Should load all 4 servers: stdio-container-1, stdio-container-2, local-container, http-server
 	if len(cfg.Servers) != 4 {
@@ -664,9 +637,7 @@ func TestLoadFromStdin_ContainerWithStdioType(t *testing.T) {
 	cfg, err := LoadFromStdin()
 	os.Stdin = oldStdin
 
-	if err != nil {
-		t.Fatalf("LoadFromStdin() failed: %v", err)
-	}
+	require.NoError(t, err, "LoadFromStdin() failed")
 
 	server, ok := cfg.Servers["docker-stdio"]
 	if !ok {
@@ -679,14 +650,10 @@ func TestLoadFromStdin_ContainerWithStdioType(t *testing.T) {
 	}
 
 	// Check container name is in args
-	if !contains(server.Args, "test/container:latest") {
-		t.Error("Container name not found in args")
-	}
+	assert.True(t, contains(server.Args, "test/container:latest"), "Container name not found in args")
 
 	// Check entrypoint args
-	if !contains(server.Args, "--verbose") {
-		t.Error("Entrypoint args not found")
-	}
+	assert.True(t, contains(server.Args, "--verbose"), "Entrypoint args not found")
 
 	// Check env vars (both explicit and passthrough)
 	hasDebug := false
@@ -748,9 +715,7 @@ func TestLoadFromStdin_WithEntrypoint(t *testing.T) {
 	cfg, err := LoadFromStdin()
 	os.Stdin = oldStdin
 
-	if err != nil {
-		t.Fatalf("LoadFromStdin() failed: %v", err)
-	}
+	require.NoError(t, err, "LoadFromStdin() failed")
 
 	server, ok := cfg.Servers["custom"]
 	if !ok {
@@ -772,9 +737,7 @@ func TestLoadFromStdin_WithEntrypoint(t *testing.T) {
 	}
 
 	// Check that entrypoint args are present
-	if !contains(server.Args, "--verbose") {
-		t.Error("Entrypoint args not found")
-	}
+	assert.True(t, contains(server.Args, "--verbose"), "Entrypoint args not found")
 }
 
 func TestLoadFromStdin_WithMounts(t *testing.T) {
@@ -807,9 +770,7 @@ func TestLoadFromStdin_WithMounts(t *testing.T) {
 	cfg, err := LoadFromStdin()
 	os.Stdin = oldStdin
 
-	if err != nil {
-		t.Fatalf("LoadFromStdin() failed: %v", err)
-	}
+	require.NoError(t, err, "LoadFromStdin() failed")
 
 	server, ok := cfg.Servers["mounted"]
 	if !ok {
@@ -827,9 +788,7 @@ func TestLoadFromStdin_WithMounts(t *testing.T) {
 		}
 	}
 
-	if mountCount != 2 {
-		t.Errorf("Expected 2 volume mounts, found %d", mountCount)
-	}
+	assert.Equal(t, 2, mountCount, "2 volume mounts, found %d")
 }
 
 func TestLoadFromStdin_WithAllNewFields(t *testing.T) {
@@ -864,9 +823,7 @@ func TestLoadFromStdin_WithAllNewFields(t *testing.T) {
 	cfg, err := LoadFromStdin()
 	os.Stdin = oldStdin
 
-	if err != nil {
-		t.Fatalf("LoadFromStdin() failed: %v", err)
-	}
+	require.NoError(t, err, "LoadFromStdin() failed")
 
 	server, ok := cfg.Servers["comprehensive"]
 	if !ok {
@@ -920,9 +877,7 @@ func TestLoadFromStdin_WithAllNewFields(t *testing.T) {
 	}
 
 	// Verify container name is present
-	if !contains(server.Args, "test/container:latest") {
-		t.Error("Container name not found")
-	}
+	assert.True(t, contains(server.Args, "test/container:latest"), "Container name not found")
 }
 
 func TestLoadFromStdin_InvalidMountFormat(t *testing.T) {

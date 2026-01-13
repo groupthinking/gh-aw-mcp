@@ -8,6 +8,9 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestInitJSONLLogger(t *testing.T) {
@@ -16,9 +19,7 @@ func TestInitJSONLLogger(t *testing.T) {
 
 	// Test successful initialization
 	err := InitJSONLLogger(logDir, "test.jsonl")
-	if err != nil {
-		t.Fatalf("InitJSONLLogger failed: %v", err)
-	}
+	require.NoError(t, err, "InitJSONLLogger failed")
 	defer CloseJSONLLogger()
 
 	// Verify log file was created
@@ -70,9 +71,7 @@ func TestLogRPCMessageJSONL(t *testing.T) {
 	// Read and verify the log file
 	logPath := filepath.Join(logDir, "test.jsonl")
 	file, err := os.Open(logPath)
-	if err != nil {
-		t.Fatalf("Failed to open log file: %v", err)
-	}
+	require.NoError(t, err, "Failed to open log file")
 	defer file.Close()
 
 	scanner := bufio.NewScanner(file)
@@ -133,9 +132,7 @@ func TestLogRPCMessageJSONL(t *testing.T) {
 		t.Fatalf("Error reading log file: %v", err)
 	}
 
-	if lineCount != 2 {
-		t.Errorf("Expected 2 log entries, got %d", lineCount)
-	}
+	assert.Equal(t, 2, lineCount, "2 log entries, got %d")
 }
 
 func TestSanitizePayload(t *testing.T) {
@@ -175,9 +172,7 @@ func TestSanitizePayload(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			result := sanitizePayload([]byte(tt.input))
 
-			if result == nil {
-				t.Fatalf("sanitizePayload returned nil")
-			}
+			require.NotNil(t, result, "sanitizePayload returned nil")
 
 			// The result is already a sanitized string
 			sanitizedStr := string(result)
@@ -230,9 +225,7 @@ func TestSanitizePayloadWithNestedStructures(t *testing.T) {
 	sanitizedStr := string(result)
 
 	// Should redact all secrets at all levels
-	if !strings.Contains(sanitizedStr, "[REDACTED]") {
-		t.Errorf("Expected [REDACTED] in sanitized output")
-	}
+	assert.True(t, strings.Contains(sanitizedStr, "[REDACTED]"), "Expected [REDACTED] in sanitized output")
 
 	// Should NOT contain original secrets
 	if strings.Contains(sanitizedStr, "test_fake_api_key") {
@@ -246,12 +239,8 @@ func TestSanitizePayloadWithNestedStructures(t *testing.T) {
 	}
 
 	// Should preserve non-secret values
-	if !strings.Contains(sanitizedStr, "item1") {
-		t.Errorf("Non-secret value 'item1' was lost")
-	}
-	if !strings.Contains(sanitizedStr, "safe") {
-		t.Errorf("Non-secret value 'safe' was lost")
-	}
+	assert.True(t, strings.Contains(sanitizedStr, "item1"), "Non-secret value 'item1' was lost")
+	assert.True(t, strings.Contains(sanitizedStr, "safe"), "Non-secret value 'safe' was lost")
 }
 
 func TestLogRPCMessageJSONLWithError(t *testing.T) {
@@ -274,9 +263,7 @@ func TestLogRPCMessageJSONLWithError(t *testing.T) {
 	// Read and verify
 	logPath := filepath.Join(logDir, "test.jsonl")
 	content, err := os.ReadFile(logPath)
-	if err != nil {
-		t.Fatalf("Failed to read log file: %v", err)
-	}
+	require.NoError(t, err, "Failed to read log file")
 
 	var entry JSONLRPCMessage
 	if err := json.Unmarshal(content, &entry); err != nil {
@@ -307,9 +294,7 @@ func TestLogRPCMessageJSONLWithInvalidJSON(t *testing.T) {
 	// Read and verify
 	logPath := filepath.Join(logDir, "test.jsonl")
 	content, err := os.ReadFile(logPath)
-	if err != nil {
-		t.Fatalf("Failed to read log file: %v", err)
-	}
+	require.NoError(t, err, "Failed to read log file")
 
 	var entry JSONLRPCMessage
 	if err := json.Unmarshal(content, &entry); err != nil {
@@ -374,9 +359,7 @@ func TestMultipleMessagesInJSONL(t *testing.T) {
 	// Read and verify all lines
 	logPath := filepath.Join(logDir, "test.jsonl")
 	file, err := os.Open(logPath)
-	if err != nil {
-		t.Fatalf("Failed to open log file: %v", err)
-	}
+	require.NoError(t, err, "Failed to open log file")
 	defer file.Close()
 
 	scanner := bufio.NewScanner(file)

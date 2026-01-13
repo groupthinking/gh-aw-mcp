@@ -8,6 +8,9 @@ import (
 	"os"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"github.com/githubnext/gh-aw-mcpg/internal/config"
 )
 
@@ -61,9 +64,7 @@ func TestHTTPConnection(t *testing.T) {
 	cfg, err := config.LoadFromStdin()
 	os.Stdin = oldStdin
 
-	if err != nil {
-		t.Fatalf("Failed to load config: %v", err)
-	}
+	require.NoError(t, err, "Failed to load config")
 
 	// Verify HTTP server is loaded
 	httpServer, ok := cfg.Servers["safeinputs"]
@@ -89,13 +90,9 @@ func TestHTTPConnection(t *testing.T) {
 
 	// Get connection
 	conn, err := GetOrLaunch(l, "safeinputs")
-	if err != nil {
-		t.Fatalf("Failed to get connection: %v", err)
-	}
+	require.NoError(t, err, "Failed to get connection")
 
-	if !conn.IsHTTP() {
-		t.Error("Connection should be HTTP")
-	}
+	assert.True(t, conn.IsHTTP(), "Connection should be HTTP")
 
 	if conn.GetHTTPURL() != mockServer.URL {
 		t.Errorf("Expected URL '%s', got '%s'", mockServer.URL, conn.GetHTTPURL())
@@ -160,9 +157,7 @@ func TestHTTPConnectionWithVariableExpansion(t *testing.T) {
 	cfg, err := config.LoadFromStdin()
 	os.Stdin = oldStdin
 
-	if err != nil {
-		t.Fatalf("Failed to load config: %v", err)
-	}
+	require.NoError(t, err, "Failed to load config")
 
 	// Verify HTTP server is loaded with expanded variable
 	httpServer, ok := cfg.Servers["safeinputs"]
@@ -180,9 +175,7 @@ func TestHTTPConnectionWithVariableExpansion(t *testing.T) {
 
 	// Get connection
 	conn, err := GetOrLaunch(l, "safeinputs")
-	if err != nil {
-		t.Fatalf("Failed to get connection: %v", err)
-	}
+	require.NoError(t, err, "Failed to get connection")
 
 	if conn.GetHTTPHeaders()["Authorization"] != "secret-token-value" {
 		t.Errorf("Expected Authorization header 'secret-token-value', got '%s'", conn.GetHTTPHeaders()["Authorization"])
@@ -221,9 +214,7 @@ func TestMixedHTTPAndStdioServers(t *testing.T) {
 	cfg, err := config.LoadFromStdin()
 	os.Stdin = oldStdin
 
-	if err != nil {
-		t.Fatalf("Failed to load config: %v", err)
-	}
+	require.NoError(t, err, "Failed to load config")
 
 	// Verify both servers are loaded
 	if len(cfg.Servers) != 2 {

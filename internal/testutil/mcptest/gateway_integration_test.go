@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"net/http/httptest"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 	"time"
 
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
@@ -52,9 +54,7 @@ func TestGatewayWithSingleBackend(t *testing.T) {
 
 	// Create unified server
 	us, err := server.NewUnified(ctx, gatewayCfg)
-	if err != nil {
-		t.Fatalf("Failed to create unified server: %v", err)
-	}
+	require.NoError(t, err, "Failed to create unified server")
 	defer us.Close()
 
 	// Manually inject test tools into the gateway
@@ -134,9 +134,7 @@ func TestGatewayRoutedMode(t *testing.T) {
 	}
 
 	us, err := server.NewUnified(ctx, gatewayCfg)
-	if err != nil {
-		t.Fatalf("Failed to create unified server: %v", err)
-	}
+	require.NoError(t, err, "Failed to create unified server")
 	defer us.Close()
 
 	// Inject test tools for backend1
@@ -226,22 +224,16 @@ func TestGatewayWithResources(t *testing.T) {
 	}
 
 	transport, err := driver.CreateStdioTransport("test")
-	if err != nil {
-		t.Fatalf("Failed to create transport: %v", err)
-	}
+	require.NoError(t, err, "Failed to create transport")
 
 	// Create validator
 	validator, err := mcptest.NewValidatorClient(ctx, transport)
-	if err != nil {
-		t.Fatalf("Failed to create validator: %v", err)
-	}
+	require.NoError(t, err, "Failed to create validator")
 	defer validator.Close()
 
 	// Test: List resources
 	resources, err := validator.ListResources()
-	if err != nil {
-		t.Fatalf("Failed to list resources: %v", err)
-	}
+	require.NoError(t, err, "Failed to list resources")
 
 	if len(resources) != 1 {
 		t.Errorf("Expected 1 resource, got %d", len(resources))
@@ -256,9 +248,7 @@ func TestGatewayWithResources(t *testing.T) {
 
 	// Test: Read resource
 	result, err := validator.ReadResource("test://config")
-	if err != nil {
-		t.Fatalf("Failed to read resource: %v", err)
-	}
+	require.NoError(t, err, "Failed to read resource")
 
 	if len(result.Contents) != 1 {
 		t.Errorf("Expected 1 content item, got %d", len(result.Contents))
