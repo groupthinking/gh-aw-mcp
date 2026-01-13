@@ -3,6 +3,7 @@ package mcp
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -528,16 +529,17 @@ func TestHTTPConnection_SSEResponse(t *testing.T) {
 
 		method, _ := reqBody["method"].(string)
 		id, _ := reqBody["id"].(float64)
+		idStr := fmt.Sprintf("%g", id) // Convert float64 to string without scientific notation
 
 		var response string
 		if method == "initialize" {
 			response = `event: message
-data: {"jsonrpc":"2.0","id":` + string(rune(int(id)+'0')) + `,"result":{"protocolVersion":"2024-11-05","capabilities":{"experimental":{},"prompts":{"listChanged":true},"resources":{"subscribe":false,"listChanged":true},"tools":{"listChanged":true}},"serverInfo":{"name":"tavily-mcp","version":"2.14.2"}}}
+data: {"jsonrpc":"2.0","id":` + idStr + `,"result":{"protocolVersion":"2024-11-05","capabilities":{"experimental":{},"prompts":{"listChanged":true},"resources":{"subscribe":false,"listChanged":true},"tools":{"listChanged":true}},"serverInfo":{"name":"tavily-mcp","version":"2.14.2"}}}
 
 `
 		} else {
 			response = `event: message
-data: {"jsonrpc":"2.0","id":` + string(rune(int(id)+'0')) + `,"result":{"tools":[]}}
+data: {"jsonrpc":"2.0","id":` + idStr + `,"result":{"tools":[]}}
 
 `
 		}
