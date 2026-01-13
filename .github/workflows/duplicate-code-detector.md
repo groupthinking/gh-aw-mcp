@@ -15,8 +15,12 @@ safe-outputs:
   create-issue:
     title-prefix: "[duplicate-code] "
     labels: [code-quality, automated-analysis]
-    max: 3
+    max: 4
     expires: 7
+  link-sub-issue:
+    parent-title-prefix: "[duplicate-code]"
+    sub-title-prefix: "[duplicate-code]"
+    max: 3
   missing-tool:
     create-issue: true
 timeout-minutes: 15
@@ -102,20 +106,31 @@ Assess findings to identify true code duplication:
 
 ### 5. Issue Reporting
 
-Create separate issues for each distinct duplication pattern found (maximum 3 patterns per run). Each pattern should get its own issue to enable focused remediation.
+Create a parent issue summarizing all duplication findings, with individual sub-issues for each distinct pattern (maximum 3 patterns per run).
 
 **When to Create Issues**:
 - Only create issues if significant duplication is found (threshold: >10 lines of duplicated code OR 3+ instances of similar patterns)
-- **Create one issue per distinct pattern** - do NOT bundle multiple patterns in a single issue
-- Limit to the top 3 most significant patterns if more are found
-- Use the `create_issue` tool from safe-outputs MCP **once for each pattern**
+- **First, create ONE parent issue** that summarizes all duplication findings
+  - Use `temporary_id` (format: `aw_` + 12 hex chars, e.g., `aw_abc123def456`) to reference this parent issue
+  - The parent issue should provide an overview of all patterns detected
+- **Then, create individual sub-issues** for each distinct duplication pattern (up to 3)
+  - Use the `parent` field with the parent's `temporary_id` to link each sub-issue
+  - Each sub-issue focuses on ONE specific duplication pattern
+- Use the `create_issue` tool from safe-outputs MCP for both parent and sub-issues
 
-**Issue Contents for Each Pattern**:
-- **Executive Summary**: Brief description of this specific duplication pattern
+**Parent Issue Contents**:
+- **Executive Summary**: Overview of all duplication findings in this analysis
+- **Summary of Patterns**: List of all duplication patterns detected (with references to sub-issues using `#aw_<temporary_id>`)
+- **Overall Impact**: High-level assessment of duplication impact on the codebase
+- **Analysis Metadata**: Commit, files analyzed, detection method
+
+**Sub-Issue Contents (for Each Pattern)**:
+- **Pattern Description**: Brief description of this specific duplication pattern
 - **Duplication Details**: Specific locations and code blocks for this pattern only
 - **Severity Assessment**: Impact and maintainability concerns for this pattern
 - **Refactoring Recommendations**: Suggested approaches to eliminate this pattern
 - **Code Examples**: Concrete examples with file paths and line numbers for this pattern
+- **Parent Reference**: Include reference to parent issue using `#aw_<temporary_id>`
 
 ## Detection Scope
 
@@ -154,14 +169,58 @@ Create separate issues for each distinct duplication pattern found (maximum 3 pa
   - Configuration parsing
   - HTTP handling
 
-## Issue Template
+## Issue Templates
 
-For each distinct duplication pattern found, create a separate issue using this structure:
+### Parent Issue Template
+
+For the overall summary, create ONE parent issue using this structure:
 
 ```markdown
-# 🔍 Duplicate Code Detected: [Pattern Name]
+# 🔍 Duplicate Code Analysis Report
 
 *Analysis of commit ${{ github.event.head_commit.id }}*
+
+## Summary
+
+[Brief overview of duplication findings - how many patterns detected, overall severity]
+
+## Detected Patterns
+
+This analysis found [N] significant duplication patterns:
+
+1. **[Pattern 1 Name]** - Severity: [High/Medium/Low] - See sub-issue #aw_[sub1_temp_id]
+2. **[Pattern 2 Name]** - Severity: [High/Medium/Low] - See sub-issue #aw_[sub2_temp_id]
+3. **[Pattern 3 Name]** - Severity: [High/Medium/Low] - See sub-issue #aw_[sub3_temp_id]
+
+## Overall Impact
+
+- **Total Duplicated Lines**: [Approximate count]
+- **Affected Files**: [Number of files with duplication]
+- **Maintainability Risk**: [High/Medium/Low assessment]
+- **Refactoring Priority**: [Recommended priority level]
+
+## Next Steps
+
+1. Review individual pattern sub-issues for detailed analysis
+2. Prioritize refactoring based on severity and impact
+3. Create implementation plan for highest priority patterns
+
+## Analysis Metadata
+
+- **Analyzed Files**: [count] Go files
+- **Detection Method**: Serena semantic code analysis
+- **Commit**: ${{ github.event.head_commit.id }}
+- **Analysis Date**: [timestamp]
+```
+
+### Sub-Issue Template
+
+For each distinct duplication pattern found, create a separate sub-issue using this structure:
+
+```markdown
+# 🔍 Duplicate Code Pattern: [Pattern Name]
+
+*Part of duplicate code analysis: #aw_[parent_temp_id]*
 
 ## Summary
 
@@ -205,13 +264,52 @@ For each distinct duplication pattern found, create a separate issue using this 
 - [ ] Update tests
 - [ ] Verify no functionality broken
 
-## Analysis Metadata
+## Parent Issue
 
-- **Analyzed Files**: [count]
-- **Detection Method**: Serena semantic code analysis
-- **Commit**: ${{ github.event.head_commit.id }}
-- **Analysis Date**: [timestamp]
+See parent analysis report: #aw_[parent_temp_id]
 ```
+
+## Creating Parent and Sub-Issues: Example
+
+Here's how to create the parent issue and link sub-issues using the `create_issue` tool:
+
+**Step 1: Create Parent Issue**
+```json
+{
+  "type": "create_issue",
+  "temporary_id": "aw_abc123def456",
+  "title": "Duplicate Code Analysis Report",
+  "body": "[Parent issue content with references to sub-issues: #aw_xyz789ghi012, #aw_mno345pqr678]"
+}
+```
+
+**Step 2: Create Sub-Issues**
+```json
+{
+  "type": "create_issue",
+  "temporary_id": "aw_xyz789ghi012",
+  "parent": "aw_abc123def456",
+  "title": "Duplicate Code Pattern: Error Handling in Server Module",
+  "body": "[Sub-issue content for pattern 1, referencing parent: #aw_abc123def456]"
+}
+```
+
+```json
+{
+  "type": "create_issue",
+  "temporary_id": "aw_mno345pqr678",
+  "parent": "aw_abc123def456",
+  "title": "Duplicate Code Pattern: Logger Initialization",
+  "body": "[Sub-issue content for pattern 2, referencing parent: #aw_abc123def456]"
+}
+```
+
+**Key Points:**
+- Use `temporary_id` format: `aw_` + 12 hexadecimal characters
+- Generate unique temporary IDs for both parent and each sub-issue
+- Use `parent` field in sub-issue creation to link to parent's `temporary_id`
+- References like `#aw_abc123def456` are automatically replaced with actual issue numbers after creation
+- The `link-sub-issue` safe-output will automatically establish the parent-child relationship
 
 ## Operational Guidelines
 
@@ -232,13 +330,15 @@ For each distinct duplication pattern found, create a separate issue using this 
 - Provide specific, actionable recommendations
 
 ### Issue Creation
-- Create **one issue per distinct duplication pattern** - do NOT bundle multiple patterns in a single issue
+- Create **one parent issue** to summarize all findings, then **individual sub-issues** for each pattern
+- Use `temporary_id` (format: `aw_` + 12 hex chars) for the parent issue to enable sub-issue linking
+- Use the `parent` field with the parent's `temporary_id` when creating sub-issues
 - Limit to the top 3 most significant patterns if more are found
 - Only create issues if significant duplication is found
 - Include sufficient detail for SWE agents to understand and act on findings
 - Provide concrete examples with file paths and line numbers
 - Suggest practical refactoring approaches
-- Use descriptive titles that clearly identify the specific pattern (e.g., "Duplicate Code: Error Handling Pattern in Server Module")
+- Use descriptive titles that clearly identify patterns (e.g., "Duplicate Code Pattern: Error Handling in Server Module")
 
 ## Tool Usage Sequence
 
