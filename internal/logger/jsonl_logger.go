@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"path/filepath"
 	"sync"
 	"time"
 
@@ -51,18 +50,10 @@ func InitJSONLLogger(logDir, fileName string) error {
 		fileName: fileName,
 	}
 
-	// Try to create the log directory if it doesn't exist
-	if err := os.MkdirAll(logDir, 0755); err != nil {
-		// If we can't create the directory, just return without setting up the logger
-		// This allows the gateway to continue running even if JSONL logging fails
-		return fmt.Errorf("failed to create log directory: %w", err)
-	}
-
-	// Try to open the log file
-	logPath := filepath.Join(logDir, fileName)
-	file, err := os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+	// Try to initialize the log file
+	file, err := initLogFile(logDir, fileName, os.O_APPEND)
 	if err != nil {
-		return fmt.Errorf("failed to open log file: %w", err)
+		return err
 	}
 
 	jl.logFile = file
