@@ -22,7 +22,7 @@ import (
 
 // Default values for command-line flags.
 const (
-	defaultConfigFile  = "config.toml"
+	defaultConfigFile  = "" // No default config file - user must explicitly specify --config or --config-stdin
 	defaultConfigStdin = false
 	// DefaultListenIPv4 is the default interface used by the HTTP server.
 	DefaultListenIPv4 = "127.0.0.1"
@@ -91,6 +91,11 @@ func run(cmd *cobra.Command, args []string) error {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
+	// Validate that either --config or --config-stdin is provided
+	if !configStdin && configFile == "" {
+		return fmt.Errorf("configuration source required: specify either --config <file> or --config-stdin")
+	}
+
 	// Initialize file logger early
 	if err := logger.InitFileLogger(logDir, "mcp-gateway.log"); err != nil {
 		log.Printf("Warning: Failed to initialize file logger: %v", err)
@@ -110,8 +115,14 @@ func run(cmd *cobra.Command, args []string) error {
 	defer logger.CloseJSONLLogger()
 
 	logger.LogInfoMd("startup", "MCPG Gateway version: %s", version)
-	logger.LogInfoMd("startup", "Starting MCPG with config: %s, listen: %s, log-dir: %s", configFile, listenAddr, logDir)
-	debugLog.Printf("Starting MCPG with config: %s, listen: %s", configFile, listenAddr)
+
+	// Log config source based on what was provided
+	configSource := configFile
+	if configStdin {
+		configSource = "stdin"
+	}
+	logger.LogInfoMd("startup", "Starting MCPG with config: %s, listen: %s, log-dir: %s", configSource, listenAddr, logDir)
+	debugLog.Printf("Starting MCPG with config: %s, listen: %s", configSource, listenAddr)
 
 	// Load .env file if specified
 	if envFile != "" {

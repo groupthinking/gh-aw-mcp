@@ -184,7 +184,7 @@ func isEffectivelyEmpty(data map[string]interface{}) bool {
 
 // formatRPCMessageMarkdown formats an RPC message for markdown logging
 func formatRPCMessageMarkdown(info *RPCMessageInfo) string {
-	// Concise format: **server**→method \n~~~ \n{formatted json} \n~~~
+	// Concise format: **server**→method \n```json \n{formatted json} \n```
 	var dir string
 	if info.Direction == RPCDirectionOutbound {
 		dir = "→"
@@ -199,7 +199,7 @@ func formatRPCMessageMarkdown(info *RPCMessageInfo) string {
 		if info.Method != "" {
 			message = fmt.Sprintf("**%s**%s`%s`", info.ServerID, dir, info.Method)
 		} else {
-			message = fmt.Sprintf("**%s**%sresp", info.ServerID, dir)
+			message = fmt.Sprintf("**%s**%s`resp`", info.ServerID, dir)
 		}
 	}
 
@@ -210,9 +210,9 @@ func formatRPCMessageMarkdown(info *RPCMessageInfo) string {
 		if isValidJSON {
 			// Don't show JSON block if it's effectively empty (only params: null)
 			if !isEmpty {
-				// Valid JSON: use code block for better readability (pretty printed)
-				// Empty line before ~~~ per markdown convention
-				message += fmt.Sprintf(" \n\n~~~\n%s\n~~~", formatted)
+				// Valid JSON: use json code block for syntax highlighting (pretty printed)
+				// Empty line before code block per markdown convention
+				message += fmt.Sprintf("\n\n```json\n%s\n```", formatted)
 			}
 		} else {
 			// Invalid JSON: use inline backticks to avoid malformed markdown

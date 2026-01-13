@@ -194,7 +194,7 @@ func TestFormatRPCMessageMarkdown(t *testing.T) {
 				PayloadSize: 50,
 				Payload:     `{"jsonrpc":"2.0","method":"tools/list","params":{}}`,
 			},
-			want:    []string{"**github**→`tools/list`", "~~~", `"params"`, "{}"},
+			want:    []string{"**github**→`tools/list`", "```json", `"params"`, "{}"},
 			notWant: []string{`"jsonrpc"`, `"method"`},
 		},
 		{
@@ -206,7 +206,7 @@ func TestFormatRPCMessageMarkdown(t *testing.T) {
 				PayloadSize: 100,
 				Payload:     `{"result":{}}`,
 			},
-			want:    []string{"**github**←resp", "~~~", `"result"`},
+			want:    []string{"**github**←`resp`", "```json", `"result"`},
 			notWant: []string{`"jsonrpc"`, `"method"`},
 		},
 		{
@@ -218,7 +218,7 @@ func TestFormatRPCMessageMarkdown(t *testing.T) {
 				PayloadSize: 100,
 				Error:       "Connection timeout",
 			},
-			want:    []string{"**github**←resp", "⚠️`Connection timeout`"},
+			want:    []string{"**github**←`resp`", "⚠️`Connection timeout`"},
 			notWant: []string{},
 		},
 		{
@@ -232,7 +232,7 @@ func TestFormatRPCMessageMarkdown(t *testing.T) {
 				Payload:     `{invalid json syntax}`,
 			},
 			want:    []string{"**github**→`tools/call`", "`{invalid json syntax}`"},
-			notWant: []string{"~~~"}, // Should NOT use code blocks for invalid JSON
+			notWant: []string{"```json"}, // Should NOT use code blocks for invalid JSON
 		},
 		{
 			name: "request with only params null after field removal",
@@ -245,7 +245,7 @@ func TestFormatRPCMessageMarkdown(t *testing.T) {
 				Payload:     `{"jsonrpc":"2.0","method":"tools/list","params":null}`,
 			},
 			want:    []string{"**github**→`tools/list`"},
-			notWant: []string{"~~~", `"params"`}, // Should NOT show JSON block when only params: null
+			notWant: []string{"```json", `"params"`}, // Should NOT show JSON block when only params: null
 		},
 		{
 			name: "request with empty object after field removal",
@@ -258,7 +258,7 @@ func TestFormatRPCMessageMarkdown(t *testing.T) {
 				Payload:     `{"jsonrpc":"2.0","method":"tools/list"}`,
 			},
 			want:    []string{"**github**→`tools/list`"},
-			notWant: []string{"~~~"}, // Should NOT show JSON block when empty
+			notWant: []string{"```json"}, // Should NOT show JSON block when empty
 		},
 	}
 
@@ -475,7 +475,7 @@ func TestLogRPCResponse(t *testing.T) {
 	}
 
 	mdStr := string(mdContent)
-	expectedInMd := []string{"**github**←resp", "⚠️`backend connection failed`"}
+	expectedInMd := []string{"**github**←`resp`", "⚠️`backend connection failed`"}
 	for _, expected := range expectedInMd {
 		if !strings.Contains(mdStr, expected) {
 			t.Errorf("Markdown log does not contain %q", expected)
