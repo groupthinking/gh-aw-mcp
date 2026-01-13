@@ -8,6 +8,8 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+
+	"github.com/githubnext/gh-aw-mcpg/internal/config/rules"
 )
 
 // RequiredEnvVars lists the environment variables that must be set for the gateway to operate
@@ -272,8 +274,8 @@ func GetGatewayPortFromEnv() (int, error) {
 		return 0, fmt.Errorf("invalid MCP_GATEWAY_PORT value: %s", portStr)
 	}
 
-	if port < 1 || port > 65535 {
-		return 0, fmt.Errorf("MCP_GATEWAY_PORT must be between 1 and 65535, got %d", port)
+	if validationErr := rules.PortRange(port, "MCP_GATEWAY_PORT"); validationErr != nil {
+		return 0, fmt.Errorf("%s", validationErr.Message)
 	}
 
 	return port, nil

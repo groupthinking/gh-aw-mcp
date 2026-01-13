@@ -7,6 +7,7 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/githubnext/gh-aw-mcpg/internal/config/rules"
 	"github.com/santhosh-tekuri/jsonschema/v5"
 )
 
@@ -189,7 +190,7 @@ func validateStringPatterns(stdinCfg *StdinConfig) error {
 		// Validate container pattern for stdio servers
 		if server.Type == "" || server.Type == "stdio" || server.Type == "local" {
 			if server.Container != "" && !containerPattern.MatchString(server.Container) {
-				return &ValidationError{
+				return &rules.ValidationError{
 					Field:      "container",
 					Message:    fmt.Sprintf("container image '%s' does not match required pattern", server.Container),
 					JSONPath:   fmt.Sprintf("%s.container", jsonPath),
@@ -200,7 +201,7 @@ func validateStringPatterns(stdinCfg *StdinConfig) error {
 			// Validate mount patterns
 			for i, mount := range server.Mounts {
 				if !mountPattern.MatchString(mount) {
-					return &ValidationError{
+					return &rules.ValidationError{
 						Field:      "mounts",
 						Message:    fmt.Sprintf("mount '%s' does not match required pattern", mount),
 						JSONPath:   fmt.Sprintf("%s.mounts[%d]", jsonPath, i),
@@ -211,7 +212,7 @@ func validateStringPatterns(stdinCfg *StdinConfig) error {
 
 			// Validate entrypoint is not empty if provided
 			if server.Entrypoint != "" && len(strings.TrimSpace(server.Entrypoint)) == 0 {
-				return &ValidationError{
+				return &rules.ValidationError{
 					Field:      "entrypoint",
 					Message:    "entrypoint cannot be empty or whitespace only",
 					JSONPath:   fmt.Sprintf("%s.entrypoint", jsonPath),
@@ -223,7 +224,7 @@ func validateStringPatterns(stdinCfg *StdinConfig) error {
 		// Validate URL pattern for HTTP servers
 		if server.Type == "http" {
 			if server.URL != "" && !urlPattern.MatchString(server.URL) {
-				return &ValidationError{
+				return &rules.ValidationError{
 					Field:      "url",
 					Message:    fmt.Sprintf("url '%s' does not match required pattern", server.URL),
 					JSONPath:   fmt.Sprintf("%s.url", jsonPath),
@@ -237,14 +238,8 @@ func validateStringPatterns(stdinCfg *StdinConfig) error {
 	if stdinCfg.Gateway != nil {
 		// Validate port: must be integer 1-65535 or variable expression
 		if stdinCfg.Gateway.Port != nil {
-			port := *stdinCfg.Gateway.Port
-			if port < 1 || port > 65535 {
-				return &ValidationError{
-					Field:      "port",
-					Message:    fmt.Sprintf("port must be between 1 and 65535, got %d", port),
-					JSONPath:   "gateway.port",
-					Suggestion: "Use a valid port number (e.g., 8080)",
-				}
+			if err := rules.PortRange(*stdinCfg.Gateway.Port, "gateway.port"); err != nil {
+				return err
 			}
 		}
 
@@ -252,7 +247,7 @@ func validateStringPatterns(stdinCfg *StdinConfig) error {
 		if stdinCfg.Gateway.Domain != "" {
 			domain := stdinCfg.Gateway.Domain
 			if domain != "localhost" && domain != "host.docker.internal" && !domainVarPattern.MatchString(domain) {
-				return &ValidationError{
+				return &rules.ValidationError{
 					Field:      "domain",
 					Message:    fmt.Sprintf("domain '%s' must be 'localhost', 'host.docker.internal', or a variable expression", domain),
 					JSONPath:   "gateway.domain",
@@ -262,21 +257,15 @@ func validateStringPatterns(stdinCfg *StdinConfig) error {
 		}
 
 		// Validate timeouts are positive
-		if stdinCfg.Gateway.StartupTimeout != nil && *stdinCfg.Gateway.StartupTimeout < 1 {
-			return &ValidationError{
-				Field:      "startupTimeout",
-				Message:    fmt.Sprintf("startupTimeout must be at least 1, got %d", *stdinCfg.Gateway.StartupTimeout),
-				JSONPath:   "gateway.startupTimeout",
-				Suggestion: "Use a positive number of seconds (e.g., 30)",
+		if stdinCfg.Gateway.StartupTimeout != nil {
+			if err := rules.TimeoutPositive(*stdinCfg.Gateway.StartupTimeout, "startupTimeout", "gateway.startupTimeout"); err != nil {
+				return err
 			}
 		}
 
-		if stdinCfg.Gateway.ToolTimeout != nil && *stdinCfg.Gateway.ToolTimeout < 1 {
-			return &ValidationError{
-				Field:      "toolTimeout",
-				Message:    fmt.Sprintf("toolTimeout must be at least 1, got %d", *stdinCfg.Gateway.ToolTimeout),
-				JSONPath:   "gateway.toolTimeout",
-				Suggestion: "Use a positive number of seconds (e.g., 60)",
+		if stdinCfg.Gateway.ToolTimeout != nil {
+			if err := rules.TimeoutPositive(*stdinCfg.Gateway.ToolTimeout, "toolTimeout", "gateway.toolTimeout"); err != nil {
+				return err
 			}
 		}
 	}

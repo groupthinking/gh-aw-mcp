@@ -4,25 +4,12 @@ import (
 	"fmt"
 	"os"
 	"regexp"
-	"strings"
+
+	"github.com/githubnext/gh-aw-mcpg/internal/config/rules"
 )
 
-// ValidationError represents a configuration validation error with context
-type ValidationError struct {
-	Field      string
-	Message    string
-	JSONPath   string
-	Suggestion string
-}
-
-func (e *ValidationError) Error() string {
-	var sb strings.Builder
-	sb.WriteString(fmt.Sprintf("Configuration error at %s: %s", e.JSONPath, e.Message))
-	if e.Suggestion != "" {
-		sb.WriteString(fmt.Sprintf("\nSuggestion: %s", e.Suggestion))
-	}
-	return sb.String()
-}
+// ValidationError is an alias for rules.ValidationError for backward compatibility
+type ValidationError = rules.ValidationError
 
 // Variable expression pattern: ${VARIABLE_NAME}
 var varExprPattern = regexp.MustCompile(`\$\{([A-Za-z_][A-Za-z0-9_]*)\}`)
@@ -75,49 +62,11 @@ func expandEnvVariables(env map[string]string, serverName string) (map[string]st
 	return result, nil
 }
 
-// validateMounts validates mount specifications
+// validateMounts validates mount specifications using centralized rules
 func validateMounts(mounts []string, jsonPath string) error {
 	for i, mount := range mounts {
-		parts := strings.Split(mount, ":")
-		if len(parts) != 3 {
-			return &ValidationError{
-				Field:      "mounts",
-				Message:    fmt.Sprintf("invalid mount format '%s' (expected 'source:dest:mode')", mount),
-				JSONPath:   fmt.Sprintf("%s.mounts[%d]", jsonPath, i),
-				Suggestion: "Use format 'source:dest:mode' where mode is 'ro' (read-only) or 'rw' (read-write)",
-			}
-		}
-
-		source, dest, mode := parts[0], parts[1], parts[2]
-
-		// Validate source is not empty
-		if source == "" {
-			return &ValidationError{
-				Field:      "mounts",
-				Message:    fmt.Sprintf("mount source cannot be empty in '%s'", mount),
-				JSONPath:   fmt.Sprintf("%s.mounts[%d]", jsonPath, i),
-				Suggestion: "Provide a valid source path",
-			}
-		}
-
-		// Validate dest is not empty
-		if dest == "" {
-			return &ValidationError{
-				Field:      "mounts",
-				Message:    fmt.Sprintf("mount destination cannot be empty in '%s'", mount),
-				JSONPath:   fmt.Sprintf("%s.mounts[%d]", jsonPath, i),
-				Suggestion: "Provide a valid destination path",
-			}
-		}
-
-		// Validate mode
-		if mode != "ro" && mode != "rw" {
-			return &ValidationError{
-				Field:      "mounts",
-				Message:    fmt.Sprintf("invalid mount mode '%s' (must be 'ro' or 'rw')", mode),
-				JSONPath:   fmt.Sprintf("%s.mounts[%d]", jsonPath, i),
-				Suggestion: "Use 'ro' for read-only or 'rw' for read-write",
-			}
+		if err := rules.MountFormat(mount, jsonPath, i); err != nil {
+			return err
 		}
 	}
 	return nil
@@ -197,34 +146,23 @@ func validateGatewayConfig(gateway *StdinGatewayConfig) error {
 		return nil
 	}
 
-	// Validate port range
+	// Validate port range using centralized rules
 	if gateway.Port != nil {
-		if *gateway.Port < 1 || *gateway.Port > 65535 {
-			return &ValidationError{
-				Field:      "port",
-				Message:    fmt.Sprintf("port must be between 1 and 65535, got %d", *gateway.Port),
-				JSONPath:   "gateway.port",
-				Suggestion: "Use a valid port number (e.g., 8080)",
-			}
+		if err := rules.PortRange(*gateway.Port, "gateway.port"); err != nil {
+			return err
 		}
 	}
 
-	// Validate timeout values (minimum 1 per schema)
-	if gateway.StartupTimeout != nil && *gateway.StartupTimeout < 1 {
-		return &ValidationError{
-			Field:      "startupTimeout",
-			Message:    fmt.Sprintf("startupTimeout must be at least 1, got %d", *gateway.StartupTimeout),
-			JSONPath:   "gateway.startupTimeout",
-			Suggestion: "Use a positive number of seconds (e.g., 30)",
+	// Validate timeout values using centralized rules
+	if gateway.StartupTimeout != nil {
+		if err := rules.TimeoutPositive(*gateway.StartupTimeout, "startupTimeout", "gateway.startupTimeout"); err != nil {
+			return err
 		}
 	}
 
-	if gateway.ToolTimeout != nil && *gateway.ToolTimeout < 1 {
-		return &ValidationError{
-			Field:      "toolTimeout",
-			Message:    fmt.Sprintf("toolTimeout must be at least 1, got %d", *gateway.ToolTimeout),
-			JSONPath:   "gateway.toolTimeout",
-			Suggestion: "Use a positive number of seconds (e.g., 60)",
+	if gateway.ToolTimeout != nil {
+		if err := rules.TimeoutPositive(*gateway.ToolTimeout, "toolTimeout", "gateway.toolTimeout"); err != nil {
+			return err
 		}
 	}
 
