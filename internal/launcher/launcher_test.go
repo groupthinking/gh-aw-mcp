@@ -276,13 +276,13 @@ func TestSanitizeEnvForLogging(t *testing.T) {
 			name: "multiple env vars with various lengths",
 			input: map[string]string{
 				"GITHUB_PERSONAL_ACCESS_TOKEN": "ghs_1234567890abcdefghijklmnop",
-				"API_KEY":                       "key_abc123xyz",
-				"SHORT":                         "abc",
+				"API_KEY":                      "key_abc123xyz",
+				"SHORT":                        "abc",
 			},
 			expected: map[string]string{
 				"GITHUB_PERSONAL_ACCESS_TOKEN": "ghs_...",
-				"API_KEY":                       "key_...",
-				"SHORT":                         "...",
+				"API_KEY":                      "key_...",
+				"SHORT":                        "...",
 			},
 		},
 		{
@@ -317,24 +317,24 @@ func TestSanitizeEnvForLogging(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result := sanitizeEnvForLogging(tt.input)
-			
+
 			// Check if both are nil
 			if tt.expected == nil && result == nil {
 				return
 			}
-			
+
 			// Check if one is nil
 			if (tt.expected == nil) != (result == nil) {
 				t.Errorf("Expected nil=%v, got nil=%v", tt.expected == nil, result == nil)
 				return
 			}
-			
+
 			// Check length
 			if len(result) != len(tt.expected) {
 				t.Errorf("Expected %d entries, got %d", len(tt.expected), len(result))
 				return
 			}
-			
+
 			// Check each entry
 			for key, expectedValue := range tt.expected {
 				actualValue, ok := result[key]
