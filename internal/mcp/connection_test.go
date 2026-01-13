@@ -278,7 +278,7 @@ func TestHTTPRequest_ErrorResponses(t *testing.T) {
 					"message": "Invalid request",
 				},
 			},
-			expectError:    true,                    // Initialize should fail on JSON-RPC errors
+			expectError:    true,               // Initialize should fail on JSON-RPC errors
 			errorSubstring: "initialize error", // Connection initialization fails on JSON-RPC error
 		},
 	}
