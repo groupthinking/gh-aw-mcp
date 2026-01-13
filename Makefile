@@ -8,7 +8,7 @@ BINARY_NAME=awmg
 
 # Go and toolchain versions
 GO_VERSION=1.25.0
-GOLANGCI_LINT_VERSION=v2.2.0
+GOLANGCI_LINT_VERSION=v2.8.0
 
 # Build the CLI binary
 build:
