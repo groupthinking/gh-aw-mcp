@@ -291,7 +291,7 @@ func TestHTTPRequest_ErrorResponses(t *testing.T) {
 				var reqBody map[string]interface{}
 				bodyBytes, _ := io.ReadAll(r.Body)
 				json.Unmarshal(bodyBytes, &reqBody)
-				
+
 				// For the JSON-RPC error test case, we need to return success for initialize
 				// and error for the actual tools/list request
 				method, _ := reqBody["method"].(string)
@@ -313,7 +313,7 @@ func TestHTTPRequest_ErrorResponses(t *testing.T) {
 					})
 					return
 				}
-				
+
 				// For all other cases, return the configured response
 				w.WriteHeader(tt.statusCode)
 				w.Header().Set("Content-Type", "application/json")
