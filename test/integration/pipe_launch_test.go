@@ -12,6 +12,8 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 	"time"
 )
 
@@ -49,9 +51,7 @@ func TestPipeBasedLaunch(t *testing.T) {
 
 	// Locate the shell script - use absolute path
 	scriptPath, err := filepath.Abs(filepath.Join(".", "start_gateway_with_pipe.sh"))
-	if err != nil {
-		t.Fatalf("Failed to get absolute path for script: %v", err)
-	}
+	require.NoError(t, err, "Failed to get absolute path for script")
 	if _, err := os.Stat(scriptPath); err != nil {
 		t.Fatalf("Shell script not found: %s", scriptPath)
 	}
@@ -156,9 +156,7 @@ func TestPipeBasedLaunch(t *testing.T) {
 			// Test 1: Health check
 			t.Run("HealthCheck", func(t *testing.T) {
 				resp, err := http.Get(serverURL + "/health")
-				if err != nil {
-					t.Fatalf("Health check failed: %v", err)
-				}
+				require.NoError(t, err, "Health check failed")
 				defer resp.Body.Close()
 
 				if resp.StatusCode != http.StatusOK {
@@ -192,14 +190,10 @@ func TestPipeBasedLaunch(t *testing.T) {
 				}
 
 				jsonData, err := json.Marshal(initReq)
-				if err != nil {
-					t.Fatalf("Failed to marshal request: %v", err)
-				}
+				require.NoError(t, err, "Failed to marshal request")
 
 				req, err := http.NewRequest("POST", endpoint, bytes.NewBuffer(jsonData))
-				if err != nil {
-					t.Fatalf("Failed to create request: %v", err)
-				}
+				require.NoError(t, err, "Failed to create request")
 
 				req.Header.Set("Content-Type", "application/json")
 				req.Header.Set("Accept", "application/json, text/event-stream")
@@ -207,15 +201,11 @@ func TestPipeBasedLaunch(t *testing.T) {
 
 				client := &http.Client{Timeout: 5 * time.Second}
 				resp, err := client.Do(req)
-				if err != nil {
-					t.Fatalf("Request failed: %v", err)
-				}
+				require.NoError(t, err, "Request failed")
 				defer resp.Body.Close()
 
 				body, err := io.ReadAll(resp.Body)
-				if err != nil {
-					t.Fatalf("Failed to read response: %v", err)
-				}
+				require.NoError(t, err, "Failed to read response")
 
 				t.Logf("Response status: %d", resp.StatusCode)
 				t.Logf("Response body: %s", string(body))
@@ -256,9 +246,7 @@ func TestPipeBasedLaunch_ScriptValidation(t *testing.T) {
 	}
 
 	scriptPath, err := filepath.Abs(filepath.Join(".", "start_gateway_with_pipe.sh"))
-	if err != nil {
-		t.Fatalf("Failed to get absolute path for script: %v", err)
-	}
+	require.NoError(t, err, "Failed to get absolute path for script")
 
 	tests := []struct {
 		name        string

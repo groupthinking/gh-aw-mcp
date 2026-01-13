@@ -7,6 +7,9 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"github.com/githubnext/gh-aw-mcpg/internal/config"
 )
 
@@ -62,9 +65,7 @@ func TestHealthEndpoint(t *testing.T) {
 			// Create unified server
 			ctx := context.Background()
 			us, err := NewUnified(ctx, cfg)
-			if err != nil {
-				t.Fatalf("Failed to create unified server: %v", err)
-			}
+			require.NoError(t, err, "Failed to create unified server")
 			t.Cleanup(func() { us.Close() })
 
 			// Create HTTP server using the provided creator function
@@ -93,9 +94,7 @@ func TestHealthEndpoint_NoAuthRequired(t *testing.T) {
 	// Create unified server
 	ctx := context.Background()
 	us, err := NewUnified(ctx, cfg)
-	if err != nil {
-		t.Fatalf("Failed to create unified server: %v", err)
-	}
+	require.NoError(t, err, "Failed to create unified server")
 	t.Cleanup(func() { us.Close() })
 
 	// Create HTTP server WITH API key (health should still work without auth)
@@ -160,9 +159,7 @@ func TestHealthEndpoint_ResponseFields(t *testing.T) {
 				if !ok {
 					t.Fatalf("Expected 'specVersion' to be string, got %T", value)
 				}
-				if specVersion != MCPGatewaySpecVersion {
-					t.Errorf("Expected specVersion '%s', got '%s'", MCPGatewaySpecVersion, specVersion)
-				}
+				assert.Equal(t, MCPGatewaySpecVersion, specVersion, "specVersion '%s', got '%s'")
 			},
 		},
 		{
@@ -202,9 +199,7 @@ func TestHealthEndpoint_ResponseFields(t *testing.T) {
 	}
 	ctx := context.Background()
 	us, err := NewUnified(ctx, cfg)
-	if err != nil {
-		t.Fatalf("Failed to create unified server: %v", err)
-	}
+	require.NoError(t, err, "Failed to create unified server")
 	defer us.Close()
 
 	httpServer := CreateHTTPServerForRoutedMode(":0", us, "")
@@ -242,9 +237,7 @@ func verifyHealthResponse(t *testing.T, w *httptest.ResponseRecorder, expectServ
 
 	// Check content type
 	contentType := w.Header().Get("Content-Type")
-	if contentType != "application/json" {
-		t.Errorf("Expected Content-Type 'application/json', got '%s'", contentType)
-	}
+	assert.Equal(t, "application/json", contentType, "Content-Type 'application/json', got '%s'")
 
 	// Check response body
 	var response map[string]interface{}
@@ -271,9 +264,7 @@ func verifyHealthResponse(t *testing.T, w *httptest.ResponseRecorder, expectServ
 
 	// Check specVersion field
 	if specVersion, ok := response["specVersion"].(string); ok {
-		if specVersion != MCPGatewaySpecVersion {
-			t.Errorf("Expected specVersion '%s', got '%s'", MCPGatewaySpecVersion, specVersion)
-		}
+		assert.Equal(t, MCPGatewaySpecVersion, specVersion, "specVersion '%s', got '%s'")
 	} else {
 		t.Error("Expected 'specVersion' field to be a string")
 	}

@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 	"time"
 
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
@@ -27,21 +29,15 @@ func TestBasicServerWithOneTool(t *testing.T) {
 	}
 
 	transport, err := driver.CreateStdioTransport("test")
-	if err != nil {
-		t.Fatalf("Failed to create transport: %v", err)
-	}
+	require.NoError(t, err, "Failed to create transport")
 
 	validator, err := mcptest.NewValidatorClient(ctx, transport)
-	if err != nil {
-		t.Fatalf("Failed to create validator client: %v", err)
-	}
+	require.NoError(t, err, "Failed to create validator client")
 	defer validator.Close()
 
 	// Validate tools
 	tools, err := validator.ListTools()
-	if err != nil {
-		t.Fatalf("Failed to list tools: %v", err)
-	}
+	require.NoError(t, err, "Failed to list tools")
 
 	if len(tools) != 1 {
 		t.Errorf("Expected 1 tool, got %d", len(tools))
@@ -58,9 +54,7 @@ func TestBasicServerWithOneTool(t *testing.T) {
 	result, err := validator.CallTool("test_echo", map[string]interface{}{
 		"message": "Hello, World!",
 	})
-	if err != nil {
-		t.Fatalf("Failed to call tool: %v", err)
-	}
+	require.NoError(t, err, "Failed to call tool")
 
 	if result.IsError {
 		t.Error("Tool returned an error")
@@ -122,21 +116,15 @@ func TestServerWithMultipleTools(t *testing.T) {
 	}
 
 	transport, err := driver.CreateStdioTransport("test")
-	if err != nil {
-		t.Fatalf("Failed to create transport: %v", err)
-	}
+	require.NoError(t, err, "Failed to create transport")
 
 	validator, err := mcptest.NewValidatorClient(ctx, transport)
-	if err != nil {
-		t.Fatalf("Failed to create validator: %v", err)
-	}
+	require.NoError(t, err, "Failed to create validator")
 	defer validator.Close()
 
 	// Validate: Should have 3 tools
 	tools, err := validator.ListTools()
-	if err != nil {
-		t.Fatalf("Failed to list tools: %v", err)
-	}
+	require.NoError(t, err, "Failed to list tools")
 
 	if len(tools) != 3 {
 		t.Errorf("Expected 3 tools, got %d", len(tools))
@@ -161,9 +149,7 @@ func TestServerWithMultipleTools(t *testing.T) {
 		"a": 5.0,
 		"b": 3.0,
 	})
-	if err != nil {
-		t.Fatalf("Failed to call add tool: %v", err)
-	}
+	require.NoError(t, err, "Failed to call add tool")
 
 	if result.IsError {
 		t.Error("Add tool returned an error")
@@ -202,21 +188,15 @@ func TestServerWithResources(t *testing.T) {
 	}
 
 	transport, err := driver.CreateStdioTransport("test")
-	if err != nil {
-		t.Fatalf("Failed to create transport: %v", err)
-	}
+	require.NoError(t, err, "Failed to create transport")
 
 	validator, err := mcptest.NewValidatorClient(ctx, transport)
-	if err != nil {
-		t.Fatalf("Failed to create validator: %v", err)
-	}
+	require.NoError(t, err, "Failed to create validator")
 	defer validator.Close()
 
 	// Test: List resources
 	resources, err := validator.ListResources()
-	if err != nil {
-		t.Fatalf("Failed to list resources: %v", err)
-	}
+	require.NoError(t, err, "Failed to list resources")
 
 	// Validate: Should have 1 resource
 	if len(resources) != 1 {
@@ -232,9 +212,7 @@ func TestServerWithResources(t *testing.T) {
 
 	// Test: Read resource
 	result, err := validator.ReadResource("test://doc1")
-	if err != nil {
-		t.Fatalf("Failed to read resource: %v", err)
-	}
+	require.NoError(t, err, "Failed to read resource")
 
 	// Validate: Should have content
 	if len(result.Contents) != 1 {
@@ -274,21 +252,15 @@ func TestServerInfo(t *testing.T) {
 	}
 
 	transport, err := driver.CreateStdioTransport("test")
-	if err != nil {
-		t.Fatalf("Failed to create transport: %v", err)
-	}
+	require.NoError(t, err, "Failed to create transport")
 
 	validator, err := mcptest.NewValidatorClient(ctx, transport)
-	if err != nil {
-		t.Fatalf("Failed to create validator: %v", err)
-	}
+	require.NoError(t, err, "Failed to create validator")
 	defer validator.Close()
 
 	// Test: Get server info
 	serverInfo := validator.GetServerInfo()
-	if serverInfo == nil {
-		t.Fatal("Server info is nil")
-	}
+	require.NotNil(t, serverInfo, "Server info is nil")
 
 	// Validate: Server name and version
 	if serverInfo.Name != "custom-test-server" {

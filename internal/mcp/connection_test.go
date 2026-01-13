@@ -8,6 +8,9 @@ import (
 	"net/http/httptest"
 	"os"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // TestHTTPRequest_SessionIDHeader tests that the Mcp-Session-Id header is added to HTTP requests
@@ -35,9 +38,7 @@ func TestHTTPRequest_SessionIDHeader(t *testing.T) {
 	conn, err := NewHTTPConnection(context.Background(), testServer.URL, map[string]string{
 		"Authorization": "test-auth-token",
 	})
-	if err != nil {
-		t.Fatalf("Failed to create HTTP connection: %v", err)
-	}
+	require.NoError(t, err, "Failed to create HTTP connection")
 
 	// Create a context with session ID
 	sessionID := "test-session-123"
@@ -45,14 +46,10 @@ func TestHTTPRequest_SessionIDHeader(t *testing.T) {
 
 	// Send a request with the context containing the session ID
 	_, err = conn.SendRequestWithServerID(ctx, "tools/list", nil, "test-server")
-	if err != nil {
-		t.Fatalf("Failed to send request: %v", err)
-	}
+	require.NoError(t, err, "Failed to send request")
 
 	// Verify the Mcp-Session-Id header was received
-	if receivedSessionID != sessionID {
-		t.Errorf("Expected Mcp-Session-Id header '%s', got '%s'", sessionID, receivedSessionID)
-	}
+	assert.Equal(t, sessionID, receivedSessionID, "Expected Mcp-Session-Id header '%s', got '%s'", sessionID, receivedSessionID)
 }
 
 // TestHTTPRequest_NoSessionID tests that requests work without session ID
@@ -78,16 +75,12 @@ func TestHTTPRequest_NoSessionID(t *testing.T) {
 	conn, err := NewHTTPConnection(context.Background(), testServer.URL, map[string]string{
 		"Authorization": "test-auth-token",
 	})
-	if err != nil {
-		t.Fatalf("Failed to create HTTP connection: %v", err)
-	}
+	require.NoError(t, err, "Failed to create HTTP connection")
 
 	// Send a request without session ID in context
 	ctx := context.Background()
 	_, err = conn.SendRequestWithServerID(ctx, "tools/list", nil, "test-server")
-	if err != nil {
-		t.Fatalf("Failed to send request: %v", err)
-	}
+	require.NoError(t, err, "Failed to send request")
 
 	// Verify no Mcp-Session-Id header was sent (empty string is acceptable)
 	if receivedSessionID != "" {
@@ -120,9 +113,7 @@ func TestHTTPRequest_ConfiguredHeaders(t *testing.T) {
 	conn, err := NewHTTPConnection(context.Background(), testServer.URL, map[string]string{
 		"Authorization": authToken,
 	})
-	if err != nil {
-		t.Fatalf("Failed to create HTTP connection: %v", err)
-	}
+	require.NoError(t, err, "Failed to create HTTP connection")
 
 	// Create a context with session ID
 	sessionID := "session-with-auth"
@@ -130,17 +121,11 @@ func TestHTTPRequest_ConfiguredHeaders(t *testing.T) {
 
 	// Send a request
 	_, err = conn.SendRequestWithServerID(ctx, "tools/list", nil, "test-server")
-	if err != nil {
-		t.Fatalf("Failed to send request: %v", err)
-	}
+	require.NoError(t, err, "Failed to send request")
 
 	// Verify both headers were received
-	if receivedAuth != authToken {
-		t.Errorf("Expected Authorization header '%s', got '%s'", authToken, receivedAuth)
-	}
-	if receivedSessionID != sessionID {
-		t.Errorf("Expected Mcp-Session-Id header '%s', got '%s'", sessionID, receivedSessionID)
-	}
+	assert.Equal(t, authToken, receivedAuth)
+	assert.Equal(t, sessionID, receivedSessionID)
 }
 
 // TestExpandDockerEnvArgs tests the Docker environment variable expansion function
@@ -388,15 +373,11 @@ func TestConnection_IsHTTP(t *testing.T) {
 	}
 
 	conn, err := NewHTTPConnection(context.Background(), testServer.URL, headers)
-	if err != nil {
-		t.Fatalf("Failed to create HTTP connection: %v", err)
-	}
+	require.NoError(t, err, "Failed to create HTTP connection")
 	defer conn.Close()
 
 	// Test IsHTTP
-	if !conn.IsHTTP() {
-		t.Error("Expected IsHTTP() to return true for HTTP connection")
-	}
+	assert.True(t, conn.IsHTTP(), "Expected IsHTTP() to return true for HTTP connection")
 
 	// Test GetHTTPURL
 	if conn.GetHTTPURL() != testServer.URL {
@@ -405,9 +386,7 @@ func TestConnection_IsHTTP(t *testing.T) {
 
 	// Test GetHTTPHeaders
 	returnedHeaders := conn.GetHTTPHeaders()
-	if len(returnedHeaders) != len(headers) {
-		t.Errorf("Expected %d headers, got %d", len(headers), len(returnedHeaders))
-	}
+	assert.Equal(t, len(headers), len(returnedHeaders))
 	for k, v := range headers {
 		if returnedHeaders[k] != v {
 			t.Errorf("Expected header '%s' to be '%s', got '%s'", k, v, returnedHeaders[k])

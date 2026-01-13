@@ -9,6 +9,9 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"time"
 
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
@@ -61,9 +64,7 @@ func TestHTTPMCPBackendServer(t *testing.T) {
 
 		client := &http.Client{Timeout: 5 * time.Second}
 		resp, err := client.Do(req)
-		if err != nil {
-			t.Fatalf("Request failed: %v", err)
-		}
+		require.NoError(t, err, "Request failed")
 		defer resp.Body.Close()
 
 		if resp.StatusCode != http.StatusOK {
@@ -72,11 +73,8 @@ func TestHTTPMCPBackendServer(t *testing.T) {
 		}
 
 		// Verify the backend received the authorization header
-		if receivedAuthHeader != expectedBackendAuth {
-			t.Errorf("Expected backend to receive auth '%s', got '%s'", expectedBackendAuth, receivedAuthHeader)
-		} else {
-			t.Log("✓ HTTP backend correctly received authorization header")
-		}
+		assert.Equal(t, expectedBackendAuth, receivedAuthHeader)
+		t.Log("✓ HTTP backend correctly received authorization header")
 
 		// Verify streamable HTTP response format (uses SSE-formatted streaming)
 		contentType := resp.Header.Get("Content-Type")
@@ -111,9 +109,7 @@ func TestHTTPMCPBackendServer(t *testing.T) {
 
 		client := &http.Client{Timeout: 5 * time.Second}
 		resp, err := client.Do(req)
-		if err != nil {
-			t.Fatalf("Request failed: %v", err)
-		}
+		require.NoError(t, err, "Request failed")
 		defer resp.Body.Close()
 
 		if resp.StatusCode != http.StatusUnauthorized {
@@ -139,9 +135,7 @@ func TestHTTPMCPBackendServer(t *testing.T) {
 
 		client := &http.Client{Timeout: 5 * time.Second}
 		resp, err := client.Do(req)
-		if err != nil {
-			t.Fatalf("Request failed: %v", err)
-		}
+		require.NoError(t, err, "Request failed")
 		defer resp.Body.Close()
 
 		if resp.StatusCode != http.StatusUnauthorized {
@@ -167,9 +161,7 @@ func TestHTTPMCPBackendServer(t *testing.T) {
 
 		client := &http.Client{Timeout: 5 * time.Second}
 		resp, err := client.Do(req)
-		if err != nil {
-			t.Fatalf("Request failed: %v", err)
-		}
+		require.NoError(t, err, "Request failed")
 		defer resp.Body.Close()
 
 		if resp.StatusCode != http.StatusOK {
@@ -196,9 +188,7 @@ func TestHTTPMCPBackendServer(t *testing.T) {
 
 		client := &http.Client{Timeout: 5 * time.Second}
 		resp, err := client.Do(req)
-		if err != nil {
-			t.Fatalf("Request failed: %v", err)
-		}
+		require.NoError(t, err, "Request failed")
 		defer resp.Body.Close()
 
 		if resp.StatusCode != http.StatusOK {

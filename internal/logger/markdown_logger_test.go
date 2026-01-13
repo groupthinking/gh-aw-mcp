@@ -5,6 +5,9 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestInitMarkdownLogger(t *testing.T) {
@@ -13,9 +16,7 @@ func TestInitMarkdownLogger(t *testing.T) {
 	fileName := "test.md"
 
 	err := InitMarkdownLogger(logDir, fileName)
-	if err != nil {
-		t.Fatalf("InitMarkdownLogger failed: %v", err)
-	}
+	require.NoError(t, err, "InitMarkdownLogger failed")
 	defer CloseMarkdownLogger()
 
 	// Check that the log directory was created
@@ -36,9 +37,7 @@ func TestMarkdownLoggerFormatting(t *testing.T) {
 	fileName := "format-test.md"
 
 	err := InitMarkdownLogger(logDir, fileName)
-	if err != nil {
-		t.Fatalf("InitMarkdownLogger failed: %v", err)
-	}
+	require.NoError(t, err, "InitMarkdownLogger failed")
 
 	// Write messages at different levels
 	LogInfoMd("test", "This is an info message")
@@ -51,22 +50,14 @@ func TestMarkdownLoggerFormatting(t *testing.T) {
 	// Read the log file
 	logPath := filepath.Join(logDir, fileName)
 	content, err := os.ReadFile(logPath)
-	if err != nil {
-		t.Fatalf("Failed to read log file: %v", err)
-	}
+	require.NoError(t, err, "Failed to read log file")
 
 	logContent := string(content)
 
 	// Check for HTML details wrapper
-	if !strings.Contains(logContent, "<details>") {
-		t.Errorf("Log file does not contain opening <details> tag")
-	}
-	if !strings.Contains(logContent, "<summary>MCP Gateway</summary>") {
-		t.Errorf("Log file does not contain summary tag")
-	}
-	if !strings.Contains(logContent, "</details>") {
-		t.Errorf("Log file does not contain closing </details> tag")
-	}
+	assert.True(t, strings.Contains(logContent, "<details>"), "Log file does not contain opening <details> tag")
+	assert.True(t, strings.Contains(logContent, "<summary>MCP Gateway</summary>"), "Log file does not contain summary tag")
+	assert.True(t, strings.Contains(logContent, "</details>"), "Log file does not contain closing </details> tag")
 
 	// Check for emoji bullet points
 	expectedEmojis := []struct {
@@ -89,9 +80,7 @@ func TestMarkdownLoggerFormatting(t *testing.T) {
 	}
 
 	// Check for markdown bullet points
-	if !strings.Contains(logContent, "- ✓") {
-		t.Errorf("Log file does not contain markdown bullet points")
-	}
+	assert.True(t, strings.Contains(logContent, "- ✓"), "Log file does not contain markdown bullet points")
 }
 
 func TestMarkdownLoggerSecretSanitization(t *testing.T) {
@@ -100,9 +89,7 @@ func TestMarkdownLoggerSecretSanitization(t *testing.T) {
 	fileName := "secret-test.md"
 
 	err := InitMarkdownLogger(logDir, fileName)
-	if err != nil {
-		t.Fatalf("InitMarkdownLogger failed: %v", err)
-	}
+	require.NoError(t, err, "InitMarkdownLogger failed")
 
 	// Test various secret patterns
 	testCases := []struct {
@@ -140,9 +127,7 @@ func TestMarkdownLoggerSecretSanitization(t *testing.T) {
 	// Read the log file
 	logPath := filepath.Join(logDir, fileName)
 	content, err := os.ReadFile(logPath)
-	if err != nil {
-		t.Fatalf("Failed to read log file: %v", err)
-	}
+	require.NoError(t, err, "Failed to read log file")
 
 	logContent := string(content)
 
@@ -161,14 +146,10 @@ func TestMarkdownLoggerSecretSanitization(t *testing.T) {
 	}
 
 	// Verify redaction marker is present
-	if !strings.Contains(logContent, "[REDACTED]") {
-		t.Errorf("Log file does not contain [REDACTED] marker")
-	}
+	assert.True(t, strings.Contains(logContent, "[REDACTED]"), "Log file does not contain [REDACTED] marker")
 
 	// Verify normal message is not redacted
-	if !strings.Contains(logContent, "Normal log message without secrets") {
-		t.Errorf("Log file does not contain non-secret message")
-	}
+	assert.True(t, strings.Contains(logContent, "Normal log message without secrets"), "Log file does not contain non-secret message")
 }
 
 func TestMarkdownLoggerCategories(t *testing.T) {
@@ -177,9 +158,7 @@ func TestMarkdownLoggerCategories(t *testing.T) {
 	fileName := "category-test.md"
 
 	err := InitMarkdownLogger(logDir, fileName)
-	if err != nil {
-		t.Fatalf("InitMarkdownLogger failed: %v", err)
-	}
+	require.NoError(t, err, "InitMarkdownLogger failed")
 
 	// Log messages with different categories
 	categories := []string{"startup", "client", "backend", "shutdown"}
@@ -192,9 +171,7 @@ func TestMarkdownLoggerCategories(t *testing.T) {
 	// Read the log file
 	logPath := filepath.Join(logDir, fileName)
 	content, err := os.ReadFile(logPath)
-	if err != nil {
-		t.Fatalf("Failed to read log file: %v", err)
-	}
+	require.NoError(t, err, "Failed to read log file")
 
 	logContent := string(content)
 
@@ -212,9 +189,7 @@ func TestMarkdownLoggerConcurrency(t *testing.T) {
 	fileName := "concurrent-test.md"
 
 	err := InitMarkdownLogger(logDir, fileName)
-	if err != nil {
-		t.Fatalf("InitMarkdownLogger failed: %v", err)
-	}
+	require.NoError(t, err, "InitMarkdownLogger failed")
 	defer CloseMarkdownLogger()
 
 	// Write from multiple goroutines
@@ -238,9 +213,7 @@ func TestMarkdownLoggerConcurrency(t *testing.T) {
 	// Read the log file
 	logPath := filepath.Join(logDir, fileName)
 	content, err := os.ReadFile(logPath)
-	if err != nil {
-		t.Fatalf("Failed to read log file: %v", err)
-	}
+	require.NoError(t, err, "Failed to read log file")
 
 	logContent := string(content)
 
@@ -248,9 +221,7 @@ func TestMarkdownLoggerConcurrency(t *testing.T) {
 	lines := strings.Count(logContent, "- ✓")
 	// Should have 100 lines (10 goroutines * 10 messages each)
 	expectedLines := 100
-	if lines != expectedLines {
-		t.Errorf("Expected %d log lines, got %d", expectedLines, lines)
-	}
+	assert.Equal(t, expectedLines, lines, "%d log lines, got %d")
 }
 
 func TestMarkdownLoggerCodeBlocks(t *testing.T) {
@@ -259,9 +230,7 @@ func TestMarkdownLoggerCodeBlocks(t *testing.T) {
 	fileName := "codeblock-test.md"
 
 	err := InitMarkdownLogger(logDir, fileName)
-	if err != nil {
-		t.Fatalf("InitMarkdownLogger failed: %v", err)
-	}
+	require.NoError(t, err, "InitMarkdownLogger failed")
 
 	// Log messages with technical content that should use code blocks
 	LogInfoMd("test", "command=/usr/bin/docker args=[run --rm -i container]")
@@ -273,17 +242,13 @@ func TestMarkdownLoggerCodeBlocks(t *testing.T) {
 	// Read the log file
 	logPath := filepath.Join(logDir, fileName)
 	content, err := os.ReadFile(logPath)
-	if err != nil {
-		t.Fatalf("Failed to read log file: %v", err)
-	}
+	require.NoError(t, err, "Failed to read log file")
 
 	logContent := string(content)
 
 	// Check for code blocks for technical content
 	codeBlockCount := strings.Count(logContent, "```")
-	if codeBlockCount < 2 {
-		t.Errorf("Expected at least 2 code block markers (opening and closing), got %d", codeBlockCount)
-	}
+	assert.False(t, codeBlockCount < 2, "Expected at least 2 code block markers (opening and closing), got %d")
 }
 
 func TestMarkdownLoggerFallback(t *testing.T) {
@@ -293,9 +258,7 @@ func TestMarkdownLoggerFallback(t *testing.T) {
 
 	// Initialize the logger - should not fail, but use fallback
 	err := InitMarkdownLogger(logDir, fileName)
-	if err != nil {
-		t.Fatalf("InitMarkdownLogger should not fail on fallback: %v", err)
-	}
+	require.NoError(t, err, "InitMarkdownLogger should not fail on fallback")
 	defer CloseMarkdownLogger()
 
 	globalMarkdownMu.RLock()
@@ -316,9 +279,7 @@ func TestMarkdownLoggerRPCFormatting(t *testing.T) {
 	fileName := "rpc-format-test.md"
 
 	err := InitMarkdownLogger(logDir, fileName)
-	if err != nil {
-		t.Fatalf("InitMarkdownLogger failed: %v", err)
-	}
+	require.NoError(t, err, "InitMarkdownLogger failed")
 
 	// Test RPC-style pre-formatted messages (should NOT be wrapped in code blocks)
 	LogDebugMd("rpc", "**github**→`tools/list`")
@@ -334,28 +295,20 @@ func TestMarkdownLoggerRPCFormatting(t *testing.T) {
 	// Read the log file
 	logPath := filepath.Join(logDir, fileName)
 	content, err := os.ReadFile(logPath)
-	if err != nil {
-		t.Fatalf("Failed to read log file: %v", err)
-	}
+	require.NoError(t, err, "Failed to read log file")
 
 	logContent := string(content)
 
 	// RPC messages should be on single lines (not wrapped in code blocks)
 	// Check that "- 🔍 rpc **github**→`tools/list`" is on one line
-	if !strings.Contains(logContent, "- 🔍 rpc **github**→`tools/list`") {
-		t.Errorf("RPC message should be on single line without extra code block wrapping")
-	}
+	assert.True(t, strings.Contains(logContent, "- 🔍 rpc **github**→`tools/list`"), "RPC message should be on single line without extra code block wrapping")
 
 	// Check that RPC messages with JSON blocks are properly formatted
 	// The title should be on one line, followed by the JSON block
-	if !strings.Contains(logContent, "- 🔍 rpc **safeoutputs**→`tools/call`") {
-		t.Errorf("RPC message with JSON should have title on single line")
-	}
+	assert.True(t, strings.Contains(logContent, "- 🔍 rpc **safeoutputs**→`tools/call`"), "RPC message with JSON should have title on single line")
 
 	// Regular multi-line messages should still use code blocks
-	if !strings.Contains(logContent, "- ✓ **backend**\n  ```\n  command=") {
-		t.Errorf("Regular multi-line messages should still use code blocks")
-	}
+	assert.True(t, strings.Contains(logContent, "- ✓ **backend**\n  ```\n  command="), "Regular multi-line messages should still use code blocks")
 
 	// Count occurrences of nested code blocks (should not happen)
 	// A nested code block would look like: ``` \n  **server** \n ```

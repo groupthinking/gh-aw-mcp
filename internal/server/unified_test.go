@@ -4,6 +4,9 @@ import (
 	"context"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"github.com/githubnext/gh-aw-mcpg/internal/config"
 )
 
@@ -17,9 +20,7 @@ func TestUnifiedServer_GetServerIDs(t *testing.T) {
 
 	ctx := context.Background()
 	us, err := NewUnified(ctx, cfg)
-	if err != nil {
-		t.Fatalf("NewUnified() failed: %v", err)
-	}
+	require.NoError(t, err, "NewUnified() failed")
 	defer us.Close()
 
 	serverIDs := us.GetServerIDs()
@@ -42,9 +43,7 @@ func TestUnifiedServer_SessionManagement(t *testing.T) {
 
 	ctx := context.Background()
 	us, err := NewUnified(ctx, cfg)
-	if err != nil {
-		t.Fatalf("NewUnified() failed: %v", err)
-	}
+	require.NoError(t, err, "NewUnified() failed")
 	defer us.Close()
 
 	// Test session creation
@@ -80,9 +79,7 @@ func TestUnifiedServer_GetSessionKeys(t *testing.T) {
 
 	ctx := context.Background()
 	us, err := NewUnified(ctx, cfg)
-	if err != nil {
-		t.Fatalf("NewUnified() failed: %v", err)
-	}
+	require.NoError(t, err, "NewUnified() failed")
 	defer us.Close()
 
 	// Add multiple sessions
@@ -94,9 +91,7 @@ func TestUnifiedServer_GetSessionKeys(t *testing.T) {
 	}
 
 	keys := us.getSessionKeys()
-	if len(keys) != len(sessions) {
-		t.Errorf("Expected %d session keys, got %d", len(sessions), len(keys))
-	}
+	assert.Equal(t, len(sessions), len(keys))
 
 	keyMap := make(map[string]bool)
 	for _, key := range keys {
@@ -117,9 +112,7 @@ func TestUnifiedServer_GetToolsForBackend(t *testing.T) {
 
 	ctx := context.Background()
 	us, err := NewUnified(ctx, cfg)
-	if err != nil {
-		t.Fatalf("NewUnified() failed: %v", err)
-	}
+	require.NoError(t, err, "NewUnified() failed")
 	defer us.Close()
 
 	// Manually add some tool info
@@ -184,9 +177,7 @@ func TestGetSessionID_FromContext(t *testing.T) {
 
 	ctx := context.Background()
 	us, err := NewUnified(ctx, cfg)
-	if err != nil {
-		t.Fatalf("NewUnified() failed: %v", err)
-	}
+	require.NoError(t, err, "NewUnified() failed")
 	defer us.Close()
 
 	// Test with session ID in context
@@ -194,15 +185,11 @@ func TestGetSessionID_FromContext(t *testing.T) {
 	ctxWithSession := context.WithValue(ctx, SessionIDContextKey, sessionID)
 
 	extractedID := us.getSessionID(ctxWithSession)
-	if extractedID != sessionID {
-		t.Errorf("Expected session ID '%s', got '%s'", sessionID, extractedID)
-	}
+	assert.Equal(t, sessionID, extractedID, "session ID '%s', got '%s'")
 
 	// Test without session ID in context
 	extractedID = us.getSessionID(ctx)
-	if extractedID != "default" {
-		t.Errorf("Expected default session ID, got '%s'", extractedID)
-	}
+	assert.Equal(t, "default", extractedID, "default session ID, got '%s'")
 }
 
 func TestRequireSession(t *testing.T) {
@@ -213,9 +200,7 @@ func TestRequireSession(t *testing.T) {
 
 	ctx := context.Background()
 	us, err := NewUnified(ctx, cfg)
-	if err != nil {
-		t.Fatalf("NewUnified() failed: %v", err)
-	}
+	require.NoError(t, err, "NewUnified() failed")
 	defer us.Close()
 
 	// Create a session
@@ -227,9 +212,7 @@ func TestRequireSession(t *testing.T) {
 	// Test with valid session
 	ctxWithSession := context.WithValue(ctx, SessionIDContextKey, sessionID)
 	err = us.requireSession(ctxWithSession)
-	if err != nil {
-		t.Errorf("requireSession() failed for valid session: %v", err)
-	}
+	assert.NoError(t, err, "requireSession() failed for valid session")
 
 	// Test with invalid session (DIFC enabled)
 	ctxWithInvalidSession := context.WithValue(ctx, SessionIDContextKey, "invalid-session")
@@ -247,9 +230,7 @@ func TestRequireSession_DifcDisabled(t *testing.T) {
 
 	ctx := context.Background()
 	us, err := NewUnified(ctx, cfg)
-	if err != nil {
-		t.Fatalf("NewUnified() failed: %v", err)
-	}
+	require.NoError(t, err, "NewUnified() failed")
 	defer us.Close()
 
 	// Test with non-existent session when DIFC is disabled
@@ -257,9 +238,7 @@ func TestRequireSession_DifcDisabled(t *testing.T) {
 	sessionID := "new-session"
 	ctxWithNewSession := context.WithValue(ctx, SessionIDContextKey, sessionID)
 	err = us.requireSession(ctxWithNewSession)
-	if err != nil {
-		t.Errorf("requireSession() should auto-create session when DIFC is disabled: %v", err)
-	}
+	assert.NoError(t, err, "requireSession() should auto-create session when DIFC is disabled")
 
 	// Verify session was created
 	us.sessionMu.RLock()
@@ -283,9 +262,7 @@ func TestRequireSession_DifcDisabled_Concurrent(t *testing.T) {
 
 	ctx := context.Background()
 	us, err := NewUnified(ctx, cfg)
-	if err != nil {
-		t.Fatalf("NewUnified() failed: %v", err)
-	}
+	require.NoError(t, err, "NewUnified() failed")
 	defer us.Close()
 
 	// Test concurrent session creation to verify no race condition
@@ -319,9 +296,7 @@ func TestRequireSession_DifcDisabled_Concurrent(t *testing.T) {
 		t.Error("Session should have been created")
 	}
 
-	if sessionCount != 1 {
-		t.Errorf("Expected exactly 1 session, got %d", sessionCount)
-	}
+	assert.Equal(t, 1, sessionCount, "exactly 1 session, got %d")
 
 	if session.SessionID != sessionID {
 		t.Errorf("Expected session ID '%s', got '%s'", sessionID, session.SessionID)

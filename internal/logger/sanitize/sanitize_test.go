@@ -5,6 +5,9 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestSanitizeString(t *testing.T) {
@@ -184,9 +187,7 @@ func TestSanitizeJSON(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			result := SanitizeJSON([]byte(tt.input))
 
-			if result == nil {
-				t.Fatalf("SanitizeJSON returned nil")
-			}
+			require.NotNil(t, result, "SanitizeJSON returned nil")
 
 			resultStr := string(result)
 
@@ -236,9 +237,7 @@ func TestSanitizeJSONWithNestedStructures(t *testing.T) {
 	resultStr := string(result)
 
 	// Should redact all secrets at all levels
-	if !strings.Contains(resultStr, "[REDACTED]") {
-		t.Errorf("Expected [REDACTED] in sanitized output")
-	}
+	assert.True(t, strings.Contains(resultStr, "[REDACTED]"), "Expected [REDACTED] in sanitized output")
 
 	// Should NOT contain original secrets
 	secrets := []string{
@@ -253,12 +252,8 @@ func TestSanitizeJSONWithNestedStructures(t *testing.T) {
 	}
 
 	// Should preserve non-secret values
-	if !strings.Contains(resultStr, "item1") {
-		t.Errorf("Non-secret value 'item1' was lost")
-	}
-	if !strings.Contains(resultStr, "safe") {
-		t.Errorf("Non-secret value 'safe' was lost")
-	}
+	assert.True(t, strings.Contains(resultStr, "item1"), "Non-secret value 'item1' was lost")
+	assert.True(t, strings.Contains(resultStr, "safe"), "Non-secret value 'safe' was lost")
 
 	// Result should be valid JSON
 	var tmp interface{}
@@ -327,9 +322,7 @@ func TestSanitizeStringMultipleSecretsInSameString(t *testing.T) {
 
 	// Should redact all secrets
 	secretCount := strings.Count(result, "[REDACTED]")
-	if secretCount < 3 {
-		t.Errorf("Expected at least 3 [REDACTED] markers, got %d in: %s", secretCount, result)
-	}
+	assert.False(t, secretCount < 3, "Expected at least 3 [REDACTED] markers, got %d in: %s")
 
 	// Should not contain any of the secrets
 	secrets := []string{"ghp_", "mysecret", "sk_test_"}
@@ -345,7 +338,5 @@ func TestSecretPatternsCount(t *testing.T) {
 	expectedPatternCount := 10
 	actualCount := len(SecretPatterns)
 
-	if actualCount != expectedPatternCount {
-		t.Errorf("Expected %d secret patterns, got %d", expectedPatternCount, actualCount)
-	}
+	assert.Equal(t, expectedPatternCount, actualCount, "%d secret patterns, got %d")
 }

@@ -2,6 +2,8 @@ package difc
 
 import (
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestLabelOperations(t *testing.T) {
@@ -17,14 +19,10 @@ func TestLabelOperations(t *testing.T) {
 		l2.Label.Add("tag3")
 
 		// l1 should flow to l2 (l1 ⊆ l2)
-		if !l1.CanFlowTo(l2) {
-			t.Errorf("Expected l1 to flow to l2")
-		}
+		assert.True(t, l1.CanFlowTo(l2), "Expected l1 to flow to l2")
 
 		// l2 should NOT flow to l1 (l2 has extra tags)
-		if l2.CanFlowTo(l1) {
-			t.Errorf("Expected l2 NOT to flow to l1")
-		}
+		assert.False(t, l2.CanFlowTo(l1), "Expected l2 NOT to flow to l1")
 	})
 
 	t.Run("IntegrityLabel flow checks", func(t *testing.T) {
@@ -37,14 +35,10 @@ func TestLabelOperations(t *testing.T) {
 		l2.Label.Add("trust1")
 
 		// l1 should flow to l2 (l1 ⊇ l2)
-		if !l1.CanFlowTo(l2) {
-			t.Errorf("Expected l1 to flow to l2")
-		}
+		assert.True(t, l1.CanFlowTo(l2), "Expected l1 to flow to l2")
 
 		// l2 should NOT flow to l1 (l2 missing trust2)
-		if l2.CanFlowTo(l1) {
-			t.Errorf("Expected l2 NOT to flow to l1")
-		}
+		assert.False(t, l2.CanFlowTo(l1), "Expected l2 NOT to flow to l1")
 	})
 
 	t.Run("Empty labels flow to everything", func(t *testing.T) {
@@ -53,14 +47,10 @@ func TestLabelOperations(t *testing.T) {
 		withTags.Label.Add("tag1")
 
 		// Empty should flow to anything
-		if !empty.CanFlowTo(withTags) {
-			t.Errorf("Expected empty to flow to withTags")
-		}
+		assert.True(t, empty.CanFlowTo(withTags), "Expected empty to flow to withTags")
 
 		// withTags should NOT flow to empty
-		if withTags.CanFlowTo(empty) {
-			t.Errorf("Expected withTags NOT to flow to empty")
-		}
+		assert.False(t, withTags.CanFlowTo(empty), "Expected withTags NOT to flow to empty")
 	})
 }
 
@@ -77,13 +67,9 @@ func TestEvaluator(t *testing.T) {
 
 		result := eval.Evaluate(agentSecrecy, agentIntegrity, resource, OperationRead)
 
-		if result.IsAllowed() {
-			t.Errorf("Expected access to be denied for read with insufficient secrecy")
-		}
+		assert.False(t, result.IsAllowed(), "Expected access to be denied for read with insufficient secrecy")
 
-		if len(result.SecrecyToAdd) == 0 {
-			t.Errorf("Expected SecrecyToAdd to contain required tags")
-		}
+		assert.False(t, len(result.SecrecyToAdd) == 0, "Expected SecrecyToAdd to contain required tags")
 	})
 
 	t.Run("Read operation - allowed with matching labels", func(t *testing.T) {
@@ -112,13 +98,9 @@ func TestEvaluator(t *testing.T) {
 
 		result := eval.Evaluate(agentSecrecy, agentIntegrity, resource, OperationWrite)
 
-		if result.IsAllowed() {
-			t.Errorf("Expected access to be denied for write with insufficient integrity")
-		}
+		assert.False(t, result.IsAllowed(), "Expected access to be denied for write with insufficient integrity")
 
-		if len(result.IntegrityToDrop) == 0 {
-			t.Errorf("Expected IntegrityToDrop to contain required tags")
-		}
+		assert.False(t, len(result.IntegrityToDrop) == 0, "Expected IntegrityToDrop to contain required tags")
 	})
 
 	t.Run("Write operation - allowed with matching integrity", func(t *testing.T) {
@@ -168,12 +150,8 @@ func TestAgentRegistry(t *testing.T) {
 		}
 
 		// Should have empty labels initially
-		if !agent.Secrecy.Label.IsEmpty() {
-			t.Errorf("Expected new agent to have empty secrecy labels")
-		}
-		if !agent.Integrity.Label.IsEmpty() {
-			t.Errorf("Expected new agent to have empty integrity labels")
-		}
+		assert.True(t, agent.Secrecy.Label.IsEmpty(), "Expected new agent to have empty secrecy labels")
+		assert.True(t, agent.Integrity.Label.IsEmpty(), "Expected new agent to have empty integrity labels")
 	})
 
 	t.Run("GetOrCreate returns existing agent", func(t *testing.T) {
@@ -181,13 +159,9 @@ func TestAgentRegistry(t *testing.T) {
 		agent1.Secrecy.Label.Add("secret")
 
 		agent2 := registry.GetOrCreate("agent-2")
-		if agent1 != agent2 {
-			t.Errorf("Expected to get same agent instance")
-		}
+		assert.Equal(t, agent2, agent1, "to get same agent instance")
 
-		if !agent2.Secrecy.Label.Contains("secret") {
-			t.Errorf("Expected agent to retain added tags")
-		}
+		assert.True(t, agent2.Secrecy.Label.Contains("secret"), "Expected agent to retain added tags")
 	})
 
 	t.Run("AccumulateFromRead updates agent labels", func(t *testing.T) {
@@ -199,12 +173,8 @@ func TestAgentRegistry(t *testing.T) {
 
 		agent.AccumulateFromRead(resource)
 
-		if !agent.Secrecy.Label.Contains("confidential") {
-			t.Errorf("Expected agent to gain secrecy tag from read")
-		}
-		if !agent.Integrity.Label.Contains("verified") {
-			t.Errorf("Expected agent to gain integrity tag from read")
-		}
+		assert.True(t, agent.Secrecy.Label.Contains("confidential"), "Expected agent to gain secrecy tag from read")
+		assert.True(t, agent.Integrity.Label.Contains("verified"), "Expected agent to gain integrity tag from read")
 	})
 }
 

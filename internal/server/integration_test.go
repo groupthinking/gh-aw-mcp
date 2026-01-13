@@ -11,6 +11,8 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 	"time"
 
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
@@ -42,9 +44,7 @@ func TestTransparentProxy_RoutedMode(t *testing.T) {
 
 	// Create unified server
 	us, err := NewUnified(ctx, cfg)
-	if err != nil {
-		t.Fatalf("Failed to create unified server: %v", err)
-	}
+	require.NoError(t, err, "Failed to create unified server")
 	defer us.Close()
 
 	// Manually inject mock tools to simulate backend tools
@@ -104,9 +104,7 @@ func TestTransparentProxy_RoutedMode(t *testing.T) {
 	// Test 1: Health check
 	t.Run("HealthCheck", func(t *testing.T) {
 		resp, err := http.Get(serverURL + "/health")
-		if err != nil {
-			t.Fatalf("Health check failed: %v", err)
-		}
+		require.NoError(t, err, "Health check failed")
 		defer resp.Body.Close()
 
 		if resp.StatusCode != http.StatusOK {
@@ -226,23 +224,17 @@ func sendMCPRequest(t *testing.T, url string, bearerToken string, payload map[st
 // Helper function to send MCP requests with a custom client (for connection reuse)
 func sendMCPRequestWithClient(t *testing.T, url string, bearerToken string, client *http.Client, payload map[string]interface{}) map[string]interface{} {
 	jsonData, err := json.Marshal(payload)
-	if err != nil {
-		t.Fatalf("Failed to marshal request: %v", err)
-	}
+	require.NoError(t, err, "Failed to marshal request")
 
 	req, err := http.NewRequest("POST", url, bytes.NewBuffer(jsonData))
-	if err != nil {
-		t.Fatalf("Failed to create request: %v", err)
-	}
+	require.NoError(t, err, "Failed to create request")
 
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "application/json, text/event-stream")
 	req.Header.Set("Authorization", "Bearer "+bearerToken)
 
 	resp, err := client.Do(req)
-	if err != nil {
-		t.Fatalf("Request failed: %v", err)
-	}
+	require.NoError(t, err, "Request failed")
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
@@ -311,9 +303,7 @@ func TestTransparentProxy_MultipleBackends(t *testing.T) {
 	}
 
 	us, err := NewUnified(ctx, cfg)
-	if err != nil {
-		t.Fatalf("Failed to create unified server: %v", err)
-	}
+	require.NoError(t, err, "Failed to create unified server")
 	defer us.Close()
 
 	// Add mock tools for both backends
@@ -424,9 +414,7 @@ func TestProxyDoesNotModifyRequests(t *testing.T) {
 	}
 
 	us, err := NewUnified(ctx, cfg)
-	if err != nil {
-		t.Fatalf("Failed to create unified server: %v", err)
-	}
+	require.NoError(t, err, "Failed to create unified server")
 	defer us.Close()
 
 	// Add tool that captures the request
@@ -493,9 +481,7 @@ func TestProxyDoesNotModifyRequests(t *testing.T) {
 
 	// Verify the handler is set up correctly
 	handler := us.GetToolHandler("testserver", "echo_tool")
-	if handler == nil {
-		t.Fatal("Echo tool handler not found")
-	}
+	require.NotNil(t, handler, "Echo tool handler not found")
 
 	t.Log("✓ Tool handler registered and accessible")
 	t.Log("✓ Request data structure is preserved through the proxy layer")
@@ -518,9 +504,7 @@ func TestCloseEndpoint_Integration(t *testing.T) {
 	}
 
 	us, err := NewUnified(ctx, cfg)
-	if err != nil {
-		t.Fatalf("Failed to create unified server: %v", err)
-	}
+	require.NoError(t, err, "Failed to create unified server")
 	defer us.Close()
 
 	// Enable test mode to prevent os.Exit
@@ -535,9 +519,7 @@ func TestCloseEndpoint_Integration(t *testing.T) {
 		// First call should succeed
 		req, _ := http.NewRequest(http.MethodPost, ts.URL+"/close", nil)
 		resp, err := http.DefaultClient.Do(req)
-		if err != nil {
-			t.Fatalf("Failed to call /close: %v", err)
-		}
+		require.NoError(t, err, "Failed to call /close")
 		defer resp.Body.Close()
 
 		if resp.StatusCode != http.StatusOK {
@@ -568,9 +550,7 @@ func TestCloseEndpoint_Integration(t *testing.T) {
 		// Second call should return 410 Gone
 		req2, _ := http.NewRequest(http.MethodPost, ts.URL+"/close", nil)
 		resp2, err := http.DefaultClient.Do(req2)
-		if err != nil {
-			t.Fatalf("Failed to call /close second time: %v", err)
-		}
+		require.NoError(t, err, "Failed to call /close second time")
 		defer resp2.Body.Close()
 
 		if resp2.StatusCode != http.StatusGone {
@@ -594,9 +574,7 @@ func TestCloseEndpoint_Integration(t *testing.T) {
 	defer cancel2()
 
 	us2, err := NewUnified(ctx2, cfg)
-	if err != nil {
-		t.Fatalf("Failed to create second unified server: %v", err)
-	}
+	require.NoError(t, err, "Failed to create second unified server")
 	defer us2.Close()
 	us2.SetTestMode(true)
 
@@ -608,9 +586,7 @@ func TestCloseEndpoint_Integration(t *testing.T) {
 		// Call close endpoint
 		req, _ := http.NewRequest(http.MethodPost, ts.URL+"/close", nil)
 		resp, err := http.DefaultClient.Do(req)
-		if err != nil {
-			t.Fatalf("Failed to call /close: %v", err)
-		}
+		require.NoError(t, err, "Failed to call /close")
 		defer resp.Body.Close()
 
 		if resp.StatusCode != http.StatusOK {
@@ -634,9 +610,7 @@ func TestCloseEndpoint_Integration(t *testing.T) {
 	defer cancel3()
 
 	us3, err := NewUnified(ctx3, cfg)
-	if err != nil {
-		t.Fatalf("Failed to create third unified server: %v", err)
-	}
+	require.NoError(t, err, "Failed to create third unified server")
 	defer us3.Close()
 	us3.SetTestMode(true)
 
@@ -649,9 +623,7 @@ func TestCloseEndpoint_Integration(t *testing.T) {
 		// Request without auth should fail
 		req, _ := http.NewRequest(http.MethodPost, ts.URL+"/close", nil)
 		resp, err := http.DefaultClient.Do(req)
-		if err != nil {
-			t.Fatalf("Failed to call /close: %v", err)
-		}
+		require.NoError(t, err, "Failed to call /close")
 		defer resp.Body.Close()
 
 		if resp.StatusCode != http.StatusUnauthorized {
@@ -664,9 +636,7 @@ func TestCloseEndpoint_Integration(t *testing.T) {
 		req2, _ := http.NewRequest(http.MethodPost, ts.URL+"/close", nil)
 		req2.Header.Set("Authorization", apiKey)
 		resp2, err := http.DefaultClient.Do(req2)
-		if err != nil {
-			t.Fatalf("Failed to call /close with auth: %v", err)
-		}
+		require.NoError(t, err, "Failed to call /close with auth")
 		defer resp2.Body.Close()
 
 		if resp2.StatusCode != http.StatusOK {

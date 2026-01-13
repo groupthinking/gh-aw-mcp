@@ -5,6 +5,9 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestInitFileLogger(t *testing.T) {
@@ -15,9 +18,7 @@ func TestInitFileLogger(t *testing.T) {
 
 	// Initialize the logger
 	err := InitFileLogger(logDir, fileName)
-	if err != nil {
-		t.Fatalf("InitFileLogger failed: %v", err)
-	}
+	require.NoError(t, err, "InitFileLogger failed")
 	defer CloseGlobalLogger()
 
 	// Check that the log directory was created
@@ -40,9 +41,7 @@ func TestFileLoggerFallback(t *testing.T) {
 
 	// Initialize the logger - should not fail, but use fallback
 	err := InitFileLogger(logDir, fileName)
-	if err != nil {
-		t.Fatalf("InitFileLogger should not fail on fallback: %v", err)
-	}
+	require.NoError(t, err, "InitFileLogger should not fail on fallback")
 	defer CloseGlobalLogger()
 
 	globalLoggerMu.RLock()
@@ -62,9 +61,7 @@ func TestFileLoggerLogging(t *testing.T) {
 	fileName := "test.log"
 
 	err := InitFileLogger(logDir, fileName)
-	if err != nil {
-		t.Fatalf("InitFileLogger failed: %v", err)
-	}
+	require.NoError(t, err, "InitFileLogger failed")
 	defer CloseGlobalLogger()
 
 	// Write some log messages
@@ -79,9 +76,7 @@ func TestFileLoggerLogging(t *testing.T) {
 	// Read the log file
 	logPath := filepath.Join(logDir, fileName)
 	content, err := os.ReadFile(logPath)
-	if err != nil {
-		t.Fatalf("Failed to read log file: %v", err)
-	}
+	require.NoError(t, err, "Failed to read log file")
 
 	logContent := string(content)
 
@@ -103,9 +98,7 @@ func TestFileLoggerLogging(t *testing.T) {
 		if !strings.Contains(logContent, expected.message) {
 			t.Errorf("Log file does not contain message: %s", expected.message)
 		}
-		if !strings.Contains(logContent, "[test]") {
-			t.Errorf("Log file does not contain category: [test]")
-		}
+		assert.True(t, strings.Contains(logContent, "[test]"), "Log file does not contain category: [test]")
 	}
 
 	// Verify timestamp format (RFC3339)
@@ -132,36 +125,26 @@ func TestFileLoggerAppend(t *testing.T) {
 
 	// First logger session
 	err := InitFileLogger(logDir, fileName)
-	if err != nil {
-		t.Fatalf("InitFileLogger failed: %v", err)
-	}
+	require.NoError(t, err, "InitFileLogger failed")
 	LogInfo("test", "First message")
 	CloseGlobalLogger()
 
 	// Second logger session - should append
 	err = InitFileLogger(logDir, fileName)
-	if err != nil {
-		t.Fatalf("InitFileLogger failed: %v", err)
-	}
+	require.NoError(t, err, "InitFileLogger failed")
 	LogInfo("test", "Second message")
 	CloseGlobalLogger()
 
 	// Read the log file
 	logPath := filepath.Join(logDir, fileName)
 	content, err := os.ReadFile(logPath)
-	if err != nil {
-		t.Fatalf("Failed to read log file: %v", err)
-	}
+	require.NoError(t, err, "Failed to read log file")
 
 	logContent := string(content)
 
 	// Verify both messages are present
-	if !strings.Contains(logContent, "First message") {
-		t.Errorf("Log file does not contain first message")
-	}
-	if !strings.Contains(logContent, "Second message") {
-		t.Errorf("Log file does not contain second message")
-	}
+	assert.True(t, strings.Contains(logContent, "First message"), "Log file does not contain first message")
+	assert.True(t, strings.Contains(logContent, "Second message"), "Log file does not contain second message")
 }
 
 func TestFileLoggerConcurrency(t *testing.T) {
@@ -170,9 +153,7 @@ func TestFileLoggerConcurrency(t *testing.T) {
 	fileName := "concurrent-test.log"
 
 	err := InitFileLogger(logDir, fileName)
-	if err != nil {
-		t.Fatalf("InitFileLogger failed: %v", err)
-	}
+	require.NoError(t, err, "InitFileLogger failed")
 	defer CloseGlobalLogger()
 
 	// Write from multiple goroutines
@@ -196,9 +177,7 @@ func TestFileLoggerConcurrency(t *testing.T) {
 	// Read the log file
 	logPath := filepath.Join(logDir, fileName)
 	content, err := os.ReadFile(logPath)
-	if err != nil {
-		t.Fatalf("Failed to read log file: %v", err)
-	}
+	require.NoError(t, err, "Failed to read log file")
 
 	// Count the number of log lines
 	lines := strings.Split(strings.TrimSpace(string(content)), "\n")
@@ -217,9 +196,7 @@ func TestFileLoggerReadableByOtherProcesses(t *testing.T) {
 
 	// Initialize the logger
 	err := InitFileLogger(logDir, fileName)
-	if err != nil {
-		t.Fatalf("InitFileLogger failed: %v", err)
-	}
+	require.NoError(t, err, "InitFileLogger failed")
 
 	// Write some data
 	LogInfo("test", "Testing file readability")
@@ -227,33 +204,23 @@ func TestFileLoggerReadableByOtherProcesses(t *testing.T) {
 	// Verify another process can open and read the file without any locks
 	// This simulates another process trying to read the log file
 	readFile, err := os.Open(logPath)
-	if err != nil {
-		t.Fatalf("Failed to open log file for reading: %v", err)
-	}
+	require.NoError(t, err, "Failed to open log file for reading")
 	defer readFile.Close()
 
 	// Read the content to verify it's readable
 	content, err := os.ReadFile(logPath)
-	if err != nil {
-		t.Fatalf("Failed to read log file content: %v", err)
-	}
+	require.NoError(t, err, "Failed to read log file content")
 
-	if !strings.Contains(string(content), "Testing file readability") {
-		t.Errorf("Log file does not contain expected content")
-	}
+	assert.True(t, strings.Contains(string(content), "Testing file readability"), "Log file does not contain expected content")
 
 	// Close the logger
 	CloseGlobalLogger()
 
 	// Verify file is still readable after close
 	content, err = os.ReadFile(logPath)
-	if err != nil {
-		t.Fatalf("Failed to read log file after close: %v", err)
-	}
+	require.NoError(t, err, "Failed to read log file after close")
 
-	if !strings.Contains(string(content), "Testing file readability") {
-		t.Errorf("Log file does not contain expected content after close")
-	}
+	assert.True(t, strings.Contains(string(content), "Testing file readability"), "Log file does not contain expected content after close")
 }
 
 func TestFileLoggerFlushes(t *testing.T) {
@@ -264,9 +231,7 @@ func TestFileLoggerFlushes(t *testing.T) {
 
 	// Initialize the logger
 	err := InitFileLogger(logDir, fileName)
-	if err != nil {
-		t.Fatalf("InitFileLogger failed: %v", err)
-	}
+	require.NoError(t, err, "InitFileLogger failed")
 	defer CloseGlobalLogger()
 
 	// Write a message
@@ -275,11 +240,7 @@ func TestFileLoggerFlushes(t *testing.T) {
 	// Immediately read the file without closing the logger
 	// This tests that Sync() is being called after each write
 	content, err := os.ReadFile(logPath)
-	if err != nil {
-		t.Fatalf("Failed to read log file: %v", err)
-	}
+	require.NoError(t, err, "Failed to read log file")
 
-	if !strings.Contains(string(content), "Immediate flush test") {
-		t.Errorf("Log file does not contain message immediately after write - data not flushed")
-	}
+	assert.True(t, strings.Contains(string(content), "Immediate flush test"), "Log file does not contain message immediately after write - data not flushed")
 }
