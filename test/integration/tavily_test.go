@@ -250,7 +250,7 @@ func TestTavilyAuthFailure(t *testing.T) {
 	authValidatingBackend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Check for Authorization header (Tavily requires API key in Authorization header)
 		authHeader := r.Header.Get("Authorization")
-		
+
 		if authHeader == "" {
 			// Missing API key - return 401 with clear error
 			w.WriteHeader(http.StatusUnauthorized)
@@ -259,7 +259,7 @@ func TestTavilyAuthFailure(t *testing.T) {
 			t.Logf("Backend: Rejected request - missing Authorization header")
 			return
 		}
-		
+
 		if authHeader != "tvly-test-valid-key-123" {
 			// Invalid API key - return 401 with clear error
 			w.WriteHeader(http.StatusUnauthorized)
@@ -268,7 +268,7 @@ func TestTavilyAuthFailure(t *testing.T) {
 			t.Logf("Backend: Rejected request - invalid Authorization: %s", authHeader)
 			return
 		}
-		
+
 		// Valid key - should not reach here in this test
 		w.WriteHeader(http.StatusOK)
 	}))
@@ -326,7 +326,7 @@ func TestTavilyAuthFailure(t *testing.T) {
 		t.Logf("Gateway stderr output:\n%s", stderrOutput)
 
 		// Verify error message clearly indicates authentication/API key issue
-		assert.True(t, 
+		assert.True(t,
 			containsAny(stderrOutput, []string{
 				"Missing API key",
 				"authentication_error",
@@ -335,7 +335,7 @@ func TestTavilyAuthFailure(t *testing.T) {
 			}),
 			"Gateway logs should clearly indicate authentication/API key issue")
 
-		assert.Contains(t, stderrOutput, "Missing API key", 
+		assert.Contains(t, stderrOutput, "Missing API key",
 			"Gateway should log the exact error from Tavily about missing API key")
 
 		t.Log("✓ Clear error message provided in gateway logs for missing API key")
@@ -394,7 +394,7 @@ func TestTavilyAuthFailure(t *testing.T) {
 		t.Logf("Gateway stderr output:\n%s", stderrOutput)
 
 		// Verify error message clearly indicates invalid API key issue
-		assert.True(t, 
+		assert.True(t,
 			containsAny(stderrOutput, []string{
 				"Invalid API key",
 				"invalid_request_error",
@@ -403,7 +403,7 @@ func TestTavilyAuthFailure(t *testing.T) {
 			}),
 			"Gateway logs should clearly indicate invalid API key issue")
 
-		assert.Contains(t, stderrOutput, "Invalid API key", 
+		assert.Contains(t, stderrOutput, "Invalid API key",
 			"Gateway should log the exact error from Tavily about invalid API key")
 
 		t.Log("✓ Clear error message provided in gateway logs for invalid API key")
