@@ -157,6 +157,8 @@ func run(cmd *cobra.Command, args []string) error {
 	}
 
 	if err != nil {
+		// Log configuration validation errors to markdown logger
+		logger.LogErrorMd("startup", "Configuration validation failed:\n%s", err.Error())
 		return fmt.Errorf("failed to load config: %w", err)
 	}
 
