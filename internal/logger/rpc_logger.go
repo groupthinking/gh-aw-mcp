@@ -214,7 +214,8 @@ func formatRPCMessageMarkdown(info *RPCMessageInfo) string {
 			if !isEmpty {
 				// Valid JSON: use json code block for syntax highlighting (pretty printed)
 				// Empty line before code block per markdown convention
-				message += fmt.Sprintf("\n\n```json\n%s\n```", formatted)
+				// Compressed format: no newlines inside code fence to save 2 lines
+				message += fmt.Sprintf("\n\n```json%s```", formatted)
 			}
 		} else {
 			// Invalid JSON: use inline backticks to avoid malformed markdown
