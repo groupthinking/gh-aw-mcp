@@ -246,3 +246,106 @@ func TestMixedHTTPAndStdioServers(t *testing.T) {
 		t.Errorf("Expected stdio server type 'stdio', got '%s'", stdioServer.Type)
 	}
 }
+
+func TestSanitizeEnvForLogging(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    map[string]string
+		expected map[string]string
+	}{
+		{
+			name:     "nil env map",
+			input:    nil,
+			expected: nil,
+		},
+		{
+			name:     "empty env map",
+			input:    map[string]string{},
+			expected: map[string]string{},
+		},
+		{
+			name: "single env var with long value",
+			input: map[string]string{
+				"GITHUB_PERSONAL_ACCESS_TOKEN": "ghs_1234567890abcdefghijklmnop",
+			},
+			expected: map[string]string{
+				"GITHUB_PERSONAL_ACCESS_TOKEN": "ghs_...",
+			},
+		},
+		{
+			name: "multiple env vars with various lengths",
+			input: map[string]string{
+				"GITHUB_PERSONAL_ACCESS_TOKEN": "ghs_1234567890abcdefghijklmnop",
+				"API_KEY":                       "key_abc123xyz",
+				"SHORT":                         "abc",
+			},
+			expected: map[string]string{
+				"GITHUB_PERSONAL_ACCESS_TOKEN": "ghs_...",
+				"API_KEY":                       "key_...",
+				"SHORT":                         "...",
+			},
+		},
+		{
+			name: "env var with exactly 4 characters",
+			input: map[string]string{
+				"TEST": "1234",
+			},
+			expected: map[string]string{
+				"TEST": "...",
+			},
+		},
+		{
+			name: "env var with 5 characters",
+			input: map[string]string{
+				"TEST": "12345",
+			},
+			expected: map[string]string{
+				"TEST": "1234...",
+			},
+		},
+		{
+			name: "env var with empty value",
+			input: map[string]string{
+				"EMPTY": "",
+			},
+			expected: map[string]string{
+				"EMPTY": "...",
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := sanitizeEnvForLogging(tt.input)
+			
+			// Check if both are nil
+			if tt.expected == nil && result == nil {
+				return
+			}
+			
+			// Check if one is nil
+			if (tt.expected == nil) != (result == nil) {
+				t.Errorf("Expected nil=%v, got nil=%v", tt.expected == nil, result == nil)
+				return
+			}
+			
+			// Check length
+			if len(result) != len(tt.expected) {
+				t.Errorf("Expected %d entries, got %d", len(tt.expected), len(result))
+				return
+			}
+			
+			// Check each entry
+			for key, expectedValue := range tt.expected {
+				actualValue, ok := result[key]
+				if !ok {
+					t.Errorf("Missing key %s in result", key)
+					continue
+				}
+				if actualValue != expectedValue {
+					t.Errorf("For key %s: expected %s, got %s", key, expectedValue, actualValue)
+				}
+			}
+		})
+	}
+}

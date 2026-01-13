@@ -16,6 +16,26 @@ import (
 
 var logLauncher = logger.New("launcher:launcher")
 
+// sanitizeEnvForLogging returns a sanitized version of environment variables
+// where each value is truncated to first 4 characters followed by "..."
+// This prevents sensitive information like API keys from being logged in full.
+func sanitizeEnvForLogging(env map[string]string) map[string]string {
+	if env == nil {
+		return nil
+	}
+	sanitized := make(map[string]string, len(env))
+	for key, value := range env {
+		if len(value) <= 4 {
+			// If value is 4 chars or less, just use "..."
+			sanitized[key] = "..."
+		} else {
+			// Show first 4 characters and append "..."
+			sanitized[key] = value[:4] + "..."
+		}
+	}
+	return sanitized
+}
+
 // Launcher manages backend MCP server connections
 type Launcher struct {
 	ctx                context.Context
@@ -141,7 +161,7 @@ func GetOrLaunch(l *Launcher, serverID string) (*mcp.Connection, error) {
 	}
 
 	if len(serverCfg.Env) > 0 {
-		log.Printf("[LAUNCHER] Additional env vars: %v", serverCfg.Env)
+		log.Printf("[LAUNCHER] Additional env vars: %v", sanitizeEnvForLogging(serverCfg.Env))
 	}
 
 	// Create connection
@@ -154,7 +174,7 @@ func GetOrLaunch(l *Launcher, serverID string) (*mcp.Connection, error) {
 		log.Printf("[LAUNCHER] Debug Information:")
 		log.Printf("[LAUNCHER]   - Command: %s", serverCfg.Command)
 		log.Printf("[LAUNCHER]   - Args: %v", serverCfg.Args)
-		log.Printf("[LAUNCHER]   - Env vars: %v", serverCfg.Env)
+		log.Printf("[LAUNCHER]   - Env vars: %v", sanitizeEnvForLogging(serverCfg.Env))
 		log.Printf("[LAUNCHER]   - Running in container: %v", l.runningInContainer)
 		log.Printf("[LAUNCHER]   - Is direct command: %v", isDirectCommand)
 
