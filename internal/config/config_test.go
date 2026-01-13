@@ -228,7 +228,7 @@ func TestLoadFromStdin_InvalidJSON(t *testing.T) {
 	require.Error(t, err, "Expected error for invalid JSON")
 
 	// JSON parsing error happens before schema validation
-	assert.True(t, 
+	assert.True(t,
 		strings.Contains(err.Error(), "invalid character") || strings.Contains(err.Error(), "JSON"),
 		"Expected JSON parsing error, got: %v", err)
 }
