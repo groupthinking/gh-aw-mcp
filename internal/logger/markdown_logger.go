@@ -147,11 +147,11 @@ func (ml *MarkdownLogger) Log(level LogLevel, category, format string, args ...i
 	// Format as markdown bullet point with emoji
 	// Use code blocks for multi-line content or technical details
 	var logLine string
-	
+
 	// Check if message is already pre-formatted (RPC messages with markdown formatting)
 	// RPC messages start with ** and contain → or ← arrows
 	isPreformatted := strings.HasPrefix(message, "**") && (strings.Contains(message, "→") || strings.Contains(message, "←"))
-	
+
 	if isPreformatted {
 		// Pre-formatted content (like RPC messages) - just add bullet and emoji
 		logLine = fmt.Sprintf("- %s %s %s\n", emoji, category, message)
