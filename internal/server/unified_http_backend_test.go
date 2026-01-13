@@ -244,7 +244,7 @@ func TestHTTPBackend_SessionIDPropagation(t *testing.T) {
 
 	// Create config
 	// Add a dummy header to force plain JSON-RPC transport (SDK transports don't support custom headers)
-	// This avoids the streamable/SSE transport attempts which don't work with simple mock servers
+	// This avoids the streamable HTTP/SSE-formatted transport attempts which don't work with simple mock servers
 	cfg := &config.Config{
 		Servers: map[string]*config.ServerConfig{
 			"test-http": {

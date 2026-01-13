@@ -217,7 +217,7 @@ func TestTransparentProxy_RoutedMode(t *testing.T) {
 	})
 }
 
-// Helper function to send MCP requests and handle SSE responses
+// Helper function to send MCP requests and handle streamable HTTP responses
 func sendMCPRequest(t *testing.T, url string, bearerToken string, payload map[string]interface{}) map[string]interface{} {
 	client := &http.Client{Timeout: 5 * time.Second}
 	return sendMCPRequestWithClient(t, url, bearerToken, client, payload)
@@ -250,10 +250,10 @@ func sendMCPRequestWithClient(t *testing.T, url string, bearerToken string, clie
 		t.Fatalf("Expected status 200, got %d. Body: %s", resp.StatusCode, string(body))
 	}
 
-	// Check if response is SSE format
+	// Check if response uses SSE-formatted streaming (part of streamable HTTP transport)
 	contentType := resp.Header.Get("Content-Type")
 	if strings.Contains(contentType, "text/event-stream") {
-		// Parse SSE response
+		// Parse SSE-formatted response
 		return parseSSEResponse(t, resp.Body)
 	}
 
@@ -266,7 +266,8 @@ func sendMCPRequestWithClient(t *testing.T, url string, bearerToken string, clie
 	return result
 }
 
-// parseSSEResponse parses Server-Sent Events format
+// parseSSEResponse parses Server-Sent Events formatted responses
+// Note: SSE formatting is used by streamable HTTP transport for streaming responses
 func parseSSEResponse(t *testing.T, body io.Reader) map[string]interface{} {
 	scanner := bufio.NewScanner(body)
 
@@ -279,14 +280,14 @@ func parseSSEResponse(t *testing.T, body io.Reader) map[string]interface{} {
 	}
 
 	if len(dataLines) == 0 {
-		t.Fatal("No data lines found in SSE response")
+		t.Fatal("No data lines found in SSE-formatted response")
 	}
 
 	// Join all data lines and parse as JSON
 	jsonData := strings.Join(dataLines, "")
 	var result map[string]interface{}
 	if err := json.Unmarshal([]byte(jsonData), &result); err != nil {
-		t.Fatalf("Failed to decode SSE data: %v, data: %s", err, jsonData)
+		t.Fatalf("Failed to decode SSE-formatted data: %v, data: %s", err, jsonData)
 	}
 
 	return result
