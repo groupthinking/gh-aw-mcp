@@ -297,7 +297,7 @@ func writeGatewayConfig(cfg *config.Config, listenAddr, mode string, w io.Writer
 
 	servers := outputConfig["mcpServers"].(map[string]interface{})
 
-	for name := range cfg.Servers {
+	for name, server := range cfg.Servers {
 		serverConfig := map[string]interface{}{
 			"type": "http",
 		}
@@ -315,6 +315,12 @@ func writeGatewayConfig(cfg *config.Config, listenAddr, mode string, w io.Writer
 			serverConfig["headers"] = map[string]string{
 				"Authorization": apiKey,
 			}
+		}
+
+		// Include tools field from original configuration per MCP Gateway Specification v1.5.0 Section 5.4
+		// This preserves tool filtering from the input configuration
+		if len(server.Tools) > 0 {
+			serverConfig["tools"] = server.Tools
 		}
 
 		servers[name] = serverConfig
