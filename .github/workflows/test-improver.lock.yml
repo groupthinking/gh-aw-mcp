@@ -19,7 +19,7 @@
 #   gh aw compile
 # For more information: https://github.com/githubnext/gh-aw/blob/main/.github/aw/github-agentic-workflows.md
 #
-# Daily analyzer that reviews test files and suggests improvements for better testify usage, increased coverage, and cleaner tests
+# Daily analyzer that reviews test files and suggests improvements using Go standard testing package, increased coverage, and cleaner tests
 
 name: "Test Improver"
 "on":
@@ -459,26 +459,29 @@ jobs:
           cat << 'PROMPT_EOF' > "$GH_AW_PROMPT"
           # Test Improver 🧹
           
-          You are an AI agent specialized in improving Go test files. Your mission is to review a single test file and suggest improvements focused on better testify library usage, increased coverage, and cleaner, more stable tests.
+          You are an AI agent specialized in improving Go test files. Your mission is to review a single test file and suggest improvements focused on better use of Go standard testing package, increased coverage, and cleaner, more stable tests.
           
           ## Mission
           
           Select one test file from the codebase, analyze it thoroughly, and create improvements that focus on:
-          1. **Better idiomatic use of the testify library** - Use testify assertions instead of manual error checking
+          1. **Better idiomatic use of Go standard testing package** - Use proper assertions (t.Fatal, t.Fatalf) and error checking patterns
           2. **Increase coverage** - Add missing test cases to cover untested code paths
-          3. **Stabler, cleaner tests** - Improve test structure, readability, and reliability
+          3. **Stabler, cleaner tests** - Improve test structure, readability, and reliability with deterministic, fast, small tests
           
-          ## Important: This project does NOT currently use testify
+          ## Testing Philosophy: Go Standard Library
           
-          **CRITICAL**: Before making any changes, check if the testify library is already in `go.mod`. If testify is NOT present:
-          1. DO NOT add testify to the project
-          2. Focus on improving tests using standard library testing patterns
-          3. Suggest improvements like:
+          **CRITICAL**: This project uses Go's standard testing package exclusively:
+          1. DO NOT use or suggest external testing libraries (testify, gomega, etc.)
+          2. Focus on Go standard testing best practices:
              - Better table-driven test structures
              - More comprehensive edge case coverage
              - Cleaner test organization and naming
-             - More robust error checking
+             - Proper use of `t.Fatal()` for fatal errors (stops test immediately)
+             - Proper use of `t.Error()` for non-fatal errors (continues test)
              - Better use of subtests with `t.Run()`
+             - Deterministic tests (no timing dependencies, fixed random seeds)
+             - Fast tests (mock external dependencies, avoid network calls)
+             - Small, focused tests (one concept per test)
           
           ## Step 1: Find All Test Files
           
@@ -504,11 +507,12 @@ jobs:
           4. **Size**: Medium-sized test files (not too small, not huge) that can be meaningfully improved
           
           **Selection criteria** (prioritize in this order):
-          - Test files with manual error checking instead of proper assertions
+          - Test files with improper use of t.Error vs t.Fatal (e.g., continuing after nil check failure)
           - Test files with low coverage of the corresponding code
           - Test files with repetitive test code that could be table-driven
-          - Test files with poor edge case coverage
+          - Test files with poor edge case coverage (nil inputs, empty values, boundaries)
           - Test files without proper subtests
+          - Test files with non-deterministic behavior (timing, randomness, external state)
           
           **Avoid**:
           - Test files that were recently modified (check git history)
@@ -551,33 +555,31 @@ jobs:
           
           Based on your analysis, create a concrete improvement plan. Focus on:
           
-          ### A. Better Assertions (if applicable)
+          ### A. Better Assertions with Go Standard Testing
           
-          **Current pattern** (manual checking):
+          **Use t.Fatal() for fatal errors** (stops test execution immediately):
           ```go
+          // Use t.Fatal/t.Fatalf when test cannot continue
           if err != nil {
-              t.Errorf("unexpected error: %v", err)
+              t.Fatalf("unexpected error: %v", err) // Fatal - test stops here
           }
-          if got != want {
-              t.Errorf("got %v, want %v", got, want)
+          if result == nil {
+              t.Fatal("expected non-nil result") // Fatal - can't proceed with nil
           }
           ```
           
-          **Improved pattern** (only if testify is available):
+          **Use t.Error() for non-fatal errors** (continues test execution):
           ```go
-          require.NoError(t, err)
-          assert.Equal(t, want, got)
+          // Use t.Error/t.Errorf when test can continue
+          if got != want {
+              t.Errorf("got %v, want %v", got, want) // Error - test continues
+          }
+          if len(items) == 0 {
+              t.Error("expected non-empty items") // Error - test continues
+          }
           ```
           
-          **If testify is NOT available**, improve manual checks:
-          ```go
-          if err != nil {
-              t.Fatalf("unexpected error: %v", err)
-          }
-          if got != want {
-              t.Errorf("got %v, want %v", got, want)
-          }
-          ```
+          **Key principle**: Use `t.Fatal*()` when subsequent assertions would panic or be meaningless. Use `t.Error*()` when you want to see all failures in one test run.
           
           ### B. Increased Coverage
           
@@ -637,14 +639,34 @@ jobs:
           
           6. **Avoid test interdependence**: Each test should be independent
           
-          ### D. More Stable Tests
+          ### D. More Stable Tests - Always Assume the Worst
           
-          Make tests more reliable:
+          Make tests deterministic, fast, and reliable:
+          
+          **Deterministic tests**:
           - Avoid timing-dependent tests (use mocks/fakes for time)
-          - Don't depend on external state
-          - Use proper setup/teardown with `t.Cleanup()`
-          - Mock external dependencies consistently
-          - Use deterministic test data
+          - Use fixed random seeds: `rand.New(rand.NewSource(1))`
+          - Don't depend on external state (filesystem, network, environment)
+          - Test in isolation - each test should be independent
+          - Use deterministic test data (no `time.Now()`, no `rand.Intn()` without seed)
+          
+          **Fast tests**:
+          - Mock external dependencies (network, database, filesystem)
+          - Use in-memory implementations where possible
+          - Avoid `time.Sleep()` - use mocks or channels for synchronization
+          - Keep tests focused and small
+          
+          **Small, focused tests**:
+          - One concept per test function
+          - Use table-driven tests for multiple scenarios
+          - Use `t.Run()` subtests for variations
+          - Clear test names that describe what's being tested
+          
+          **Assume the worst**:
+          - Test nil inputs, empty strings, zero values
+          - Test boundary conditions (max, min, zero, negative)
+          - Test error paths and edge cases first
+          - Use `t.Cleanup()` for guaranteed cleanup even on failure
           
           ## Step 5: Implement Improvements
           
@@ -713,6 +735,8 @@ jobs:
           - ✅ [Specific improvement, e.g., "Converted to table-driven tests"]
           - ✅ [Specific improvement, e.g., "Added descriptive test names"]
           - ✅ [Specific improvement, e.g., "Better error messages"]
+          - ✅ [Specific improvement, e.g., "Proper use of t.Fatal vs t.Error"]
+          - ✅ [Specific improvement, e.g., "Made tests deterministic by fixing random seeds"]
           
           ### 2. Increased Coverage
           - ✅ Added test for [edge case or scenario]
@@ -726,6 +750,8 @@ jobs:
           - ✅ [Improvement, e.g., "Proper use of t.Cleanup()"]
           - ✅ [Improvement, e.g., "Removed timing dependencies"]
           - ✅ [Improvement, e.g., "Better test isolation"]
+          - ✅ [Improvement, e.g., "Made tests deterministic with fixed seeds"]
+          - ✅ [Improvement, e.g., "Mocked external dependencies for faster tests"]
           
           ## Test Execution
           
@@ -740,7 +766,7 @@ jobs:
           
           ---
           *Generated by Test Improver Workflow*
-          *Focuses on better patterns, increased coverage, and more stable tests*
+          *Focuses on Go standard testing best practices, increased coverage, deterministic and fast tests*
           ```
           
           **If NO improvements were made** (test file is already excellent):
@@ -761,7 +787,11 @@ jobs:
           - **Use Serena**: Leverage Go analysis capabilities for intelligent file selection
           - **Quality over quantity**: Better to make meaningful improvements to one file than superficial changes to many
           - **Verify stability**: Run tests multiple times to ensure reliability
-          - **Standard library first**: If testify is not in the project, use standard library patterns
+          - **Go standard library only**: Use only Go's standard testing package - no external test libraries
+          - **Deterministic tests**: Always assume the worst - test edge cases, nil inputs, boundaries
+          - **Fast tests**: Mock dependencies, avoid network/filesystem, no sleep calls
+          - **Small tests**: One concept per test, focused and readable
+          - **Proper assertions**: Use t.Fatal for fatal errors, t.Error for non-fatal errors
           - **Cache memory**: Use cache to track which files were improved to avoid repetition
           
           ## Serena Configuration
@@ -1246,7 +1276,7 @@ jobs:
         uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
         env:
           WORKFLOW_NAME: "Test Improver"
-          WORKFLOW_DESCRIPTION: "Daily analyzer that reviews test files and suggests improvements for better testify usage, increased coverage, and cleaner tests"
+          WORKFLOW_DESCRIPTION: "Daily analyzer that reviews test files and suggests improvements using Go standard testing package, increased coverage, and cleaner tests"
           HAS_PATCH: ${{ needs.agent.outputs.has_patch }}
         with:
           script: |
