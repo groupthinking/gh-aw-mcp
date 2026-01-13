@@ -232,11 +232,12 @@ func TestExpandDockerEnvArgs(t *testing.T) {
 // TestHTTPRequest_ErrorResponses tests handling of various error conditions
 func TestHTTPRequest_ErrorResponses(t *testing.T) {
 	tests := []struct {
-		name           string
-		statusCode     int
-		responseBody   map[string]interface{}
-		expectError    bool
-		errorSubstring string
+		name                 string
+		statusCode           int
+		responseBody         map[string]interface{}
+		expectError          bool
+		errorSubstring       string
+		needSuccessfulInit   bool // If true, return success for initialize requests
 	}{
 		{
 			name:       "HTTP 200 success",
@@ -279,7 +280,8 @@ func TestHTTPRequest_ErrorResponses(t *testing.T) {
 					"message": "Invalid request",
 				},
 			},
-			expectError: false, // JSON-RPC errors are returned as valid responses
+			expectError:        false, // JSON-RPC errors are returned as valid responses
+			needSuccessfulInit: true,  // Need successful initialize to test error handling
 		},
 	}
 
@@ -289,13 +291,22 @@ func TestHTTPRequest_ErrorResponses(t *testing.T) {
 			testServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				// Read request body to determine if it's an initialize request
 				var reqBody map[string]interface{}
-				bodyBytes, _ := io.ReadAll(r.Body)
-				json.Unmarshal(bodyBytes, &reqBody)
+				bodyBytes, err := io.ReadAll(r.Body)
+				if err != nil {
+					t.Errorf("Failed to read request body: %v", err)
+					http.Error(w, "Internal error", http.StatusInternalServerError)
+					return
+				}
+				if err := json.Unmarshal(bodyBytes, &reqBody); err != nil {
+					t.Errorf("Failed to unmarshal request body: %v", err)
+					http.Error(w, "Bad request", http.StatusBadRequest)
+					return
+				}
 
-				// For the JSON-RPC error test case, we need to return success for initialize
-				// and error for the actual tools/list request
+				// If this test case needs successful initialization, return success for initialize
+				// and error for subsequent requests
 				method, _ := reqBody["method"].(string)
-				if tt.name == "JSON-RPC error response" && method == "initialize" {
+				if tt.needSuccessfulInit && method == "initialize" {
 					// Return success for initialize request
 					w.WriteHeader(http.StatusOK)
 					w.Header().Set("Content-Type", "application/json")
