@@ -478,7 +478,13 @@ func (c *Connection) initializeHTTPSession() (string, error) {
 	// Send request
 	httpResp, err := c.httpClient.Do(httpReq)
 	if err != nil {
-		return "", fmt.Errorf("failed to send initialize request: %w", err)
+		// Check if it's a connection error (cannot connect at all)
+		if strings.Contains(err.Error(), "connection refused") ||
+			strings.Contains(err.Error(), "no such host") ||
+			strings.Contains(err.Error(), "network is unreachable") {
+			return "", fmt.Errorf("cannot connect to HTTP backend at %s: %w", c.httpURL, err)
+		}
+		return "", fmt.Errorf("failed to send initialize request to %s: %w", c.httpURL, err)
 	}
 	defer httpResp.Body.Close()
 
@@ -509,7 +515,12 @@ func (c *Connection) initializeHTTPSession() (string, error) {
 	// Parse JSON-RPC response to check for errors
 	var rpcResponse Response
 	if err := json.Unmarshal(responseBody, &rpcResponse); err != nil {
-		return "", fmt.Errorf("failed to parse initialize response: %w", err)
+		// Include the response body to help debug what the server actually returned
+		bodyPreview := string(responseBody)
+		if len(bodyPreview) > 500 {
+			bodyPreview = bodyPreview[:500] + "... (truncated)"
+		}
+		return "", fmt.Errorf("failed to parse initialize response (received non-JSON or malformed response): %w\nResponse body: %s", err, bodyPreview)
 	}
 
 	if rpcResponse.Error != nil {
@@ -576,7 +587,13 @@ func (c *Connection) sendHTTPRequest(ctx context.Context, method string, params 
 	// Send request using the reusable HTTP client
 	httpResp, err := c.httpClient.Do(httpReq)
 	if err != nil {
-		return nil, fmt.Errorf("failed to send HTTP request: %w", err)
+		// Check if it's a connection error (cannot connect at all)
+		if strings.Contains(err.Error(), "connection refused") ||
+			strings.Contains(err.Error(), "no such host") ||
+			strings.Contains(err.Error(), "network is unreachable") {
+			return nil, fmt.Errorf("cannot connect to HTTP backend at %s: %w", c.httpURL, err)
+		}
+		return nil, fmt.Errorf("failed to send HTTP request to %s: %w", c.httpURL, err)
 	}
 	defer httpResp.Body.Close()
 
@@ -596,7 +613,12 @@ func (c *Connection) sendHTTPRequest(ctx context.Context, method string, params 
 	// Parse JSON-RPC response
 	var rpcResponse Response
 	if err := json.Unmarshal(responseBody, &rpcResponse); err != nil {
-		return nil, fmt.Errorf("failed to parse JSON-RPC response: %w", err)
+		// Include the response body to help debug what the server actually returned
+		bodyPreview := string(responseBody)
+		if len(bodyPreview) > 500 {
+			bodyPreview = bodyPreview[:500] + "... (truncated)"
+		}
+		return nil, fmt.Errorf("failed to parse JSON-RPC response (received non-JSON or malformed response): %w\nResponse body: %s", err, bodyPreview)
 	}
 
 	return &rpcResponse, nil
