@@ -309,3 +309,58 @@ func TestMarkdownLoggerFallback(t *testing.T) {
 	// Should not panic when logging
 	LogInfoMd("test", "This should not crash")
 }
+
+func TestMarkdownLoggerRPCFormatting(t *testing.T) {
+	tmpDir := t.TempDir()
+	logDir := filepath.Join(tmpDir, "logs")
+	fileName := "rpc-format-test.md"
+
+	err := InitMarkdownLogger(logDir, fileName)
+	if err != nil {
+		t.Fatalf("InitMarkdownLogger failed: %v", err)
+	}
+
+	// Test RPC-style pre-formatted messages (should NOT be wrapped in code blocks)
+	LogDebugMd("rpc", "**github**→`tools/list`")
+	LogDebugMd("rpc", "**safeoutputs**→`tools/call`\n\n```json\n{\n  \"id\": 1\n}\n```")
+	LogDebugMd("rpc", "**backend**←`resp`")
+
+	// Test regular messages (should use code blocks for multi-line)
+	LogInfoMd("backend", "command=/usr/bin/docker args=[run]")
+	LogInfoMd("backend", "Multi\nline\ncontent")
+
+	CloseMarkdownLogger()
+
+	// Read the log file
+	logPath := filepath.Join(logDir, fileName)
+	content, err := os.ReadFile(logPath)
+	if err != nil {
+		t.Fatalf("Failed to read log file: %v", err)
+	}
+
+	logContent := string(content)
+
+	// RPC messages should be on single lines (not wrapped in code blocks)
+	// Check that "- 🔍 rpc **github**→`tools/list`" is on one line
+	if !strings.Contains(logContent, "- 🔍 rpc **github**→`tools/list`") {
+		t.Errorf("RPC message should be on single line without extra code block wrapping")
+	}
+
+	// Check that RPC messages with JSON blocks are properly formatted
+	// The title should be on one line, followed by the JSON block
+	if !strings.Contains(logContent, "- 🔍 rpc **safeoutputs**→`tools/call`") {
+		t.Errorf("RPC message with JSON should have title on single line")
+	}
+
+	// Regular multi-line messages should still use code blocks
+	if !strings.Contains(logContent, "- ✓ **backend**\n  ```\n  command=") {
+		t.Errorf("Regular multi-line messages should still use code blocks")
+	}
+
+	// Count occurrences of nested code blocks (should not happen)
+	// A nested code block would look like: ``` \n  **server** \n ```
+	nestedPattern := "```\n  **"
+	if strings.Contains(logContent, nestedPattern) {
+		t.Errorf("Found nested code blocks - RPC messages should not be double-wrapped")
+	}
+}
