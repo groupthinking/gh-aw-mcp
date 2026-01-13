@@ -4,6 +4,9 @@ import (
 	"os"
 	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestExpandVariables(t *testing.T) {
@@ -63,16 +66,10 @@ func TestExpandVariables(t *testing.T) {
 			result, err := expandVariables(tt.input, "test.path")
 
 			if tt.shouldErr {
-				if err == nil {
-					t.Errorf("Expected error but got none")
-				}
+				assert.Error(t, err)
 			} else {
-				if err != nil {
-					t.Errorf("Unexpected error: %v", err)
-				}
-				if result != tt.expected {
-					t.Errorf("Expected %q, got %q", tt.expected, result)
-				}
+				assert.NoError(t, err, "Unexpected error")
+				assert.Equal(t, tt.expected, result, "%q, got %q")
 			}
 		})
 	}
@@ -140,17 +137,13 @@ func TestExpandEnvVariables(t *testing.T) {
 			result, err := expandEnvVariables(tt.input, tt.serverName)
 
 			if tt.shouldErr {
-				if err == nil {
-					t.Errorf("Expected error but got none")
-				}
+				assert.Error(t, err)
 				// Check error message contains server name
 				if !strings.Contains(err.Error(), tt.serverName) {
 					t.Errorf("Error should mention server name %q", tt.serverName)
 				}
 			} else {
-				if err != nil {
-					t.Errorf("Unexpected error: %v", err)
-				}
+				assert.NoError(t, err, "Unexpected error")
 				for k, v := range tt.expected {
 					if result[k] != v {
 						t.Errorf("For key %q: expected %q, got %q", k, v, result[k])
@@ -350,15 +343,12 @@ func TestValidateStdioServer(t *testing.T) {
 			err := validateServerConfig("test-server", tt.server)
 
 			if tt.shouldErr {
-				if err == nil {
-					t.Errorf("Expected error but got none")
-				} else if tt.errorMsg != "" && !strings.Contains(err.Error(), tt.errorMsg) {
+				assert.Error(t, err)
+				if tt.errorMsg != "" && err != nil && !strings.Contains(err.Error(), tt.errorMsg) {
 					t.Errorf("Expected error containing %q, got: %v", tt.errorMsg, err)
 				}
 			} else {
-				if err != nil {
-					t.Errorf("Unexpected error: %v", err)
-				}
+				assert.NoError(t, err, "Unexpected error")
 			}
 		})
 	}
@@ -441,15 +431,12 @@ func TestValidateGatewayConfig(t *testing.T) {
 			err := validateGatewayConfig(tt.gateway)
 
 			if tt.shouldErr {
-				if err == nil {
-					t.Errorf("Expected error but got none")
-				} else if tt.errorMsg != "" && !strings.Contains(err.Error(), tt.errorMsg) {
+				assert.Error(t, err)
+				if tt.errorMsg != "" && err != nil && !strings.Contains(err.Error(), tt.errorMsg) {
 					t.Errorf("Expected error containing %q, got: %v", tt.errorMsg, err)
 				}
 			} else {
-				if err != nil {
-					t.Errorf("Unexpected error: %v", err)
-				}
+				assert.NoError(t, err, "Unexpected error")
 			}
 		})
 	}
@@ -488,9 +475,7 @@ func TestLoadFromStdin_WithVariableExpansion(t *testing.T) {
 	cfg, err := LoadFromStdin()
 	os.Stdin = oldStdin
 
-	if err != nil {
-		t.Fatalf("LoadFromStdin() failed: %v", err)
-	}
+	require.NoError(t, err, "LoadFromStdin() failed")
 
 	server := cfg.Servers["github"]
 	// Check docker command is set up correctly
@@ -528,9 +513,7 @@ func TestLoadFromStdin_UndefinedVariable(t *testing.T) {
 	_, err := LoadFromStdin()
 	os.Stdin = oldStdin
 
-	if err == nil {
-		t.Fatal("Expected error for undefined variable")
-	}
+	require.Error(t, err)
 
 	if !strings.Contains(err.Error(), "UNDEFINED_GITHUB_TOKEN") {
 		t.Errorf("Error should mention the undefined variable, got: %v", err)
@@ -617,15 +600,12 @@ func TestLoadFromStdin_ValidationErrors(t *testing.T) {
 			os.Stdin = oldStdin
 
 			if tt.shouldErr {
-				if err == nil {
-					t.Errorf("Expected error but got none")
-				} else if !strings.Contains(err.Error(), tt.errorMsg) {
+				assert.Error(t, err)
+				if err != nil && !strings.Contains(err.Error(), tt.errorMsg) {
 					t.Errorf("Expected error containing %q, got: %v", tt.errorMsg, err)
 				}
 			} else {
-				if err != nil {
-					t.Errorf("Unexpected error: %v", err)
-				}
+				assert.NoError(t, err, "Unexpected error")
 			}
 		})
 	}

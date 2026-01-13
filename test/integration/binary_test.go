@@ -11,6 +11,8 @@ import (
 	"os/exec"
 	"path/filepath"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 	"time"
 )
 
@@ -73,9 +75,7 @@ func TestBinaryInvocation_RoutedMode(t *testing.T) {
 	// Test 1: Health check
 	t.Run("HealthCheck", func(t *testing.T) {
 		resp, err := http.Get(serverURL + "/health")
-		if err != nil {
-			t.Fatalf("Health check failed: %v", err)
-		}
+		require.NoError(t, err, "Health check failed")
 		defer resp.Body.Close()
 
 		if resp.StatusCode != http.StatusOK {
@@ -261,9 +261,7 @@ func TestBinaryInvocation_ConfigStdin(t *testing.T) {
 
 	// Test health check
 	resp, err := http.Get(serverURL + "/health")
-	if err != nil {
-		t.Fatalf("Health check failed: %v", err)
-	}
+	require.NoError(t, err, "Health check failed")
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
@@ -414,9 +412,7 @@ func TestBinaryInvocation_PipeInputOutput(t *testing.T) {
 		},
 	}
 	configBytes, err := json.Marshal(configJSON)
-	if err != nil {
-		t.Fatalf("Failed to marshal config: %v", err)
-	}
+	require.NoError(t, err, "Failed to marshal config")
 
 	// Setup pipes for both stdin and stdout
 	var stdout, stderr bytes.Buffer
@@ -502,9 +498,7 @@ func TestBinaryInvocation_NoConfigRequired(t *testing.T) {
 	output, err := cmd.CombinedOutput()
 
 	// Should exit with error
-	if err == nil {
-		t.Fatal("Expected error when running without config flags, but command succeeded")
-	}
+	require.Error(t, err)
 
 	outputStr := string(output)
 	// Should contain the error message about requiring config
@@ -530,9 +524,7 @@ func TestBinaryInvocation_Version(t *testing.T) {
 
 	cmd := exec.Command(binaryPath, "--version")
 	output, err := cmd.CombinedOutput()
-	if err != nil {
-		t.Fatalf("Failed to get version: %v", err)
-	}
+	require.NoError(t, err, "Failed to get version")
 
 	outputStr := string(output)
 	if outputStr == "" {
@@ -579,9 +571,7 @@ func createTempConfig(t *testing.T, servers map[string]interface{}) string {
 	t.Helper()
 
 	tmpFile, err := os.CreateTemp("", "awmg-test-config-*.toml")
-	if err != nil {
-		t.Fatalf("Failed to create temp config: %v", err)
-	}
+	require.NoError(t, err, "Failed to create temp config")
 	defer tmpFile.Close()
 
 	// Write TOML format
@@ -634,14 +624,10 @@ func sendMCPRequest(t *testing.T, url string, authToken string, payload map[stri
 	t.Helper()
 
 	jsonData, err := json.Marshal(payload)
-	if err != nil {
-		t.Fatalf("Failed to marshal request: %v", err)
-	}
+	require.NoError(t, err, "Failed to marshal request")
 
 	req, err := http.NewRequest("POST", url, bytes.NewBuffer(jsonData))
-	if err != nil {
-		t.Fatalf("Failed to create request: %v", err)
-	}
+	require.NoError(t, err, "Failed to create request")
 
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "application/json, text/event-stream")
@@ -651,15 +637,11 @@ func sendMCPRequest(t *testing.T, url string, authToken string, payload map[stri
 
 	client := &http.Client{Timeout: 5 * time.Second}
 	resp, err := client.Do(req)
-	if err != nil {
-		t.Fatalf("Request failed: %v", err)
-	}
+	require.NoError(t, err, "Request failed")
 	defer resp.Body.Close()
 
 	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		t.Fatalf("Failed to read response: %v", err)
-	}
+	require.NoError(t, err, "Failed to read response")
 
 	if resp.StatusCode != http.StatusOK {
 		t.Logf("Response status: %d, body: %s", resp.StatusCode, string(body))
@@ -722,9 +704,7 @@ func TestBinaryInvocation_LogFileCreation(t *testing.T) {
 
 	// Create a temporary directory for logs
 	tmpLogDir, err := os.MkdirTemp("", "awmg-log-test-*")
-	if err != nil {
-		t.Fatalf("Failed to create temp log directory: %v", err)
-	}
+	require.NoError(t, err, "Failed to create temp log directory")
 	defer os.RemoveAll(tmpLogDir)
 
 	// Create a temporary config file
@@ -782,9 +762,7 @@ func TestBinaryInvocation_LogFileCreation(t *testing.T) {
 
 	// Read the log file to verify it contains log entries
 	logContent, err := os.ReadFile(logFilePath)
-	if err != nil {
-		t.Fatalf("Failed to read log file: %v", err)
-	}
+	require.NoError(t, err, "Failed to read log file")
 
 	if len(logContent) == 0 {
 		t.Error("Log file is empty")
@@ -810,9 +788,7 @@ func TestBinaryInvocation_LogFileCreation(t *testing.T) {
 
 	// Verify log file permissions (should be 0644)
 	fileInfo, err := os.Stat(logFilePath)
-	if err != nil {
-		t.Fatalf("Failed to stat log file: %v", err)
-	}
+	require.NoError(t, err, "Failed to stat log file")
 
 	perms := fileInfo.Mode().Perm()
 	expectedPerms := os.FileMode(0644)
@@ -825,16 +801,12 @@ func TestBinaryInvocation_LogFileCreation(t *testing.T) {
 	// Test that the log file is readable by other processes
 	// Try to open and read the file while the server is still running
 	readFile, err := os.Open(logFilePath)
-	if err != nil {
-		t.Fatalf("Failed to open log file for reading (concurrent access): %v", err)
-	}
+	require.NoError(t, err, "Failed to open log file for reading (concurrent access)")
 	defer readFile.Close()
 
 	// Read content
 	concurrentRead, err := io.ReadAll(readFile)
-	if err != nil {
-		t.Fatalf("Failed to read log file concurrently: %v", err)
-	}
+	require.NoError(t, err, "Failed to read log file concurrently")
 
 	if len(concurrentRead) == 0 {
 		t.Error("Concurrent read returned empty content")
@@ -853,9 +825,7 @@ func TestBinaryInvocation_LogFileCreation(t *testing.T) {
 
 	// Read the log file again to verify new entries were added (or at least it's still readable)
 	newLogContent, err := os.ReadFile(logFilePath)
-	if err != nil {
-		t.Fatalf("Failed to read log file after API call: %v", err)
-	}
+	require.NoError(t, err, "Failed to read log file after API call")
 
 	// Log file should either grow or stay the same (health endpoint may not always log)
 	if len(newLogContent) >= len(logContent) {
@@ -942,9 +912,7 @@ func TestBinaryInvocation_LogDirEnvironmentVariable(t *testing.T) {
 
 	// Read the log file to verify it contains log entries
 	logContent, err := os.ReadFile(logFilePath)
-	if err != nil {
-		t.Fatalf("Failed to read log file: %v", err)
-	}
+	require.NoError(t, err, "Failed to read log file")
 
 	if len(logContent) == 0 {
 		t.Error("Log file is empty")

@@ -3,6 +3,8 @@ package timeutil
 import (
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestFormatDuration(t *testing.T) {
@@ -158,9 +160,7 @@ func TestFormatDuration(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result := FormatDuration(tt.duration)
-			if result != tt.expected {
-				t.Errorf("FormatDuration(%v) = %q, want %q", tt.duration, result, tt.expected)
-			}
+			assert.Equal(t, tt.expected, result, "FormatDuration(%v)", tt.duration)
 		})
 	}
 }

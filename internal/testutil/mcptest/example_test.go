@@ -3,6 +3,8 @@ package mcptest_test
 import (
 	"context"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 	"time"
 
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
@@ -86,21 +88,15 @@ func TestCompleteWorkflow(t *testing.T) {
 
 	// Step 4: Create transport and validator client
 	transport, err := driver.CreateStdioTransport("weather")
-	if err != nil {
-		t.Fatalf("Failed to create transport: %v", err)
-	}
+	require.NoError(t, err, "Failed to create transport")
 
 	validator, err := mcptest.NewValidatorClient(ctx, transport)
-	if err != nil {
-		t.Fatalf("Failed to create validator client: %v", err)
-	}
+	require.NoError(t, err, "Failed to create validator client")
 	defer validator.Close()
 
 	// Step 5: Validate server information
 	serverInfo := validator.GetServerInfo()
-	if serverInfo == nil {
-		t.Fatal("Server info should not be nil")
-	}
+	require.NotNil(t, serverInfo, "Server info should not be nil")
 
 	if serverInfo.Name != "weather-service" {
 		t.Errorf("Expected server name 'weather-service', got '%s'", serverInfo.Name)
@@ -109,9 +105,7 @@ func TestCompleteWorkflow(t *testing.T) {
 
 	// Step 6: List and validate tools
 	tools, err := validator.ListTools()
-	if err != nil {
-		t.Fatalf("Failed to list tools: %v", err)
-	}
+	require.NoError(t, err, "Failed to list tools")
 
 	if len(tools) != 1 {
 		t.Errorf("Expected 1 tool, got %d", len(tools))
@@ -134,9 +128,7 @@ func TestCompleteWorkflow(t *testing.T) {
 
 	// Step 7: List and validate resources
 	resources, err := validator.ListResources()
-	if err != nil {
-		t.Fatalf("Failed to list resources: %v", err)
-	}
+	require.NoError(t, err, "Failed to list resources")
 
 	if len(resources) != 1 {
 		t.Errorf("Expected 1 resource, got %d", len(resources))
@@ -170,9 +162,7 @@ func TestCompleteWorkflow(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			result, err := validator.CallTool("get_weather", tc.args)
-			if err != nil {
-				t.Fatalf("Failed to call tool: %v", err)
-			}
+			require.NoError(t, err, "Failed to call tool")
 
 			if result.IsError {
 				t.Error("Tool returned an error")
@@ -197,9 +187,7 @@ func TestCompleteWorkflow(t *testing.T) {
 
 	// Step 9: Read resource content
 	resourceResult, err := validator.ReadResource("weather://cities")
-	if err != nil {
-		t.Fatalf("Failed to read resource: %v", err)
-	}
+	require.NoError(t, err, "Failed to read resource")
 
 	if len(resourceResult.Contents) != 1 {
 		t.Errorf("Expected 1 content item, got %d", len(resourceResult.Contents))

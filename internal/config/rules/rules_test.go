@@ -3,6 +3,8 @@ package rules
 import (
 	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestPortRange(t *testing.T) {
@@ -77,9 +79,7 @@ func TestPortRange(t *testing.T) {
 					t.Errorf("Expected JSONPath %q, got %q", tt.jsonPath, err.JSONPath)
 				}
 			} else {
-				if err != nil {
-					t.Errorf("Unexpected error: %v", err)
-				}
+				assert.Nil(t, err, "Unexpected error")
 			}
 		})
 	}
@@ -152,9 +152,7 @@ func TestTimeoutPositive(t *testing.T) {
 					t.Errorf("Expected Field %q, got %q", tt.fieldName, err.Field)
 				}
 			} else {
-				if err != nil {
-					t.Errorf("Unexpected error: %v", err)
-				}
+				assert.Nil(t, err, "Unexpected error")
 			}
 		})
 	}
@@ -260,9 +258,7 @@ func TestMountFormat(t *testing.T) {
 					t.Errorf("Expected JSONPath %q, got %q", expectedPath, err.JSONPath)
 				}
 			} else {
-				if err != nil {
-					t.Errorf("Unexpected error: %v", err)
-				}
+				assert.Nil(t, err, "Unexpected error")
 			}
 		})
 	}

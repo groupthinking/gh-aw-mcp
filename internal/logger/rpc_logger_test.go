@@ -6,6 +6,9 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestTruncateAndSanitize(t *testing.T) {
@@ -101,15 +104,11 @@ func TestExtractEssentialFields(t *testing.T) {
 			result := extractEssentialFields([]byte(tt.payload))
 
 			if tt.wantKeys == nil {
-				if result != nil {
-					t.Errorf("Expected nil result for invalid JSON, got: %v", result)
-				}
+				assert.Nil(t, result, "Expected nil result for invalid JSON")
 				return
 			}
 
-			if result == nil {
-				t.Fatalf("Expected result map, got nil")
-			}
+			require.NotNil(t, result, "Expected result map, got nil")
 
 			for _, key := range tt.wantKeys {
 				if _, ok := result[key]; !ok {
@@ -273,9 +272,7 @@ func TestFormatRPCMessageMarkdown(t *testing.T) {
 			}
 
 			for _, notExpected := range tt.notWant {
-				if strings.Contains(result, notExpected) {
-					t.Errorf("Expected result NOT to contain %q, got:\n%s", notExpected, result)
-				}
+				assert.False(t, strings.Contains(result, notExpected), "Expected result NOT to contain %q, got:\n%s")
 			}
 		})
 	}
@@ -351,13 +348,9 @@ func TestFormatJSONWithoutFields(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			result, isValid, isEmpty := formatJSONWithoutFields(tt.input, tt.fieldsToRemove)
 
-			if isValid != tt.wantValid {
-				t.Errorf("Expected isValid=%v, got %v", tt.wantValid, isValid)
-			}
+			assert.Equal(t, tt.wantValid, isValid, "isValid=%v, got %v")
 
-			if isEmpty != tt.wantEmpty {
-				t.Errorf("Expected isEmpty=%v, got %v", tt.wantEmpty, isEmpty)
-			}
+			assert.Equal(t, tt.wantEmpty, isEmpty, "isEmpty=%v, got %v")
 
 			for _, want := range tt.wantContains {
 				if !strings.Contains(result, want) {
@@ -366,9 +359,7 @@ func TestFormatJSONWithoutFields(t *testing.T) {
 			}
 
 			for _, notWant := range tt.wantNotContain {
-				if strings.Contains(result, notWant) {
-					t.Errorf("Expected result NOT to contain %q, got:\n%s", notWant, result)
-				}
+				assert.False(t, strings.Contains(result, notWant), "Expected result NOT to contain %q, got:\n%s")
 			}
 		})
 	}
@@ -400,9 +391,7 @@ func TestLogRPCRequest(t *testing.T) {
 	// Check text log
 	textLog := filepath.Join(logDir, "test.log")
 	textContent, err := os.ReadFile(textLog)
-	if err != nil {
-		t.Fatalf("Failed to read text log: %v", err)
-	}
+	require.NoError(t, err, "Failed to read text log")
 
 	textStr := string(textContent)
 	expectedInText := []string{"github→tools/list", "58b"}
@@ -415,9 +404,7 @@ func TestLogRPCRequest(t *testing.T) {
 	// Check markdown log
 	mdLog := filepath.Join(logDir, "test.md")
 	mdContent, err := os.ReadFile(mdLog)
-	if err != nil {
-		t.Fatalf("Failed to read markdown log: %v", err)
-	}
+	require.NoError(t, err, "Failed to read markdown log")
 
 	mdStr := string(mdContent)
 	expectedInMd := []string{"**github**→`tools/list`"}
@@ -455,9 +442,7 @@ func TestLogRPCResponse(t *testing.T) {
 	// Check text log
 	textLog := filepath.Join(logDir, "test.log")
 	textContent, err := os.ReadFile(textLog)
-	if err != nil {
-		t.Fatalf("Failed to read text log: %v", err)
-	}
+	require.NoError(t, err, "Failed to read text log")
 
 	textStr := string(textContent)
 	expectedInText := []string{"github←resp", "err:backend connection failed"}
@@ -470,9 +455,7 @@ func TestLogRPCResponse(t *testing.T) {
 	// Check markdown log
 	mdLog := filepath.Join(logDir, "test.md")
 	mdContent, err := os.ReadFile(mdLog)
-	if err != nil {
-		t.Fatalf("Failed to read markdown log: %v", err)
-	}
+	require.NoError(t, err, "Failed to read markdown log")
 
 	mdStr := string(mdContent)
 	expectedInMd := []string{"**github**←`resp`", "⚠️`backend connection failed`"}
@@ -509,32 +492,24 @@ func TestLogRPCRequestWithSecrets(t *testing.T) {
 	// Check text log - should NOT contain the actual token
 	textLog := filepath.Join(logDir, "test.log")
 	textContent, err := os.ReadFile(textLog)
-	if err != nil {
-		t.Fatalf("Failed to read text log: %v", err)
-	}
+	require.NoError(t, err, "Failed to read text log")
 
 	textStr := string(textContent)
 	if strings.Contains(textStr, "ghp_1234567890123456789012345678901234567890") {
 		t.Errorf("Text log contains secret that should be redacted")
 	}
-	if !strings.Contains(textStr, "[REDACTED]") {
-		t.Errorf("Text log does not contain [REDACTED] marker")
-	}
+	assert.True(t, strings.Contains(textStr, "[REDACTED]"), "Text log does not contain [REDACTED] marker")
 
 	// Check markdown log - should NOT contain the actual token
 	mdLog := filepath.Join(logDir, "test.md")
 	mdContent, err := os.ReadFile(mdLog)
-	if err != nil {
-		t.Fatalf("Failed to read markdown log: %v", err)
-	}
+	require.NoError(t, err, "Failed to read markdown log")
 
 	mdStr := string(mdContent)
 	if strings.Contains(mdStr, "ghp_1234567890123456789012345678901234567890") {
 		t.Errorf("Markdown log contains secret that should be redacted")
 	}
-	if !strings.Contains(mdStr, "[REDACTED]") {
-		t.Errorf("Markdown log does not contain [REDACTED] marker")
-	}
+	assert.True(t, strings.Contains(mdStr, "[REDACTED]"), "Markdown log does not contain [REDACTED] marker")
 }
 
 func TestLogRPCRequestPayloadTruncation(t *testing.T) {
@@ -564,14 +539,10 @@ func TestLogRPCRequestPayloadTruncation(t *testing.T) {
 	// Check text log - payload should be truncated at 10KB
 	textLog := filepath.Join(logDir, "test.log")
 	textContent, err := os.ReadFile(textLog)
-	if err != nil {
-		t.Fatalf("Failed to read text log: %v", err)
-	}
+	require.NoError(t, err, "Failed to read text log")
 
 	textStr := string(textContent)
-	if !strings.Contains(textStr, "...") {
-		t.Errorf("Text log does not show truncation marker")
-	}
+	assert.True(t, strings.Contains(textStr, "..."), "Text log does not show truncation marker")
 
 	// The logged payload should not contain the full 12KB of x's
 	// (it should be truncated to 10KB + "...")
@@ -583,14 +554,10 @@ func TestLogRPCRequestPayloadTruncation(t *testing.T) {
 	// Check markdown log - should be truncated at 512 chars
 	mdLog := filepath.Join(logDir, "test.md")
 	mdContent, err := os.ReadFile(mdLog)
-	if err != nil {
-		t.Fatalf("Failed to read markdown log: %v", err)
-	}
+	require.NoError(t, err, "Failed to read markdown log")
 
 	mdStr := string(mdContent)
-	if !strings.Contains(mdStr, "...") {
-		t.Errorf("Markdown log does not show truncation marker")
-	}
+	assert.True(t, strings.Contains(mdStr, "..."), "Markdown log does not show truncation marker")
 
 	// Markdown should have much less data (truncated at 512 chars)
 	xCountMd := strings.Count(mdStr, strings.Repeat("x", 600))

@@ -7,14 +7,15 @@ import (
 	"strings"
 	"sync"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestCloseLogFile_NilFile(t *testing.T) {
 	var mu sync.Mutex
 	err := closeLogFile(nil, &mu, "test")
-	if err != nil {
-		t.Errorf("Expected nil error for nil file, got: %v", err)
-	}
+	assert.NoError(t, err, "Expected nil error for nil file, got")
 }
 
 func TestCloseLogFile_ValidFile(t *testing.T) {
@@ -23,9 +24,7 @@ func TestCloseLogFile_ValidFile(t *testing.T) {
 
 	// Create and write to a file
 	file, err := os.Create(logPath)
-	if err != nil {
-		t.Fatalf("Failed to create test file: %v", err)
-	}
+	require.NoError(t, err, "Failed to create test file")
 
 	// Write some content
 	if _, err := file.WriteString("test content\n"); err != nil {
@@ -40,9 +39,7 @@ func TestCloseLogFile_ValidFile(t *testing.T) {
 
 	// Verify file was actually closed and flushed
 	content, err := os.ReadFile(logPath)
-	if err != nil {
-		t.Fatalf("Failed to read file after close: %v", err)
-	}
+	require.NoError(t, err, "Failed to read file after close")
 
 	if !strings.Contains(string(content), "test content") {
 		t.Errorf("File content not preserved: %s", content)
@@ -54,9 +51,7 @@ func TestCloseLogFile_AlreadyClosedFile(t *testing.T) {
 	logPath := filepath.Join(tmpDir, "test.log")
 
 	file, err := os.Create(logPath)
-	if err != nil {
-		t.Fatalf("Failed to create test file: %v", err)
-	}
+	require.NoError(t, err, "Failed to create test file")
 
 	// Close the file first
 	if err := file.Close(); err != nil {
@@ -117,9 +112,7 @@ func TestCloseLogFile_PreservesMutexSemantics(t *testing.T) {
 	logPath := filepath.Join(tmpDir, "test.log")
 
 	file, err := os.Create(logPath)
-	if err != nil {
-		t.Fatalf("Failed to create test file: %v", err)
-	}
+	require.NoError(t, err, "Failed to create test file")
 
 	var mu sync.Mutex
 
@@ -128,9 +121,7 @@ func TestCloseLogFile_PreservesMutexSemantics(t *testing.T) {
 	err = closeLogFile(file, &mu, "test")
 	mu.Unlock()
 
-	if err != nil {
-		t.Errorf("closeLogFile failed with locked mutex: %v", err)
-	}
+	assert.NoError(t, err, "closeLogFile failed with locked mutex")
 }
 
 func TestCloseLogFile_LoggerNameInErrorMessages(t *testing.T) {
@@ -139,9 +130,7 @@ func TestCloseLogFile_LoggerNameInErrorMessages(t *testing.T) {
 	logPath := filepath.Join(tmpDir, "test.log")
 
 	file, err := os.Create(logPath)
-	if err != nil {
-		t.Fatalf("Failed to create test file: %v", err)
-	}
+	require.NoError(t, err, "Failed to create test file")
 
 	// Close normally - this test mainly validates the function signature
 	// In a real scenario, we'd capture log output to verify the logger name appears
@@ -156,9 +145,7 @@ func TestCloseLogFile_EmptyFile(t *testing.T) {
 	logPath := filepath.Join(tmpDir, "empty.log")
 
 	file, err := os.Create(logPath)
-	if err != nil {
-		t.Fatalf("Failed to create test file: %v", err)
-	}
+	require.NoError(t, err, "Failed to create test file")
 
 	// Don't write anything, just close
 	var mu sync.Mutex
@@ -168,9 +155,7 @@ func TestCloseLogFile_EmptyFile(t *testing.T) {
 
 	// Verify file exists and is empty
 	info, err := os.Stat(logPath)
-	if err != nil {
-		t.Fatalf("Failed to stat file after close: %v", err)
-	}
+	require.NoError(t, err, "Failed to stat file after close")
 
 	if info.Size() != 0 {
 		t.Errorf("Expected empty file, got size: %d", info.Size())

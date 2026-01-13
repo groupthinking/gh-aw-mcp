@@ -6,6 +6,8 @@ import (
 	"os"
 	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestSlogAdapter(t *testing.T) {
@@ -88,9 +90,7 @@ func TestSlogAdapterDisabled(t *testing.T) {
 	os.Stderr = oldStderr
 
 	// Verify no output
-	if output != "" {
-		t.Errorf("Expected no output when logger is disabled, got: %s", output)
-	}
+	assert.Equal(t, "", output, "no output when logger is disabled, got: %s")
 }
 
 func TestNewSlogLoggerWithHandler(t *testing.T) {

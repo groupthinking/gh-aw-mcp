@@ -7,6 +7,8 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 	"time"
 
 	"github.com/githubnext/gh-aw-mcpg/internal/config"
@@ -133,9 +135,7 @@ func TestHTTPError_ConnectionRefused(t *testing.T) {
 
 	// Use a port that's not listening (find a free port then don't use it)
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatalf("Failed to find free port: %v", err)
-	}
+	require.NoError(t, err, "Failed to find free port")
 	addr := listener.Addr().String()
 	listener.Close() // Close so nothing is listening
 
@@ -169,9 +169,7 @@ func TestHTTPError_DroppedConnection(t *testing.T) {
 			t.Fatal("Server doesn't support hijacking")
 		}
 		conn, _, err := hj.Hijack()
-		if err != nil {
-			t.Fatalf("Failed to hijack connection: %v", err)
-		}
+		require.NoError(t, err, "Failed to hijack connection")
 		conn.Close() // Drop the connection
 	}))
 	defer mockServer.Close()
@@ -320,9 +318,7 @@ func TestHTTPError_LauncherIntegration(t *testing.T) {
 
 	// Try to get or launch the failing backend
 	_, err := launcher.GetOrLaunch(l, "failing-backend")
-	if err == nil {
-		t.Fatal("Expected launcher to fail due to backend error, but it succeeded")
-	}
+	require.NotNil(t, err, "Expected launcher to fail due to backend error, but it succeeded")
 
 	// Verify error is properly propagated through launcher
 	if err != nil {
@@ -375,18 +371,14 @@ func TestHTTPError_RequestFailure(t *testing.T) {
 	// Connect successfully
 	ctx := context.Background()
 	conn, err := mcp.NewHTTPConnection(ctx, mockServer.URL, map[string]string{"X-Test": "test"})
-	if err != nil {
-		t.Fatalf("Connection failed: %v", err)
-	}
+	require.NoError(t, err, "Connection failed")
 	defer conn.Close()
 
 	t.Log("✓ Connection established successfully")
 
 	// Try to make a request that should fail
 	_, err = conn.SendRequest("tools/list", nil)
-	if err == nil {
-		t.Fatal("Expected request to fail, but it succeeded")
-	}
+	require.NotNil(t, err, "Expected request to fail, but it succeeded")
 
 	// Verify error is properly propagated
 	if err != nil {

@@ -94,9 +94,21 @@ make test-all
 
 ### Linting
 
-Run linters (go vet and gofmt check):
+Run all linters (go vet, gofmt check, and golangci-lint):
 ```bash
 make lint
+```
+
+This runs:
+- `go vet` for common code issues
+- `gofmt` check for code formatting
+- `golangci-lint` for additional static analysis (misspell, unconvert)
+
+**Note**: `golangci-lint` is automatically installed by `make install`. If you see a warning about golangci-lint not being found, run `make install` first.
+
+To run golangci-lint directly with all configured linters:
+```bash
+golangci-lint run --timeout=5m
 ```
 
 ### Formatting

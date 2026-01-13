@@ -10,7 +10,7 @@ Quick reference for AI agents working with MCP Gateway (Go-based MCP proxy serve
 **Test-Unit**: `make test-unit` (run unit tests only)  
 **Test-Integration**: `make test-integration` (run binary integration tests, requires build)  
 **Test-All**: `make test-all` (run both unit and integration tests)  
-**Lint**: `make lint` (runs go vet and gofmt checks)  
+**Lint**: `make lint` (runs go vet, gofmt checks, and golangci-lint)  
 **Coverage**: `make coverage` (unit tests with coverage report)  
 **Format**: `make format` (auto-format code with gofmt)  
 **Clean**: `make clean` (remove build artifacts)  
@@ -85,6 +85,20 @@ args = ["run", "--rm", "-e", "GITHUB_PERSONAL_ACCESS_TOKEN", "-i", "ghcr.io/gith
 - Always handle errors explicitly
 - Godoc comments for exports
 - Mock external dependencies (Docker, network)
+
+## Linting
+
+**golangci-lint** is integrated and runs as part of `make lint`:
+- Configuration: `.golangci.yml` (version 2 format)
+- Enabled linters: `misspell`, `unconvert`
+- Disabled linters: `gosec`, `testifylint`, `errcheck`, `gocritic`, `revive`
+- Install: `make install` (installs golangci-lint v2.8.0)
+- Run manually: `golangci-lint run --timeout=5m`
+
+**Note**: Some linters (gosec, testifylint) are disabled to minimize noise. Enable them for stricter checks:
+```bash
+golangci-lint run --enable=gosec,testifylint --timeout=5m
+```
 
 ## Test Structure
 

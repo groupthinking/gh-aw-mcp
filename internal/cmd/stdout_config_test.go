@@ -6,6 +6,8 @@ import (
 	"os"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/githubnext/gh-aw-mcpg/internal/config"
 )
 
@@ -117,9 +119,7 @@ func TestWriteGatewayConfigToStdout(t *testing.T) {
 			// Write configuration to buffer
 			err := writeGatewayConfig(tt.cfg, tt.listenAddr, tt.mode, &buf)
 
-			if err != nil {
-				t.Fatalf("writeGatewayConfig() error = %v", err)
-			}
+			require.NoError(t, err, "writeGatewayConfig() error = ")
 			output := buf.String()
 
 			// Parse JSON output
@@ -216,9 +216,7 @@ func TestWriteGatewayConfigToStdout_EmptyConfig(t *testing.T) {
 
 	err := writeGatewayConfig(cfg, "127.0.0.1:8080", "routed", &buf)
 
-	if err != nil {
-		t.Fatalf("writeGatewayConfig() error = %v", err)
-	}
+	require.NoError(t, err, "writeGatewayConfig() error = ")
 
 	// Parse output
 	var result map[string]interface{}
@@ -246,9 +244,7 @@ func TestWriteGatewayConfigToStdout_JSONFormat(t *testing.T) {
 
 	err := writeGatewayConfig(cfg, "localhost:3000", "routed", &buf)
 
-	if err != nil {
-		t.Fatalf("writeGatewayConfig() error = %v", err)
-	}
+	require.NoError(t, err, "writeGatewayConfig() error = ")
 
 	output := buf.String()
 
@@ -276,9 +272,7 @@ func TestWriteGatewayConfigToStdout_WithPipe(t *testing.T) {
 
 	// Create a pipe (simulates writing to /dev/stdout in containerized environment)
 	r, w, err := os.Pipe()
-	if err != nil {
-		t.Fatalf("Failed to create pipe: %v", err)
-	}
+	require.NoError(t, err, "Failed to create pipe")
 	defer r.Close()
 	defer w.Close()
 

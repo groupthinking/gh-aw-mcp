@@ -3,6 +3,8 @@ package config
 import (
 	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestValidateJSONSchema(t *testing.T) {
@@ -308,15 +310,12 @@ func TestValidateJSONSchema(t *testing.T) {
 			err := validateJSONSchema([]byte(tt.config))
 
 			if tt.shouldErr {
-				if err == nil {
-					t.Errorf("Expected error but got none")
-				} else if tt.errorMsg != "" && !strings.Contains(err.Error(), tt.errorMsg) {
+				assert.Error(t, err)
+				if tt.errorMsg != "" && err != nil && !strings.Contains(err.Error(), tt.errorMsg) {
 					t.Errorf("Expected error containing %q, got: %v", tt.errorMsg, err)
 				}
 			} else {
-				if err != nil {
-					t.Errorf("Unexpected error: %v", err)
-				}
+				assert.NoError(t, err, "Unexpected error")
 			}
 		})
 	}
@@ -516,15 +515,12 @@ func TestValidateStringPatterns(t *testing.T) {
 			err := validateStringPatterns(tt.config)
 
 			if tt.shouldErr {
-				if err == nil {
-					t.Errorf("Expected error but got none")
-				} else if tt.errorMsg != "" && !strings.Contains(err.Error(), tt.errorMsg) {
+				assert.Error(t, err)
+				if tt.errorMsg != "" && err != nil && !strings.Contains(err.Error(), tt.errorMsg) {
 					t.Errorf("Expected error containing %q, got: %v", tt.errorMsg, err)
 				}
 			} else {
-				if err != nil {
-					t.Errorf("Unexpected error: %v", err)
-				}
+				assert.NoError(t, err, "Unexpected error")
 			}
 		})
 	}

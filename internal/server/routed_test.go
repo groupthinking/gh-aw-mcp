@@ -7,6 +7,9 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/githubnext/gh-aw-mcpg/internal/config"
@@ -23,9 +26,7 @@ func TestCloseEndpoint_Success(t *testing.T) {
 
 	ctx := context.Background()
 	us, err := NewUnified(ctx, cfg)
-	if err != nil {
-		t.Fatalf("NewUnified() failed: %v", err)
-	}
+	require.NoError(t, err, "NewUnified() failed")
 	defer us.Close()
 
 	// Enable test mode to prevent os.Exit()
@@ -66,9 +67,7 @@ func TestCloseEndpoint_Success(t *testing.T) {
 	}
 
 	// Verify server is marked as shutdown
-	if !us.IsShutdown() {
-		t.Error("Expected server to be marked as shutdown")
-	}
+	assert.True(t, us.IsShutdown(), "Expected server to be marked as shutdown")
 }
 
 // TestCloseEndpoint_Idempotency tests that subsequent calls return 410 Gone
@@ -81,9 +80,7 @@ func TestCloseEndpoint_Idempotency(t *testing.T) {
 
 	ctx := context.Background()
 	us, err := NewUnified(ctx, cfg)
-	if err != nil {
-		t.Fatalf("NewUnified() failed: %v", err)
-	}
+	require.NoError(t, err, "NewUnified() failed")
 	defer us.Close()
 
 	// Enable test mode to prevent os.Exit()
@@ -129,9 +126,7 @@ func TestCloseEndpoint_MethodNotAllowed(t *testing.T) {
 
 	ctx := context.Background()
 	us, err := NewUnified(ctx, cfg)
-	if err != nil {
-		t.Fatalf("NewUnified() failed: %v", err)
-	}
+	require.NoError(t, err, "NewUnified() failed")
 	defer us.Close()
 
 	// Create routed mode server
@@ -155,9 +150,7 @@ func TestCloseEndpoint_RequiresAuth(t *testing.T) {
 
 	ctx := context.Background()
 	us, err := NewUnified(ctx, cfg)
-	if err != nil {
-		t.Fatalf("NewUnified() failed: %v", err)
-	}
+	require.NoError(t, err, "NewUnified() failed")
 	defer us.Close()
 
 	// Enable test mode to prevent os.Exit()
@@ -195,9 +188,7 @@ func TestCreateFilteredServer_ToolFiltering(t *testing.T) {
 
 	ctx := context.Background()
 	us, err := NewUnified(ctx, cfg)
-	if err != nil {
-		t.Fatalf("NewUnified() failed: %v", err)
-	}
+	require.NoError(t, err, "NewUnified() failed")
 	defer us.Close()
 
 	// Add test tools - Handler is not tested directly, just use nil
@@ -258,9 +249,7 @@ func TestGetToolHandler(t *testing.T) {
 
 	ctx := context.Background()
 	us, err := NewUnified(ctx, cfg)
-	if err != nil {
-		t.Fatalf("NewUnified() failed: %v", err)
-	}
+	require.NoError(t, err, "NewUnified() failed")
 	defer us.Close()
 
 	// Create a mock handler with correct signature
@@ -280,9 +269,7 @@ func TestGetToolHandler(t *testing.T) {
 
 	// Test retrieval with non-prefixed name (routed mode format)
 	handler := us.GetToolHandler("github", "test_tool")
-	if handler == nil {
-		t.Fatal("GetToolHandler() returned nil for non-prefixed tool name")
-	}
+	require.NotNil(t, handler, "GetToolHandler() returned nil for non-prefixed tool name")
 
 	// Test non-existent tool
 	handler = us.GetToolHandler("github", "nonexistent_tool")
@@ -307,16 +294,12 @@ func TestCreateHTTPServerForRoutedMode_ServerIDs(t *testing.T) {
 
 	ctx := context.Background()
 	us, err := NewUnified(ctx, cfg)
-	if err != nil {
-		t.Fatalf("NewUnified() failed: %v", err)
-	}
+	require.NoError(t, err, "NewUnified() failed")
 	defer us.Close()
 
 	// Create routed mode server
 	httpServer := CreateHTTPServerForRoutedMode("127.0.0.1:8000", us, "")
-	if httpServer == nil {
-		t.Fatal("CreateHTTPServerForRoutedMode() returned nil")
-	}
+	require.NotNil(t, httpServer, "CreateHTTPServerForRoutedMode() returned nil")
 
 	// Verify server IDs are correctly set up
 	serverIDs := us.GetServerIDs()
@@ -343,9 +326,7 @@ func TestRoutedMode_SysToolsBackend_DIFCDisabled(t *testing.T) {
 
 	ctx := context.Background()
 	us, err := NewUnified(ctx, cfg)
-	if err != nil {
-		t.Fatalf("NewUnified() failed: %v", err)
-	}
+	require.NoError(t, err, "NewUnified() failed")
 	defer us.Close()
 
 	// Verify sys tools are NOT registered when DIFC is disabled
@@ -366,9 +347,7 @@ func TestRoutedMode_SysToolsBackend_DIFCEnabled(t *testing.T) {
 
 	ctx := context.Background()
 	us, err := NewUnified(ctx, cfg)
-	if err != nil {
-		t.Fatalf("NewUnified() failed: %v", err)
-	}
+	require.NoError(t, err, "NewUnified() failed")
 	defer us.Close()
 
 	// Verify sys tools exist when DIFC is enabled
