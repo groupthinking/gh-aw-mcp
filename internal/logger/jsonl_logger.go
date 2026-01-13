@@ -4,9 +4,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"path/filepath"
 	"sync"
 	"time"
+
+	"github.com/githubnext/gh-aw-mcpg/internal/logger/sanitize"
 )
 
 // JSONLLogger manages logging RPC messages to a JSONL file (one JSON object per line)
@@ -49,18 +50,10 @@ func InitJSONLLogger(logDir, fileName string) error {
 		fileName: fileName,
 	}
 
-	// Try to create the log directory if it doesn't exist
-	if err := os.MkdirAll(logDir, 0755); err != nil {
-		// If we can't create the directory, just return without setting up the logger
-		// This allows the gateway to continue running even if JSONL logging fails
-		return fmt.Errorf("failed to create log directory: %w", err)
-	}
-
-	// Try to open the log file
-	logPath := filepath.Join(logDir, fileName)
-	file, err := os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+	// Try to initialize the log file
+	file, err := initLogFile(logDir, fileName, os.O_APPEND)
 	if err != nil {
-		return fmt.Errorf("failed to open log file: %w", err)
+		return err
 	}
 
 	jl.logFile = file
@@ -75,48 +68,15 @@ func (jl *JSONLLogger) Close() error {
 	jl.mu.Lock()
 	defer jl.mu.Unlock()
 
-	if jl.logFile != nil {
-		// Sync any remaining buffered data before closing
-		if err := jl.logFile.Sync(); err != nil {
-			// Log sync errors but continue with close
-			return err
-		}
-		return jl.logFile.Close()
-	}
-	return nil
+	return closeLogFile(jl.logFile, &jl.mu, "JSONL")
 }
 
 // sanitizePayload sanitizes a payload by applying regex patterns to the entire string
 // It takes raw bytes, applies regex sanitization in one pass, and returns sanitized bytes
+// This function is deprecated and will be removed in a future version.
+// Use sanitize.SanitizeJSON() directly instead.
 func sanitizePayload(payloadBytes []byte) json.RawMessage {
-	// Apply regex sanitization to the entire string in one pass
-	sanitized := sanitizeSecrets(string(payloadBytes))
-
-	// Validate that the result is valid JSON for RawMessage
-	// If not valid, wrap it in a JSON object
-	if !json.Valid([]byte(sanitized)) {
-		// Create a valid JSON object with the invalid content as a string
-		wrapped := map[string]string{
-			"_error": "invalid JSON",
-			"_raw":   sanitized,
-		}
-		wrappedBytes, _ := json.Marshal(wrapped)
-		return json.RawMessage(wrappedBytes)
-	}
-
-	// Marshal and unmarshal to ensure single-line JSON (removes newlines/whitespace)
-	var tmp interface{}
-	if err := json.Unmarshal([]byte(sanitized), &tmp); err != nil {
-		// Should not happen since we validated above, but handle gracefully
-		wrapped := map[string]string{
-			"_error": "failed to parse JSON",
-			"_raw":   sanitized,
-		}
-		wrappedBytes, _ := json.Marshal(wrapped)
-		return json.RawMessage(wrappedBytes)
-	}
-	compactBytes, _ := json.Marshal(tmp)
-	return json.RawMessage(compactBytes)
+	return sanitize.SanitizeJSON(payloadBytes)
 }
 
 // LogMessage logs an RPC message to the JSONL file

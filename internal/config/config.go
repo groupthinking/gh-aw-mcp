@@ -39,6 +39,8 @@ type ServerConfig struct {
 	// HTTP-specific fields
 	URL     string            // HTTP endpoint URL
 	Headers map[string]string // HTTP headers for authentication
+	// Tool filtering (applies to both stdio and http servers)
+	Tools []string // Tool filter: ["*"] for all tools, or list of specific tool names
 }
 
 // StdinConfig represents JSON configuration from stdin
@@ -59,6 +61,7 @@ type StdinServerConfig struct {
 	Mounts         []string          `json:"mounts,omitempty"`
 	URL            string            `json:"url,omitempty"`     // For HTTP-based MCP servers
 	Headers        map[string]string `json:"headers,omitempty"` // HTTP headers for authentication
+	Tools          []string          `json:"tools,omitempty"`   // Tool filter: ["*"] for all tools, or list of specific tool names
 }
 
 // StdinGatewayConfig represents gateway configuration from stdin JSON
@@ -184,6 +187,7 @@ func LoadFromStdin() (*Config, error) {
 				Type:    "http",
 				URL:     server.URL,
 				Headers: server.Headers,
+				Tools:   server.Tools,
 			}
 			logConfig.Printf("Configured HTTP MCP server: name=%s, url=%s", name, server.URL)
 			log.Printf("[CONFIG] Configured HTTP MCP server: %s -> %s", name, server.URL)
@@ -238,6 +242,7 @@ func LoadFromStdin() (*Config, error) {
 			Command: "docker",
 			Args:    args,
 			Env:     make(map[string]string),
+			Tools:   server.Tools,
 		}
 	}
 

@@ -1,0 +1,74 @@
+package sanitize
+
+import (
+	"encoding/json"
+	"regexp"
+	"strings"
+)
+
+// SecretPatterns contains regex patterns for detecting potential secrets
+var SecretPatterns = []*regexp.Regexp{
+	regexp.MustCompile(`(?i)(token|key|secret|password|auth)[=:]\s*[^\s]{8,}`),
+	regexp.MustCompile(`ghp_[a-zA-Z0-9]{36,}`),                                  // GitHub PATs
+	regexp.MustCompile(`github_pat_[a-zA-Z0-9]{22}_[a-zA-Z0-9]{59}`),            // GitHub fine-grained PATs
+	regexp.MustCompile(`(?i)bearer\s+[a-zA-Z0-9\-._~+/]+=*`),                    // Bearer tokens
+	regexp.MustCompile(`(?i)authorization:\s*[a-zA-Z0-9\-._~+/]+=*`),            // Auth headers
+	regexp.MustCompile(`[a-f0-9]{32,}`),                                         // Long hex strings (API keys)
+	regexp.MustCompile(`(?i)(apikey|api_key|access_key)[=:]\s*[^\s]{8,}`),       // API keys
+	regexp.MustCompile(`(?i)(client_secret|client_id)[=:]\s*[^\s]{8,}`),         // OAuth secrets
+	regexp.MustCompile(`[a-zA-Z0-9_-]{20,}\.eyJ[a-zA-Z0-9_-]+\.[a-zA-Z0-9_-]+`), // JWT tokens
+	// JSON-specific patterns for field:value pairs
+	regexp.MustCompile(`(?i)"(token|password|passwd|pwd|apikey|api_key|api-key|secret|client_secret|api_secret|authorization|auth|key|private_key|public_key|credentials|credential|access_token|refresh_token|bearer_token)"\s*:\s*"[^"]{1,}"`),
+}
+
+// SanitizeString replaces potential secrets in a string with [REDACTED]
+func SanitizeString(message string) string {
+	result := message
+	for _, pattern := range SecretPatterns {
+		result = pattern.ReplaceAllStringFunc(result, func(match string) string {
+			// Keep the prefix (key name) but redact the value
+			if strings.Contains(match, "=") || strings.Contains(match, ":") {
+				parts := regexp.MustCompile(`[=:]\s*`).Split(match, 2)
+				if len(parts) == 2 {
+					return parts[0] + "=[REDACTED]"
+				}
+			}
+			// For tokens without key=value format, redact entirely
+			return "[REDACTED]"
+		})
+	}
+	return result
+}
+
+// SanitizeJSON sanitizes a JSON payload by applying regex patterns to the entire string
+// It takes raw bytes, applies regex sanitization in one pass, and returns sanitized bytes
+func SanitizeJSON(payloadBytes []byte) json.RawMessage {
+	// Apply regex sanitization to the entire string in one pass
+	sanitized := SanitizeString(string(payloadBytes))
+
+	// Validate that the result is valid JSON for RawMessage
+	// If not valid, wrap it in a JSON object
+	if !json.Valid([]byte(sanitized)) {
+		// Create a valid JSON object with the invalid content as a string
+		wrapped := map[string]string{
+			"_error": "invalid JSON",
+			"_raw":   sanitized,
+		}
+		wrappedBytes, _ := json.Marshal(wrapped)
+		return json.RawMessage(wrappedBytes)
+	}
+
+	// Marshal and unmarshal to ensure single-line JSON (removes newlines/whitespace)
+	var tmp interface{}
+	if err := json.Unmarshal([]byte(sanitized), &tmp); err != nil {
+		// Should not happen since we validated above, but handle gracefully
+		wrapped := map[string]string{
+			"_error": "failed to parse JSON",
+			"_raw":   sanitized,
+		}
+		wrappedBytes, _ := json.Marshal(wrapped)
+		return json.RawMessage(wrappedBytes)
+	}
+	compactBytes, _ := json.Marshal(tmp)
+	return json.RawMessage(compactBytes)
+}

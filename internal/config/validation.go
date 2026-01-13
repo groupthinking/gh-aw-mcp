@@ -4,32 +4,23 @@ import (
 	"fmt"
 	"os"
 	"regexp"
-	"strings"
+
+	"github.com/githubnext/gh-aw-mcpg/internal/config/rules"
+	"github.com/githubnext/gh-aw-mcpg/internal/logger"
 )
 
-// ValidationError represents a configuration validation error with context
-type ValidationError struct {
-	Field      string
-	Message    string
-	JSONPath   string
-	Suggestion string
-}
-
-func (e *ValidationError) Error() string {
-	var sb strings.Builder
-	sb.WriteString(fmt.Sprintf("Configuration error at %s: %s", e.JSONPath, e.Message))
-	if e.Suggestion != "" {
-		sb.WriteString(fmt.Sprintf("\nSuggestion: %s", e.Suggestion))
-	}
-	return sb.String()
-}
+// ValidationError is an alias for rules.ValidationError for backward compatibility
+type ValidationError = rules.ValidationError
 
 // Variable expression pattern: ${VARIABLE_NAME}
 var varExprPattern = regexp.MustCompile(`\$\{([A-Za-z_][A-Za-z0-9_]*)\}`)
 
+var logValidation = logger.New("config:validation")
+
 // expandVariables expands variable expressions in a string
 // Returns the expanded string and error if any variable is undefined
 func expandVariables(value, jsonPath string) (string, error) {
+	logValidation.Printf("Expanding variables: jsonPath=%s", jsonPath)
 	var undefinedVars []string
 
 	result := varExprPattern.ReplaceAllStringFunc(value, func(match string) string {
@@ -37,28 +28,28 @@ func expandVariables(value, jsonPath string) (string, error) {
 		varName := match[2 : len(match)-1]
 
 		if envValue, exists := os.LookupEnv(varName); exists {
+			logValidation.Printf("Expanded variable: %s (found in environment)", varName)
 			return envValue
 		}
 
 		// Track undefined variable
 		undefinedVars = append(undefinedVars, varName)
+		logValidation.Printf("Undefined variable: %s", varName)
 		return match // Keep original if undefined
 	})
 
 	if len(undefinedVars) > 0 {
-		return "", &ValidationError{
-			Field:      "env variable",
-			Message:    fmt.Sprintf("undefined environment variable referenced: %s", undefinedVars[0]),
-			JSONPath:   jsonPath,
-			Suggestion: fmt.Sprintf("Set the environment variable %s before starting the gateway", undefinedVars[0]),
-		}
+		logValidation.Printf("Variable expansion failed: undefined variables=%v", undefinedVars)
+		return "", rules.UndefinedVariable(undefinedVars[0], jsonPath)
 	}
 
+	logValidation.Print("Variable expansion completed successfully")
 	return result, nil
 }
 
 // expandEnvVariables expands all variable expressions in an env map
 func expandEnvVariables(env map[string]string, serverName string) (map[string]string, error) {
+	logValidation.Printf("Expanding env variables for server: %s, count=%d", serverName, len(env))
 	result := make(map[string]string, len(env))
 
 	for key, value := range env {
@@ -72,52 +63,15 @@ func expandEnvVariables(env map[string]string, serverName string) (map[string]st
 		result[key] = expanded
 	}
 
+	logValidation.Printf("Env variable expansion completed for server: %s", serverName)
 	return result, nil
 }
 
-// validateMounts validates mount specifications
+// validateMounts validates mount specifications using centralized rules
 func validateMounts(mounts []string, jsonPath string) error {
 	for i, mount := range mounts {
-		parts := strings.Split(mount, ":")
-		if len(parts) != 3 {
-			return &ValidationError{
-				Field:      "mounts",
-				Message:    fmt.Sprintf("invalid mount format '%s' (expected 'source:dest:mode')", mount),
-				JSONPath:   fmt.Sprintf("%s.mounts[%d]", jsonPath, i),
-				Suggestion: "Use format 'source:dest:mode' where mode is 'ro' (read-only) or 'rw' (read-write)",
-			}
-		}
-
-		source, dest, mode := parts[0], parts[1], parts[2]
-
-		// Validate source is not empty
-		if source == "" {
-			return &ValidationError{
-				Field:      "mounts",
-				Message:    fmt.Sprintf("mount source cannot be empty in '%s'", mount),
-				JSONPath:   fmt.Sprintf("%s.mounts[%d]", jsonPath, i),
-				Suggestion: "Provide a valid source path",
-			}
-		}
-
-		// Validate dest is not empty
-		if dest == "" {
-			return &ValidationError{
-				Field:      "mounts",
-				Message:    fmt.Sprintf("mount destination cannot be empty in '%s'", mount),
-				JSONPath:   fmt.Sprintf("%s.mounts[%d]", jsonPath, i),
-				Suggestion: "Provide a valid destination path",
-			}
-		}
-
-		// Validate mode
-		if mode != "ro" && mode != "rw" {
-			return &ValidationError{
-				Field:      "mounts",
-				Message:    fmt.Sprintf("invalid mount mode '%s' (must be 'ro' or 'rw')", mode),
-				JSONPath:   fmt.Sprintf("%s.mounts[%d]", jsonPath, i),
-				Suggestion: "Use 'ro' for read-only or 'rw' for read-write",
-			}
+		if err := rules.MountFormat(mount, jsonPath, i); err != nil {
+			return err
 		}
 	}
 	return nil
@@ -125,51 +79,43 @@ func validateMounts(mounts []string, jsonPath string) error {
 
 // validateServerConfig validates a server configuration (stdio or HTTP)
 func validateServerConfig(name string, server *StdinServerConfig) error {
+	logValidation.Printf("Validating server config: name=%s, type=%s", name, server.Type)
 	jsonPath := fmt.Sprintf("mcpServers.%s", name)
 
 	// Validate type (empty defaults to stdio)
 	if server.Type == "" {
 		server.Type = "stdio"
+		logValidation.Printf("Server type empty, defaulting to stdio: name=%s", name)
 	}
 
 	// Normalize "local" to "stdio"
 	if server.Type == "local" {
 		server.Type = "stdio"
+		logValidation.Printf("Server type normalized from 'local' to 'stdio': name=%s", name)
 	}
 
 	// Validate known types
 	if server.Type != "stdio" && server.Type != "http" {
-		return &ValidationError{
-			Field:      "type",
-			Message:    fmt.Sprintf("unsupported server type '%s'", server.Type),
-			JSONPath:   fmt.Sprintf("%s.type", jsonPath),
-			Suggestion: "Use 'stdio' for standard input/output transport or 'http' for HTTP transport",
-		}
+		logValidation.Printf("Invalid server type: name=%s, type=%s", name, server.Type)
+		return rules.UnsupportedType("type", server.Type, jsonPath, "Use 'stdio' for standard input/output transport or 'http' for HTTP transport")
 	}
 
 	// For stdio servers, container is required
 	if server.Type == "stdio" || server.Type == "local" {
 		if server.Container == "" {
-			return &ValidationError{
-				Field:      "container",
-				Message:    "'container' is required for stdio servers",
-				JSONPath:   jsonPath,
-				Suggestion: "Add a 'container' field (e.g., \"ghcr.io/owner/image:tag\")",
-			}
+			logValidation.Printf("Validation failed: stdio server missing container field, name=%s", name)
+			return rules.MissingRequired("container", "stdio", jsonPath, "Add a 'container' field (e.g., \"ghcr.io/owner/image:tag\")")
 		}
 
 		// Reject unsupported 'command' field
 		if server.Command != "" {
-			return &ValidationError{
-				Field:      "command",
-				Message:    "'command' field is not supported (stdio servers must use 'container')",
-				JSONPath:   jsonPath,
-				Suggestion: "Remove 'command' field and use 'container' instead",
-			}
+			logValidation.Printf("Validation failed: stdio server has unsupported command field, name=%s", name)
+			return rules.UnsupportedField("command", "'command' field is not supported (stdio servers must use 'container')", jsonPath, "Remove 'command' field and use 'container' instead")
 		}
 
 		// Validate mounts if provided
 		if len(server.Mounts) > 0 {
+			logValidation.Printf("Validating mounts for server: name=%s, mount_count=%d", name, len(server.Mounts))
 			if err := validateMounts(server.Mounts, jsonPath); err != nil {
 				return err
 			}
@@ -179,54 +125,47 @@ func validateServerConfig(name string, server *StdinServerConfig) error {
 	// For HTTP servers, url is required
 	if server.Type == "http" {
 		if server.URL == "" {
-			return &ValidationError{
-				Field:      "url",
-				Message:    "'url' is required for HTTP servers",
-				JSONPath:   jsonPath,
-				Suggestion: "Add a 'url' field (e.g., \"https://example.com/mcp\")",
-			}
+			logValidation.Printf("Validation failed: HTTP server missing url field, name=%s", name)
+			return rules.MissingRequired("url", "HTTP", jsonPath, "Add a 'url' field (e.g., \"https://example.com/mcp\")")
 		}
 	}
 
+	logValidation.Printf("Server config validation passed: name=%s", name)
 	return nil
 }
 
 // validateGatewayConfig validates gateway configuration
 func validateGatewayConfig(gateway *StdinGatewayConfig) error {
 	if gateway == nil {
+		logValidation.Print("No gateway config to validate")
 		return nil
 	}
 
-	// Validate port range
+	logValidation.Print("Validating gateway configuration")
+
+	// Validate port range using centralized rules
 	if gateway.Port != nil {
-		if *gateway.Port < 1 || *gateway.Port > 65535 {
-			return &ValidationError{
-				Field:      "port",
-				Message:    fmt.Sprintf("port must be between 1 and 65535, got %d", *gateway.Port),
-				JSONPath:   "gateway.port",
-				Suggestion: "Use a valid port number (e.g., 8080)",
-			}
+		logValidation.Printf("Validating gateway port: %d", *gateway.Port)
+		if err := rules.PortRange(*gateway.Port, "gateway.port"); err != nil {
+			return err
 		}
 	}
 
-	// Validate timeout values (minimum 1 per schema)
-	if gateway.StartupTimeout != nil && *gateway.StartupTimeout < 1 {
-		return &ValidationError{
-			Field:      "startupTimeout",
-			Message:    fmt.Sprintf("startupTimeout must be at least 1, got %d", *gateway.StartupTimeout),
-			JSONPath:   "gateway.startupTimeout",
-			Suggestion: "Use a positive number of seconds (e.g., 30)",
+	// Validate timeout values using centralized rules
+	if gateway.StartupTimeout != nil {
+		logValidation.Printf("Validating startup timeout: %d", *gateway.StartupTimeout)
+		if err := rules.TimeoutPositive(*gateway.StartupTimeout, "startupTimeout", "gateway.startupTimeout"); err != nil {
+			return err
 		}
 	}
 
-	if gateway.ToolTimeout != nil && *gateway.ToolTimeout < 1 {
-		return &ValidationError{
-			Field:      "toolTimeout",
-			Message:    fmt.Sprintf("toolTimeout must be at least 1, got %d", *gateway.ToolTimeout),
-			JSONPath:   "gateway.toolTimeout",
-			Suggestion: "Use a positive number of seconds (e.g., 60)",
+	if gateway.ToolTimeout != nil {
+		logValidation.Printf("Validating tool timeout: %d", *gateway.ToolTimeout)
+		if err := rules.TimeoutPositive(*gateway.ToolTimeout, "toolTimeout", "gateway.toolTimeout"); err != nil {
+			return err
 		}
 	}
 
+	logValidation.Print("Gateway config validation passed")
 	return nil
 }

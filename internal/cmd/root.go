@@ -163,6 +163,17 @@ func run(cmd *cobra.Command, args []string) error {
 	debugLog.Printf("Configuration loaded with %d servers", len(cfg.Servers))
 	log.Printf("Loaded %d MCP server(s)", len(cfg.Servers))
 
+	// Log server names to markdown
+	serverNames := make([]string, 0, len(cfg.Servers))
+	for name := range cfg.Servers {
+		serverNames = append(serverNames, name)
+	}
+	if len(serverNames) > 0 {
+		logger.LogInfoMd("startup", "Loaded %d MCP server(s): %v", len(cfg.Servers), serverNames)
+	} else {
+		logger.LogInfoMd("startup", "Loaded %d MCP server(s)", len(cfg.Servers))
+	}
+
 	// Apply command-line flags to config
 	cfg.EnableDIFC = enableDIFC
 	if enableDIFC {
@@ -209,6 +220,8 @@ func run(cmd *cobra.Command, args []string) error {
 	if mode == "routed" {
 		log.Printf("Starting MCPG in ROUTED mode on %s", listenAddr)
 		log.Printf("Routes: /mcp/<server> where <server> is one of: %v", unifiedServer.GetServerIDs())
+		logger.LogInfoMd("startup", "Starting in ROUTED mode on %s", listenAddr)
+		logger.LogInfoMd("startup", "Routes: /mcp/<server> for servers: %v", unifiedServer.GetServerIDs())
 
 		// Extract API key from gateway config (spec 7.1)
 		apiKey := ""
@@ -220,6 +233,8 @@ func run(cmd *cobra.Command, args []string) error {
 	} else {
 		log.Printf("Starting MCPG in UNIFIED mode on %s", listenAddr)
 		log.Printf("Endpoint: /mcp")
+		logger.LogInfoMd("startup", "Starting in UNIFIED mode on %s", listenAddr)
+		logger.LogInfoMd("startup", "Endpoint: /mcp")
 
 		// Extract API key from gateway config (spec 7.1)
 		apiKey := ""
@@ -282,7 +297,7 @@ func writeGatewayConfig(cfg *config.Config, listenAddr, mode string, w io.Writer
 
 	servers := outputConfig["mcpServers"].(map[string]interface{})
 
-	for name := range cfg.Servers {
+	for name, server := range cfg.Servers {
 		serverConfig := map[string]interface{}{
 			"type": "http",
 		}
@@ -300,6 +315,12 @@ func writeGatewayConfig(cfg *config.Config, listenAddr, mode string, w io.Writer
 			serverConfig["headers"] = map[string]string{
 				"Authorization": apiKey,
 			}
+		}
+
+		// Include tools field from original configuration per MCP Gateway Specification v1.5.0 Section 5.4
+		// This preserves tool filtering from the input configuration
+		if len(server.Tools) > 0 {
+			serverConfig["tools"] = server.Tools
 		}
 
 		servers[name] = serverConfig

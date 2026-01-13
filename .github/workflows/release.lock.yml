@@ -81,6 +81,7 @@ jobs:
       - docker
       - generate-sbom
       - release
+      - test
     runs-on: ubuntu-latest
     permissions:
       actions: read
@@ -981,7 +982,9 @@ jobs:
             await main();
 
   create-tag:
-    needs: activation
+    needs:
+      - activation
+      - test
     if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     permissions:
@@ -1453,4 +1456,36 @@ jobs:
             setupGlobals(core, github, context, exec, io);
             const { main } = require('/opt/gh-aw/actions/safe_output_handler_manager.cjs');
             await main();
+
+  test:
+    needs: activation
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+        with:
+          fetch-depth: 0
+      - name: Set up Go
+        uses: actions/setup-go@4dc6199c7b1a012772edbd06daecab0f50c9053c # v6
+        with:
+          cache: false
+          go-version-file: go.mod
+      - name: Download Go modules
+        run: go mod download
+      - name: Run unit tests
+        run: |
+          echo "Running unit tests (excluding integration tests)..."
+          make test-unit
+          echo "✓ Unit tests passed"
+      - name: Build binary
+        run: |
+          echo "Building binary for integration tests..."
+          make build
+          echo "✓ Binary built successfully"
+      - name: Run integration tests
+        run: |
+          echo "Running integration tests with built binary..."
+          make test-integration
+          echo "✓ Integration tests passed"
 
