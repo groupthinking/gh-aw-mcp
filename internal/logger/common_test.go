@@ -1,6 +1,7 @@
 package logger
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -173,5 +174,247 @@ func TestCloseLogFile_EmptyFile(t *testing.T) {
 
 	if info.Size() != 0 {
 		t.Errorf("Expected empty file, got size: %d", info.Size())
+	}
+}
+
+// Tests for initLogFile helper function
+
+func TestInitLogFile_Success(t *testing.T) {
+	tmpDir := t.TempDir()
+	logDir := filepath.Join(tmpDir, "logs")
+	fileName := "test.log"
+
+	// Initialize log file with O_APPEND flag
+	file, err := initLogFile(logDir, fileName, os.O_APPEND)
+	if err != nil {
+		t.Fatalf("initLogFile failed: %v", err)
+	}
+	defer file.Close()
+
+	// Verify directory was created
+	if _, err := os.Stat(logDir); os.IsNotExist(err) {
+		t.Errorf("Log directory was not created: %s", logDir)
+	}
+
+	// Verify file was created
+	logPath := filepath.Join(logDir, fileName)
+	if _, err := os.Stat(logPath); os.IsNotExist(err) {
+		t.Errorf("Log file was not created: %s", logPath)
+	}
+
+	// Write some content to verify file is writable
+	if _, err := file.WriteString("test content\n"); err != nil {
+		t.Errorf("Failed to write to log file: %v", err)
+	}
+}
+
+func TestInitLogFile_CreatesDirectory(t *testing.T) {
+	tmpDir := t.TempDir()
+	logDir := filepath.Join(tmpDir, "nested", "log", "directory")
+	fileName := "test.log"
+
+	// Directory doesn't exist yet
+	if _, err := os.Stat(logDir); !os.IsNotExist(err) {
+		t.Fatal("Directory should not exist yet")
+	}
+
+	file, err := initLogFile(logDir, fileName, os.O_APPEND)
+	if err != nil {
+		t.Fatalf("initLogFile failed: %v", err)
+	}
+	defer file.Close()
+
+	// Verify nested directory was created
+	if _, err := os.Stat(logDir); os.IsNotExist(err) {
+		t.Errorf("Nested log directory was not created: %s", logDir)
+	}
+}
+
+func TestInitLogFile_AppendFlag(t *testing.T) {
+	tmpDir := t.TempDir()
+	logDir := filepath.Join(tmpDir, "logs")
+	fileName := "test.log"
+
+	// Create file with initial content using O_TRUNC
+	file1, err := initLogFile(logDir, fileName, os.O_TRUNC)
+	if err != nil {
+		t.Fatalf("First initLogFile failed: %v", err)
+	}
+	if _, err := file1.WriteString("initial content\n"); err != nil {
+		t.Fatalf("Failed to write initial content: %v", err)
+	}
+	file1.Close()
+
+	// Open file again with O_APPEND
+	file2, err := initLogFile(logDir, fileName, os.O_APPEND)
+	if err != nil {
+		t.Fatalf("Second initLogFile failed: %v", err)
+	}
+	if _, err := file2.WriteString("appended content\n"); err != nil {
+		t.Fatalf("Failed to write appended content: %v", err)
+	}
+	file2.Close()
+
+	// Verify file contains both contents
+	logPath := filepath.Join(logDir, fileName)
+	content, err := os.ReadFile(logPath)
+	if err != nil {
+		t.Fatalf("Failed to read log file: %v", err)
+	}
+
+	contentStr := string(content)
+	if !strings.Contains(contentStr, "initial content") {
+		t.Errorf("File should contain initial content")
+	}
+	if !strings.Contains(contentStr, "appended content") {
+		t.Errorf("File should contain appended content")
+	}
+}
+
+func TestInitLogFile_TruncFlag(t *testing.T) {
+	tmpDir := t.TempDir()
+	logDir := filepath.Join(tmpDir, "logs")
+	fileName := "test.log"
+
+	// Create file with initial content
+	file1, err := initLogFile(logDir, fileName, os.O_APPEND)
+	if err != nil {
+		t.Fatalf("First initLogFile failed: %v", err)
+	}
+	if _, err := file1.WriteString("initial content\n"); err != nil {
+		t.Fatalf("Failed to write initial content: %v", err)
+	}
+	file1.Close()
+
+	// Open file again with O_TRUNC (should truncate)
+	file2, err := initLogFile(logDir, fileName, os.O_TRUNC)
+	if err != nil {
+		t.Fatalf("Second initLogFile failed: %v", err)
+	}
+	if _, err := file2.WriteString("new content\n"); err != nil {
+		t.Fatalf("Failed to write new content: %v", err)
+	}
+	file2.Close()
+
+	// Verify file only contains new content
+	logPath := filepath.Join(logDir, fileName)
+	content, err := os.ReadFile(logPath)
+	if err != nil {
+		t.Fatalf("Failed to read log file: %v", err)
+	}
+
+	contentStr := string(content)
+	if strings.Contains(contentStr, "initial content") {
+		t.Errorf("File should not contain initial content (should be truncated)")
+	}
+	if !strings.Contains(contentStr, "new content") {
+		t.Errorf("File should contain new content")
+	}
+}
+
+func TestInitLogFile_InvalidDirectory(t *testing.T) {
+	// Try to create a log file in a directory that can't be created
+	// Use a path that includes a file as a directory component
+	tmpDir := t.TempDir()
+	filePath := filepath.Join(tmpDir, "not-a-dir")
+
+	// Create a regular file (not a directory)
+	if err := os.WriteFile(filePath, []byte("content"), 0644); err != nil {
+		t.Fatalf("Failed to create test file: %v", err)
+	}
+
+	// Try to create a log directory under this file (should fail)
+	logDir := filepath.Join(filePath, "logs")
+	fileName := "test.log"
+
+	file, err := initLogFile(logDir, fileName, os.O_APPEND)
+	if err == nil {
+		file.Close()
+		t.Fatal("initLogFile should fail when directory can't be created")
+	}
+
+	if !strings.Contains(err.Error(), "failed to create log directory") {
+		t.Errorf("Expected 'failed to create log directory' error, got: %v", err)
+	}
+}
+
+func TestInitLogFile_UnwritableDirectory(t *testing.T) {
+	// Use a non-writable directory path
+	// On most systems, /root or similar paths are not writable by regular users
+	logDir := "/root/nonexistent/directory"
+	fileName := "test.log"
+
+	file, err := initLogFile(logDir, fileName, os.O_APPEND)
+	if err == nil {
+		file.Close()
+		// If we succeeded, we might have unexpected permissions
+		// This is OK - just skip the test
+		t.Skip("Test requires non-writable directory, but directory was writable")
+	}
+
+	// Verify error message includes "failed to create log directory"
+	if !strings.Contains(err.Error(), "failed to create log directory") {
+		t.Errorf("Expected 'failed to create log directory' error, got: %v", err)
+	}
+}
+
+func TestInitLogFile_EmptyFileName(t *testing.T) {
+	tmpDir := t.TempDir()
+	logDir := filepath.Join(tmpDir, "logs")
+	fileName := ""
+
+	file, err := initLogFile(logDir, fileName, os.O_APPEND)
+	if err == nil {
+		file.Close()
+		t.Fatal("initLogFile should fail with empty fileName")
+	}
+
+	if !strings.Contains(err.Error(), "failed to open log file") {
+		t.Errorf("Expected 'failed to open log file' error, got: %v", err)
+	}
+}
+
+func TestInitLogFile_ConcurrentCreation(t *testing.T) {
+	tmpDir := t.TempDir()
+	logDir := filepath.Join(tmpDir, "logs")
+
+	var wg sync.WaitGroup
+	errors := make(chan error, 10)
+
+	// Multiple goroutines trying to create files concurrently
+	for i := 0; i < 10; i++ {
+		wg.Add(1)
+		go func(id int) {
+			defer wg.Done()
+
+			fileName := fmt.Sprintf("test-%d.log", id)
+			file, err := initLogFile(logDir, fileName, os.O_APPEND)
+			if err != nil {
+				errors <- err
+				return
+			}
+			defer file.Close()
+
+			// Write some content
+			if _, err := file.WriteString(fmt.Sprintf("content from goroutine %d\n", id)); err != nil {
+				errors <- err
+			}
+		}(i)
+	}
+
+	wg.Wait()
+	close(errors)
+
+	for err := range errors {
+		t.Errorf("Concurrent file creation error: %v", err)
+	}
+
+	// Verify all files were created
+	for i := 0; i < 10; i++ {
+		fileName := fmt.Sprintf("test-%d.log", i)
+		logPath := filepath.Join(logDir, fileName)
+		if _, err := os.Stat(logPath); os.IsNotExist(err) {
+			t.Errorf("File not created: %s", logPath)
+		}
 	}
 }

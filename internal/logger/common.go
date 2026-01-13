@@ -1,8 +1,10 @@
 package logger
 
 import (
+	"fmt"
 	"log"
 	"os"
+	"path/filepath"
 	"sync"
 )
 
@@ -31,4 +33,34 @@ func closeLogFile(file *os.File, mu *sync.Mutex, loggerName string) error {
 
 	// Always close the file, even if sync failed
 	return file.Close()
+}
+
+// initLogFile handles the common logic for initializing a log file.
+// It creates the log directory if needed and opens the log file with the specified flags.
+//
+// Parameters:
+//   - logDir: Directory where the log file should be created
+//   - fileName: Name of the log file
+//   - flags: File opening flags (e.g., os.O_APPEND, os.O_TRUNC)
+//
+// Returns:
+//   - *os.File: The opened log file handle
+//   - error: Any error that occurred during directory creation or file opening
+//
+// This function does not implement any fallback behavior - it returns errors to the caller.
+// Callers can decide whether to fall back to stdout or propagate the error.
+func initLogFile(logDir, fileName string, flags int) (*os.File, error) {
+	// Try to create the log directory if it doesn't exist
+	if err := os.MkdirAll(logDir, 0755); err != nil {
+		return nil, fmt.Errorf("failed to create log directory: %w", err)
+	}
+
+	// Try to open the log file with the specified flags
+	logPath := filepath.Join(logDir, fileName)
+	file, err := os.OpenFile(logPath, flags|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		return nil, fmt.Errorf("failed to open log file: %w", err)
+	}
+
+	return file, nil
 }

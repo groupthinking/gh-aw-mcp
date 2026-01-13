@@ -41,10 +41,11 @@ func InitFileLogger(logDir, fileName string) error {
 		fileName: fileName,
 	}
 
-	// Try to create the log directory if it doesn't exist
-	if err := os.MkdirAll(logDir, 0755); err != nil {
-		// Directory creation failed - fallback to stdout
-		log.Printf("WARNING: Failed to create log directory %s: %v", logDir, err)
+	// Try to initialize the log file
+	file, err := initLogFile(logDir, fileName, os.O_APPEND)
+	if err != nil {
+		// File initialization failed - fallback to stdout
+		log.Printf("WARNING: Failed to initialize log file: %v", err)
 		log.Printf("WARNING: Falling back to stdout for logging")
 		fl.useFallback = true
 		fl.logger = log.New(os.Stdout, "", 0) // We'll add our own timestamp
@@ -52,23 +53,10 @@ func InitFileLogger(logDir, fileName string) error {
 		return nil
 	}
 
-	// Try to open the log file
-	logPath := filepath.Join(logDir, fileName)
-	file, err := os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
-	if err != nil {
-		// File creation failed - fallback to stdout
-		log.Printf("WARNING: Failed to open log file %s: %v", logPath, err)
-		log.Printf("WARNING: Falling back to stdout for logging")
-		fl.useFallback = true
-		fl.logger = log.New(os.Stdout, "", 0)
-		globalFileLogger = fl
-		return nil
-	}
-
 	fl.logFile = file
 	fl.logger = log.New(file, "", 0)
 
-	log.Printf("Logging to file: %s", logPath)
+	log.Printf("Logging to file: %s", filepath.Join(logDir, fileName))
 
 	globalFileLogger = fl
 	return nil
