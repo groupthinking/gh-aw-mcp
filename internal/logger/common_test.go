@@ -121,7 +121,7 @@ func TestCloseLogFile_PreservesMutexSemantics(t *testing.T) {
 	}
 
 	var mu sync.Mutex
-	
+
 	// Lock the mutex before calling (as real code would)
 	mu.Lock()
 	err = closeLogFile(file, &mu, "test")
