@@ -24,6 +24,16 @@ lint:
 	@go vet ./...
 	@echo "Running gofmt check..."
 	@test -z "$$(gofmt -l .)" || (echo "The following files are not formatted:"; gofmt -l .; exit 1)
+	@echo "Running golangci-lint..."
+	@GOPATH=$$(go env GOPATH); \
+	if [ -f "$$GOPATH/bin/golangci-lint" ]; then \
+		$$GOPATH/bin/golangci-lint run --timeout=5m; \
+	elif command -v golangci-lint >/dev/null 2>&1; then \
+		golangci-lint run --timeout=5m; \
+	else \
+		echo "⚠ Warning: golangci-lint not found. Run 'make install' to install it."; \
+		echo "  Skipping golangci-lint checks..."; \
+	fi
 	@echo "Linting complete!"
 
 # Run unit tests only (no build required)
@@ -207,7 +217,7 @@ install:
 help:
 	@echo "Available targets:"
 	@echo "  build           - Build the CLI binary"
-	@echo "  lint            - Run all linters (go vet, gofmt check)"
+	@echo "  lint            - Run all linters (go vet, gofmt check, golangci-lint)"
 	@echo "  test            - Run unit tests (no build required)"
 	@echo "  test-unit       - Run unit tests (no build required)"
 	@echo "  test-integration - Run binary integration tests (requires built binary)"
