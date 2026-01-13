@@ -3,6 +3,7 @@ package mcp
 import (
 	"context"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -286,6 +287,34 @@ func TestHTTPRequest_ErrorResponses(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			// Create test server with specific response
 			testServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				// Read request body to determine if it's an initialize request
+				var reqBody map[string]interface{}
+				bodyBytes, _ := io.ReadAll(r.Body)
+				json.Unmarshal(bodyBytes, &reqBody)
+				
+				// For the JSON-RPC error test case, we need to return success for initialize
+				// and error for the actual tools/list request
+				method, _ := reqBody["method"].(string)
+				if tt.name == "JSON-RPC error response" && method == "initialize" {
+					// Return success for initialize request
+					w.WriteHeader(http.StatusOK)
+					w.Header().Set("Content-Type", "application/json")
+					w.Header().Set("Mcp-Session-Id", "test-session-123")
+					json.NewEncoder(w).Encode(map[string]interface{}{
+						"jsonrpc": "2.0",
+						"id":      reqBody["id"],
+						"result": map[string]interface{}{
+							"protocolVersion": "2024-11-05",
+							"serverInfo": map[string]interface{}{
+								"name":    "test-server",
+								"version": "1.0.0",
+							},
+						},
+					})
+					return
+				}
+				
+				// For all other cases, return the configured response
 				w.WriteHeader(tt.statusCode)
 				w.Header().Set("Content-Type", "application/json")
 				json.NewEncoder(w).Encode(tt.responseBody)
