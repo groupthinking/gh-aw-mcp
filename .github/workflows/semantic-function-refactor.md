@@ -10,8 +10,6 @@ permissions:
   issues: read
   pull-requests: read
 
-engine: claude
-
 imports:
   - shared/reporting.md
 
@@ -30,14 +28,7 @@ tools:
     toolsets: [default, issues]
   edit:
   bash:
-    - "find internal -name '*.go' ! -name '*_test.go' -type f"
-    - "find internal -type f -name '*.go' ! -name '*_test.go'"
-    - "find internal/ -maxdepth 1 -ls"
-    - "find internal/*/ -maxdepth 1 -ls"
-    - "wc -l internal/**/*.go"
-    - "head -n * internal/**/*.go"
-    - "grep -r 'func ' internal --include='*.go'"
-    - "cat internal/**/*.go"
+    - "*"
 
 timeout-minutes: 20
 strict: true
