@@ -10,6 +10,7 @@ linters:
     - misspell
     - unconvert
     - testifylint
+    - gosec
   disable:
     - errcheck
     - gocritic
@@ -42,14 +43,6 @@ linters-settings:
       - commentFormatting
       - badCall
   gosec:
-    exclude:
-      - G101
-      - G115
-      - G602
-      - G301
-      - G302
-      - G304
-      - G306
     config:
       G204: "0644"
       G306: "0644"
@@ -60,30 +53,3 @@ issues:
   exclude-generated: lax
   exclude-dirs-use-default: false
   exclude-use-default: false
-  exclude-rules:
-    - linters:
-        - staticcheck
-      text: "ST1005:"
-    - linters:
-        - gosec
-      text: "^G304:"
-    - linters:
-        - gosec
-      text: "^G104:"
-      path: _test\.go
-    - linters:
-        - gosec
-      text: "^G204:"
-    - linters:
-        - gosec
-      text: "^G404:"
-    - linters:
-        - gosec
-      text: "^G306:"
-      path: _test\.go
-    - linters:
-        - gosec
-      text: "^G305:"
-    - linters:
-        - gosec
-      text: "^G110:"
