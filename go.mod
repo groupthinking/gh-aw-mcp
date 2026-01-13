@@ -10,7 +10,10 @@ require (
 	golang.org/x/term v0.38.0
 )
 
-require github.com/santhosh-tekuri/jsonschema/v5 v5.3.1
+require (
+	github.com/santhosh-tekuri/jsonschema/v5 v5.3.1
+	github.com/stretchr/testify v1.11.1
+)
 
 require (
 	github.com/google/jsonschema-go v0.3.0 // indirect
