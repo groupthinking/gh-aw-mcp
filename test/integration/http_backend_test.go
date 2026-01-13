@@ -20,8 +20,8 @@ import (
 // This test demonstrates:
 // 1. Creating an HTTP MCP backend server using the SDK
 // 2. HTTP backend requires and validates authorization headers
-// 3. Tools and resources are available via HTTP transport
-// 4. SSE (Server-Sent Events) protocol works correctly
+// 3. Tools and resources are available via streamable HTTP transport
+// 4. Streamable HTTP transport uses SSE-formatted responses for streaming
 func TestHTTPMCPBackendServer(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping integration test in short mode")
@@ -78,12 +78,12 @@ func TestHTTPMCPBackendServer(t *testing.T) {
 			t.Log("✓ HTTP backend correctly received authorization header")
 		}
 
-		// Verify SSE response format
+		// Verify streamable HTTP response format (uses SSE-formatted streaming)
 		contentType := resp.Header.Get("Content-Type")
 		if !strings.Contains(contentType, "text/event-stream") {
-			t.Errorf("Expected SSE content type, got %s", contentType)
+			t.Errorf("Expected streamable HTTP (text/event-stream) content type, got %s", contentType)
 		} else {
-			t.Log("✓ HTTP backend returns Server-Sent Events (SSE) format")
+			t.Log("✓ HTTP backend returns streamable HTTP with SSE-formatted responses")
 		}
 
 		// Read and parse SSE response
@@ -211,7 +211,7 @@ func TestHTTPMCPBackendServer(t *testing.T) {
 
 	t.Log("✓ HTTP MCP backend server test completed successfully")
 	t.Log("  - Backend validates authorization headers")
-	t.Log("  - Backend serves tools and resources via HTTP/SSE")
+	t.Log("  - Backend serves tools and resources via streamable HTTP transport")
 	t.Log("  - Backend is ready to be wrapped by the gateway")
 }
 
@@ -331,11 +331,11 @@ func createHTTPMCPBackend(t *testing.T, receivedAuthHeader *string, expectedAuth
 	}
 
 	// Create StreamableHTTP handler using SDK
-	// This creates an SSE-based HTTP transport for MCP
+	// This creates a streamable HTTP transport for MCP with SSE-formatted responses
 	mcpHandler := sdk.NewStreamableHTTPHandler(func(r *http.Request) *sdk.Server {
 		return mcpServer
 	}, &sdk.StreamableHTTPOptions{
-		// SSE options can be configured here
+		// Streamable HTTP options can be configured here
 	})
 
 	// Create HTTP mux and apply auth middleware

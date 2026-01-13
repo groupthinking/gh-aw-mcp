@@ -665,10 +665,10 @@ func sendMCPRequest(t *testing.T, url string, authToken string, payload map[stri
 		t.Logf("Response status: %d, body: %s", resp.StatusCode, string(body))
 	}
 
-	// Check if response is SSE format
+	// Check if response uses SSE-formatted streaming (part of streamable HTTP)
 	contentType := resp.Header.Get("Content-Type")
 	if contentType == "text/event-stream" {
-		// Parse SSE format
+		// Parse SSE-formatted response
 		return parseSSEResponse(t, string(body))
 	}
 
@@ -681,7 +681,8 @@ func sendMCPRequest(t *testing.T, url string, authToken string, payload map[stri
 	return result
 }
 
-// parseSSEResponse parses Server-Sent Events format and extracts the JSON data
+// parseSSEResponse parses Server-Sent Events formatted responses and extracts the JSON data
+// Note: SSE formatting is used by streamable HTTP transport for streaming responses
 func parseSSEResponse(t *testing.T, body string) map[string]interface{} {
 	t.Helper()
 
@@ -696,7 +697,7 @@ func parseSSEResponse(t *testing.T, body string) map[string]interface{} {
 	}
 
 	if len(dataLines) == 0 {
-		t.Fatalf("No data lines found in SSE response: %s", body)
+		t.Fatalf("No data lines found in SSE-formatted response: %s", body)
 	}
 
 	// Join all data lines (in case the response is multi-line)
@@ -704,7 +705,7 @@ func parseSSEResponse(t *testing.T, body string) map[string]interface{} {
 
 	var result map[string]interface{}
 	if err := json.Unmarshal(jsonData, &result); err != nil {
-		t.Fatalf("Failed to decode SSE data: %v, data: %s", err, string(jsonData))
+		t.Fatalf("Failed to decode SSE-formatted data: %v, data: %s", err, string(jsonData))
 	}
 
 	return result
