@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"sync"
 	"time"
+
+	"github.com/githubnext/gh-aw-mcpg/internal/logger/sanitize"
 )
 
 // JSONLLogger manages logging RPC messages to a JSONL file (one JSON object per line)
@@ -88,35 +90,10 @@ func (jl *JSONLLogger) Close() error {
 
 // sanitizePayload sanitizes a payload by applying regex patterns to the entire string
 // It takes raw bytes, applies regex sanitization in one pass, and returns sanitized bytes
+// This function is deprecated and will be removed in a future version.
+// Use sanitize.SanitizeJSON() directly instead.
 func sanitizePayload(payloadBytes []byte) json.RawMessage {
-	// Apply regex sanitization to the entire string in one pass
-	sanitized := sanitizeSecrets(string(payloadBytes))
-
-	// Validate that the result is valid JSON for RawMessage
-	// If not valid, wrap it in a JSON object
-	if !json.Valid([]byte(sanitized)) {
-		// Create a valid JSON object with the invalid content as a string
-		wrapped := map[string]string{
-			"_error": "invalid JSON",
-			"_raw":   sanitized,
-		}
-		wrappedBytes, _ := json.Marshal(wrapped)
-		return json.RawMessage(wrappedBytes)
-	}
-
-	// Marshal and unmarshal to ensure single-line JSON (removes newlines/whitespace)
-	var tmp interface{}
-	if err := json.Unmarshal([]byte(sanitized), &tmp); err != nil {
-		// Should not happen since we validated above, but handle gracefully
-		wrapped := map[string]string{
-			"_error": "failed to parse JSON",
-			"_raw":   sanitized,
-		}
-		wrappedBytes, _ := json.Marshal(wrapped)
-		return json.RawMessage(wrappedBytes)
-	}
-	compactBytes, _ := json.Marshal(tmp)
-	return json.RawMessage(compactBytes)
+	return sanitize.SanitizeJSON(payloadBytes)
 }
 
 // LogMessage logs an RPC message to the JSONL file
