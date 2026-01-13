@@ -128,6 +128,20 @@ release:
 		exit 1; \
 	fi; \
 	echo "Bump type: $$BUMP_TYPE"; \
+	echo ""; \
+	echo "Fetching latest changes from remote..."; \
+	git pull || { echo "Error: Failed to pull latest changes"; exit 1; }; \
+	git fetch --tags || { echo "Error: Failed to fetch tags"; exit 1; }; \
+	echo "✓ Latest changes and tags fetched"; \
+	echo ""; \
+	echo "Checking for uncommitted changes..."; \
+	if [ -n "$$(git status --porcelain)" ]; then \
+		echo "Error: You have uncommitted changes. Please commit or stash them before creating a release."; \
+		git status --short; \
+		exit 1; \
+	fi; \
+	echo "✓ Working directory is clean"; \
+	echo ""; \
 	LATEST_TAG=$$(git tag --list 'v[0-9]*.[0-9]*.[0-9]*' | sort -V | tail -1); \
 	if [ -z "$$LATEST_TAG" ]; then \
 		echo "No existing tags found, starting from v0.0.0"; \
