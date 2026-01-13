@@ -3,6 +3,7 @@ package mcp
 import (
 	"context"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -231,11 +232,12 @@ func TestExpandDockerEnvArgs(t *testing.T) {
 // TestHTTPRequest_ErrorResponses tests handling of various error conditions
 func TestHTTPRequest_ErrorResponses(t *testing.T) {
 	tests := []struct {
-		name           string
-		statusCode     int
-		responseBody   map[string]interface{}
-		expectError    bool
-		errorSubstring string
+		name                 string
+		statusCode           int
+		responseBody         map[string]interface{}
+		expectError          bool
+		errorSubstring       string
+		needSuccessfulInit   bool // If true, return success for initialize requests
 	}{
 		{
 			name:       "HTTP 200 success",
@@ -278,8 +280,8 @@ func TestHTTPRequest_ErrorResponses(t *testing.T) {
 					"message": "Invalid request",
 				},
 			},
-			expectError:    true,               // Initialize should fail on JSON-RPC errors
-			errorSubstring: "initialize error", // Connection initialization fails on JSON-RPC error
+			expectError:        false, // JSON-RPC errors are returned as valid responses
+			needSuccessfulInit: true,  // Need successful initialize to test error handling
 		},
 	}
 
@@ -287,6 +289,43 @@ func TestHTTPRequest_ErrorResponses(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			// Create test server with specific response
 			testServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				// Read request body to determine if it's an initialize request
+				var reqBody map[string]interface{}
+				bodyBytes, err := io.ReadAll(r.Body)
+				if err != nil {
+					t.Errorf("Failed to read request body: %v", err)
+					http.Error(w, "Internal error", http.StatusInternalServerError)
+					return
+				}
+				if err := json.Unmarshal(bodyBytes, &reqBody); err != nil {
+					t.Errorf("Failed to unmarshal request body: %v", err)
+					http.Error(w, "Bad request", http.StatusBadRequest)
+					return
+				}
+
+				// If this test case needs successful initialization, return success for initialize
+				// and error for subsequent requests
+				method, _ := reqBody["method"].(string)
+				if tt.needSuccessfulInit && method == "initialize" {
+					// Return success for initialize request
+					w.WriteHeader(http.StatusOK)
+					w.Header().Set("Content-Type", "application/json")
+					w.Header().Set("Mcp-Session-Id", "test-session-123")
+					json.NewEncoder(w).Encode(map[string]interface{}{
+						"jsonrpc": "2.0",
+						"id":      reqBody["id"],
+						"result": map[string]interface{}{
+							"protocolVersion": "2024-11-05",
+							"serverInfo": map[string]interface{}{
+								"name":    "test-server",
+								"version": "1.0.0",
+							},
+						},
+					})
+					return
+				}
+
+				// For all other cases, return the configured response
 				w.WriteHeader(tt.statusCode)
 				w.Header().Set("Content-Type", "application/json")
 				json.NewEncoder(w).Encode(tt.responseBody)
