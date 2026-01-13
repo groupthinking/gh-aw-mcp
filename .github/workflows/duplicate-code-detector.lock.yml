@@ -169,12 +169,12 @@ jobs:
           mkdir -p /tmp/gh-aw/safeoutputs
           mkdir -p /tmp/gh-aw/mcp-logs/safeoutputs
           cat > /opt/gh-aw/safeoutputs/config.json << 'EOF'
-          {"create_issue":{"max":1},"create_missing_tool_issue":{"max":1,"title_prefix":"[missing tool]"},"missing_data":{},"missing_tool":{},"noop":{"max":1}}
+          {"create_issue":{"max":3},"create_missing_tool_issue":{"max":1,"title_prefix":"[missing tool]"},"missing_data":{},"missing_tool":{},"noop":{"max":1}}
           EOF
           cat > /opt/gh-aw/safeoutputs/tools.json << 'EOF'
           [
             {
-              "description": "Create a new GitHub issue for tracking bugs, feature requests, or tasks. Use this for actionable work items that need assignment, labeling, and status tracking. For reports, announcements, or status updates that don't require task tracking, use create_discussion instead. CONSTRAINTS: Maximum 1 issue(s) can be created. Assignees [copilot] will be automatically assigned.",
+              "description": "Create a new GitHub issue for tracking bugs, feature requests, or tasks. Use this for actionable work items that need assignment, labeling, and status tracking. For reports, announcements, or status updates that don't require task tracking, use create_discussion instead. CONSTRAINTS: Maximum 3 issue(s) can be created. Title will be prefixed with \"[duplicate-code] \". Labels [code-quality automated-analysis] will be automatically added.",
               "inputSchema": {
                 "additionalProperties": false,
                 "properties": {
@@ -599,8 +599,6 @@ jobs:
           
           *Analysis of commit __GH_AW_GITHUB_EVENT_HEAD_COMMIT_ID__*
           
-          **Assignee**: @copilot
-          
           ## Summary
           
           [Brief overview of this specific duplication pattern]
@@ -676,7 +674,6 @@ jobs:
           - Include sufficient detail for SWE agents to understand and act on findings
           - Provide concrete examples with file paths and line numbers
           - Suggest practical refactoring approaches
-          - Assign issue to @copilot for automated remediation
           - Use descriptive titles that clearly identify the specific pattern (e.g., "Duplicate Code: Error Handling Pattern in Server Module")
           
           ## Tool Usage Sequence
@@ -1237,7 +1234,7 @@ jobs:
         uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
         env:
           GH_AW_AGENT_OUTPUT: ${{ env.GH_AW_AGENT_OUTPUT }}
-          GH_AW_SAFE_OUTPUTS_HANDLER_CONFIG: "{\"create_issue\":{\"assignees\":[\"copilot\"],\"max\":1}}"
+          GH_AW_SAFE_OUTPUTS_HANDLER_CONFIG: "{\"create_issue\":{\"expires\":7,\"labels\":[\"code-quality\",\"automated-analysis\"],\"max\":3,\"title_prefix\":\"[duplicate-code] \"}}"
         with:
           github-token: ${{ secrets.GH_AW_GITHUB_TOKEN || secrets.GITHUB_TOKEN }}
           script: |

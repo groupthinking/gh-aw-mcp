@@ -15,7 +15,6 @@ safe-outputs:
   create-issue:
     title-prefix: "[duplicate-code] "
     labels: [code-quality, automated-analysis]
-    assignees: copilot
     max: 3
     expires: 7
   missing-tool:
@@ -164,8 +163,6 @@ For each distinct duplication pattern found, create a separate issue using this 
 
 *Analysis of commit ${{ github.event.head_commit.id }}*
 
-**Assignee**: @copilot
-
 ## Summary
 
 [Brief overview of this specific duplication pattern]
@@ -241,7 +238,6 @@ For each distinct duplication pattern found, create a separate issue using this 
 - Include sufficient detail for SWE agents to understand and act on findings
 - Provide concrete examples with file paths and line numbers
 - Suggest practical refactoring approaches
-- Assign issue to @copilot for automated remediation
 - Use descriptive titles that clearly identify the specific pattern (e.g., "Duplicate Code: Error Handling Pattern in Server Module")
 
 ## Tool Usage Sequence
