@@ -533,7 +533,6 @@ func (c *Connection) initializeHTTPSession() (string, error) {
 	// The response might be in SSE format (event: message\ndata: {...})
 	// Try to parse as JSON first, if that fails, try SSE format
 	var rpcResponse Response
-	jsonData := responseBody
 
 	if err := json.Unmarshal(responseBody, &rpcResponse); err != nil {
 		// Try parsing as SSE format
@@ -549,9 +548,8 @@ func (c *Connection) initializeHTTPSession() (string, error) {
 		}
 
 		// Successfully extracted JSON from SSE, now parse it
-		jsonData = sseData
-		if err := json.Unmarshal(jsonData, &rpcResponse); err != nil {
-			return "", fmt.Errorf("failed to parse JSON data extracted from SSE response: %w\nJSON data: %s", err, string(jsonData))
+		if err := json.Unmarshal(sseData, &rpcResponse); err != nil {
+			return "", fmt.Errorf("failed to parse JSON data extracted from SSE response: %w\nJSON data: %s", err, string(sseData))
 		}
 		logConn.Printf("Successfully parsed SSE-formatted response")
 	}
@@ -647,7 +645,6 @@ func (c *Connection) sendHTTPRequest(ctx context.Context, method string, params 
 	// The response might be in SSE format (event: message\ndata: {...})
 	// Try to parse as JSON first, if that fails, try SSE format
 	var rpcResponse Response
-	jsonData := responseBody
 
 	if err := json.Unmarshal(responseBody, &rpcResponse); err != nil {
 		// Try parsing as SSE format
@@ -663,9 +660,8 @@ func (c *Connection) sendHTTPRequest(ctx context.Context, method string, params 
 		}
 
 		// Successfully extracted JSON from SSE, now parse it
-		jsonData = sseData
-		if err := json.Unmarshal(jsonData, &rpcResponse); err != nil {
-			return nil, fmt.Errorf("failed to parse JSON data extracted from SSE response: %w\nJSON data: %s", err, string(jsonData))
+		if err := json.Unmarshal(sseData, &rpcResponse); err != nil {
+			return nil, fmt.Errorf("failed to parse JSON data extracted from SSE response: %w\nJSON data: %s", err, string(sseData))
 		}
 		logConn.Printf("Successfully parsed SSE-formatted response")
 	}

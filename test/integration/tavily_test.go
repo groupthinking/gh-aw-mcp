@@ -18,42 +18,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// startGatewayWithConfig starts the gateway with a specific config file
-func startGatewayWithConfig(ctx context.Context, t *testing.T, configPath string) *exec.Cmd {
-	t.Helper()
-
-	// Find the binary
-	binaryPath := findBinary(t)
-	t.Logf("Using binary: %s", binaryPath)
-
-	port := "13099" // Use a specific port for Tavily tests
-	cmd := exec.CommandContext(ctx, binaryPath,
-		"--config", configPath,
-		"--listen", "127.0.0.1:"+port,
-		"--routed",
-	)
-
-	// Capture output for debugging
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-
-	if err := cmd.Start(); err != nil {
-		t.Fatalf("Failed to start gateway: %v\nSTDOUT: %s\nSTDERR: %s", err, stdout.String(), stderr.String())
-	}
-
-	// Start a goroutine to log output if test fails
-	go func() {
-		<-ctx.Done()
-		if t.Failed() {
-			t.Logf("Gateway STDOUT: %s", stdout.String())
-			t.Logf("Gateway STDERR: %s", stderr.String())
-		}
-	}()
-
-	return cmd
-}
-
 // startGatewayWithJSONConfig starts the gateway with JSON config via stdin
 func startGatewayWithJSONConfig(ctx context.Context, t *testing.T, jsonConfig string) *exec.Cmd {
 	t.Helper()
