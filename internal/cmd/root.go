@@ -162,7 +162,7 @@ func run(cmd *cobra.Command, args []string) error {
 
 	debugLog.Printf("Configuration loaded with %d servers", len(cfg.Servers))
 	log.Printf("Loaded %d MCP server(s)", len(cfg.Servers))
-	
+
 	// Log server names to markdown
 	serverNames := make([]string, 0, len(cfg.Servers))
 	for name := range cfg.Servers {
