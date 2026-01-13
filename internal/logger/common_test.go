@@ -396,7 +396,7 @@ func TestInitLogFile_ConcurrentCreation(t *testing.T) {
 			defer file.Close()
 
 			// Write some content
-			if _, err := file.WriteString(fmt.Sprintf("content from goroutine %d\n", id)); err != nil {
+			if _, err := fmt.Fprintf(file, "content from goroutine %d\n", id); err != nil {
 				errors <- err
 			}
 		}(i)
