@@ -39,6 +39,9 @@ tools:
 safe-outputs:
   update-release:
 jobs:
+  # Pre-tag validation: Run tests BEFORE creating the tag (workflow_dispatch only)
+  # This prevents tag creation if build or tests fail
+  # Note: release job also runs tests for direct tag pushes and as defense-in-depth
   test:
     if: github.event_name == 'workflow_dispatch'
     needs: ["activation"]
