@@ -79,14 +79,7 @@ func (fl *FileLogger) Close() error {
 	fl.mu.Lock()
 	defer fl.mu.Unlock()
 
-	if fl.logFile != nil {
-		// Sync any remaining buffered data before closing
-		if err := fl.logFile.Sync(); err != nil {
-			log.Printf("WARNING: Failed to sync log file before close: %v", err)
-		}
-		return fl.logFile.Close()
-	}
-	return nil
+	return closeLogFile(fl.logFile, &fl.mu, "file")
 }
 
 // LogLevel represents the severity of a log message

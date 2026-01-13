@@ -77,15 +77,7 @@ func (jl *JSONLLogger) Close() error {
 	jl.mu.Lock()
 	defer jl.mu.Unlock()
 
-	if jl.logFile != nil {
-		// Sync any remaining buffered data before closing
-		if err := jl.logFile.Sync(); err != nil {
-			// Log sync errors but continue with close
-			return err
-		}
-		return jl.logFile.Close()
-	}
-	return nil
+	return closeLogFile(jl.logFile, &jl.mu, "JSONL")
 }
 
 // sanitizePayload sanitizes a payload by applying regex patterns to the entire string
