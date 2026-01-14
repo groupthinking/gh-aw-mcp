@@ -43,28 +43,19 @@ func TestCloseEndpoint_Success(t *testing.T) {
 	httpServer.Handler.ServeHTTP(w, req)
 
 	// Verify response
-	if w.Code != http.StatusOK {
-		t.Errorf("Expected status 200, got %d", w.Code)
-	}
+	assert.Equal(t, http.StatusOK, w.Code, "Close endpoint should return 200 OK")
 
 	var response map[string]interface{}
-	if err := json.NewDecoder(w.Body).Decode(&response); err != nil {
-		t.Fatalf("Failed to decode response: %v", err)
-	}
+	require.NoError(t, json.NewDecoder(w.Body).Decode(&response), "Failed to decode response")
 
 	// Check response fields
-	if status, ok := response["status"].(string); !ok || status != "closed" {
-		t.Errorf("Expected status 'closed', got %v", response["status"])
-	}
-
-	if msg, ok := response["message"].(string); !ok || msg != "Gateway shutdown initiated" {
-		t.Errorf("Expected message 'Gateway shutdown initiated', got %v", response["message"])
-	}
+	assert.Equal(t, "closed", response["status"], "Expected status 'closed'")
+	assert.Equal(t, "Gateway shutdown initiated", response["message"], "Expected shutdown message")
 
 	// Should report 2 servers terminated
-	if count, ok := response["serversTerminated"].(float64); !ok || count != 2 {
-		t.Errorf("Expected serversTerminated 2, got %v", response["serversTerminated"])
-	}
+	serversTerminated, ok := response["serversTerminated"].(float64)
+	require.True(t, ok, "serversTerminated should be a number")
+	assert.InDelta(t, 2.0, serversTerminated, 0.01, "Expected 2 servers terminated")
 
 	// Verify server is marked as shutdown
 	assert.True(t, us.IsShutdown(), "Expected server to be marked as shutdown")
