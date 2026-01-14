@@ -24,16 +24,9 @@ func TestUnifiedServer_GetServerIDs(t *testing.T) {
 	defer us.Close()
 
 	serverIDs := us.GetServerIDs()
-	if len(serverIDs) != 2 {
-		t.Errorf("Expected 2 server IDs, got %d", len(serverIDs))
-	}
+	assert.Len(t, serverIDs, 2, "Expected 2 server IDs")
 
-	expectedIDs := map[string]bool{"github": true, "fetch": true}
-	for _, id := range serverIDs {
-		if !expectedIDs[id] {
-			t.Errorf("Unexpected server ID: %s", id)
-		}
-	}
+	assert.ElementsMatch(t, []string{"github", "fetch"}, serverIDs, "Server IDs should match expected values")
 }
 
 func TestUnifiedServer_SessionManagement(t *testing.T) {
@@ -59,17 +52,9 @@ func TestUnifiedServer_SessionManagement(t *testing.T) {
 	session, exists := us.sessions[sessionID]
 	us.sessionMu.RUnlock()
 
-	if !exists {
-		t.Error("Session not found after creation")
-	}
-
-	if session.Token != token {
-		t.Errorf("Expected token '%s', got '%s'", token, session.Token)
-	}
-
-	if session.SessionID != sessionID {
-		t.Errorf("Expected session ID '%s', got '%s'", sessionID, session.SessionID)
-	}
+	assert.True(t, exists, "Session should exist after creation")
+	assert.Equal(t, token, session.Token, "Session token should match")
+	assert.Equal(t, sessionID, session.SessionID, "Session ID should match")
 }
 
 func TestUnifiedServer_GetSessionKeys(t *testing.T) {
@@ -91,18 +76,9 @@ func TestUnifiedServer_GetSessionKeys(t *testing.T) {
 	}
 
 	keys := us.getSessionKeys()
-	assert.Equal(t, len(sessions), len(keys))
+	assert.Len(t, keys, len(sessions), "Number of session keys should match")
 
-	keyMap := make(map[string]bool)
-	for _, key := range keys {
-		keyMap[key] = true
-	}
-
-	for _, expected := range sessions {
-		if !keyMap[expected] {
-			t.Errorf("Session key '%s' not found", expected)
-		}
-	}
+	assert.ElementsMatch(t, sessions, keys, "Session keys should match expected sessions")
 }
 
 func TestUnifiedServer_GetToolsForBackend(t *testing.T) {
