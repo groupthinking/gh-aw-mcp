@@ -4,6 +4,53 @@ import (
 	"testing"
 )
 
+func TestSanitizeForLogging(t *testing.T) {
+	tests := []struct {
+		name  string
+		input string
+		want  string
+	}{
+		{
+			name:  "Empty string",
+			input: "",
+			want:  "",
+		},
+		{
+			name:  "Single character",
+			input: "a",
+			want:  "...",
+		},
+		{
+			name:  "Four characters",
+			input: "abcd",
+			want:  "...",
+		},
+		{
+			name:  "Five characters",
+			input: "abcde",
+			want:  "abcd...",
+		},
+		{
+			name:  "Long string",
+			input: "my-secret-api-key-12345",
+			want:  "my-s...",
+		},
+		{
+			name:  "API key with Bearer prefix",
+			input: "Bearer my-token-123",
+			want:  "Bear...",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := sanitizeForLogging(tt.input); got != tt.want {
+				t.Errorf("sanitizeForLogging() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
 func TestParseAuthHeader(t *testing.T) {
 	tests := []struct {
 		name        string
