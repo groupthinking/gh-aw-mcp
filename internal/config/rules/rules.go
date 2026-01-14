@@ -106,6 +106,10 @@ func TimeoutPositive(timeout int, fieldName, jsonPath string) *ValidationError {
 
 // MountFormat validates a mount specification in the format "source:dest:mode"
 // Returns nil if valid, *ValidationError if invalid
+// Per MCP Gateway specification v1.7.0 section 4.1.5:
+// - Host path MUST be an absolute path
+// - Container path MUST be an absolute path
+// - Mode MUST be either "ro" (read-only) or "rw" (read-write)
 func MountFormat(mount, jsonPath string, index int) *ValidationError {
 	parts := strings.Split(mount, ":")
 	if len(parts) != 3 {
@@ -125,7 +129,17 @@ func MountFormat(mount, jsonPath string, index int) *ValidationError {
 			Field:      "mounts",
 			Message:    fmt.Sprintf("mount source cannot be empty in '%s'", mount),
 			JSONPath:   fmt.Sprintf("%s.mounts[%d]", jsonPath, index),
-			Suggestion: "Provide a valid source path",
+			Suggestion: "Provide a valid absolute source path (e.g., '/host/path')",
+		}
+	}
+
+	// Validate source is an absolute path (MCP spec requirement)
+	if !strings.HasPrefix(source, "/") {
+		return &ValidationError{
+			Field:      "mounts",
+			Message:    fmt.Sprintf("mount source must be an absolute path, got '%s'", source),
+			JSONPath:   fmt.Sprintf("%s.mounts[%d]", jsonPath, index),
+			Suggestion: "Use an absolute path starting with '/' (e.g., '/var/data' instead of 'data')",
 		}
 	}
 
@@ -135,7 +149,17 @@ func MountFormat(mount, jsonPath string, index int) *ValidationError {
 			Field:      "mounts",
 			Message:    fmt.Sprintf("mount destination cannot be empty in '%s'", mount),
 			JSONPath:   fmt.Sprintf("%s.mounts[%d]", jsonPath, index),
-			Suggestion: "Provide a valid destination path",
+			Suggestion: "Provide a valid absolute destination path (e.g., '/app/data')",
+		}
+	}
+
+	// Validate dest is an absolute path (MCP spec requirement)
+	if !strings.HasPrefix(dest, "/") {
+		return &ValidationError{
+			Field:      "mounts",
+			Message:    fmt.Sprintf("mount destination must be an absolute path, got '%s'", dest),
+			JSONPath:   fmt.Sprintf("%s.mounts[%d]", jsonPath, index),
+			Suggestion: "Use an absolute path starting with '/' (e.g., '/app/data' instead of 'app/data')",
 		}
 	}
 
