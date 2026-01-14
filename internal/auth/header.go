@@ -16,7 +16,11 @@ package auth
 import (
 	"errors"
 	"strings"
+
+	"github.com/githubnext/gh-aw-mcpg/internal/logger"
 )
+
+var log = logger.New("auth:header")
 
 var (
 	// ErrMissingAuthHeader is returned when the Authorization header is missing
@@ -38,33 +42,52 @@ var (
 //   - agentID: The extracted agent/session identifier
 //   - error: ErrMissingAuthHeader if header is empty, nil otherwise
 func ParseAuthHeader(authHeader string) (apiKey string, agentID string, error error) {
+	// Sanitize header for logging (show only first 4 chars)
+	sanitized := ""
+	if len(authHeader) > 4 {
+		sanitized = authHeader[:4] + "..."
+	} else if len(authHeader) > 0 {
+		sanitized = "..."
+	}
+	log.Printf("Parsing auth header: sanitized=%s, length=%d", sanitized, len(authHeader))
+
 	if authHeader == "" {
+		log.Print("Auth header missing, returning error")
 		return "", "", ErrMissingAuthHeader
 	}
 
 	// Handle "Bearer <token>" format (backward compatibility)
 	if strings.HasPrefix(authHeader, "Bearer ") {
+		log.Print("Detected Bearer token format (backward compatibility)")
 		token := strings.TrimPrefix(authHeader, "Bearer ")
 		return token, token, nil
 	}
 
 	// Handle "Agent <agent-id>" format
 	if strings.HasPrefix(authHeader, "Agent ") {
+		log.Print("Detected Agent ID format")
 		agentIDValue := strings.TrimPrefix(authHeader, "Agent ")
 		return agentIDValue, agentIDValue, nil
 	}
 
 	// Per MCP spec 7.1: Authorization header contains API key directly
 	// Use the entire header value as both API key and agent/session ID
+	log.Print("Using plain API key format (MCP spec 7.1)")
 	return authHeader, authHeader, nil
 }
 
 // ValidateAPIKey checks if the provided API key matches the expected key.
 // Returns true if they match, false otherwise.
 func ValidateAPIKey(provided, expected string) bool {
+	log.Printf("Validating API key: expected_configured=%t", expected != "")
+
 	if expected == "" {
 		// No API key configured, authentication is disabled
+		log.Print("No API key configured, authentication disabled")
 		return true
 	}
-	return provided == expected
+
+	matches := provided == expected
+	log.Printf("API key validation result: matches=%t", matches)
+	return matches
 }
