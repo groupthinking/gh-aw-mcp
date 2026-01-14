@@ -268,7 +268,7 @@ func TestFormatViolationError(t *testing.T) {
 			SecrecyToAdd: []Tag{"private"},
 			Reason:       "Empty agent cannot access private resource",
 		}
-		agentSecrecy := NewSecrecyLabel()   // Empty
+		agentSecrecy := NewSecrecyLabel()     // Empty
 		agentIntegrity := NewIntegrityLabel() // Empty
 
 		resource := NewLabeledResource("private-resource")
