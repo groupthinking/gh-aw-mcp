@@ -6,6 +6,8 @@ This gateway is used with [GitHub Agentic Workflows](https://github.com/githubne
 
 📖 **[Full Configuration Specification](docs/mcp-gateway.md)** - Complete reference for all configuration options and validation rules.
 
+> **Documentation Sync**: The specification docs are automatically synced daily from the [githubnext/gh-aw](https://github.com/githubnext/gh-aw) repository. See [docs/README.md](docs/README.md) for details.
+
 ## Features
 
 - **Configuration Modes**: Supports both TOML files and JSON stdin configuration
