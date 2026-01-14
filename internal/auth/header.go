@@ -29,6 +29,18 @@ var (
 	ErrInvalidAuthHeader = errors.New("invalid Authorization header format")
 )
 
+// sanitizeForLogging returns a sanitized version of the input string for safe logging.
+// It shows only the first 4 characters followed by "..." to prevent exposing sensitive data.
+// For strings with 4 or fewer characters, it returns only "...".
+func sanitizeForLogging(input string) string {
+	if len(input) > 4 {
+		return input[:4] + "..."
+	} else if len(input) > 0 {
+		return "..."
+	}
+	return ""
+}
+
 // ParseAuthHeader parses the Authorization header and extracts the API key and agent ID.
 // Per MCP spec 7.1, the Authorization header should contain the API key directly
 // without any Bearer prefix or other scheme.
@@ -42,14 +54,7 @@ var (
 //   - agentID: The extracted agent/session identifier
 //   - error: ErrMissingAuthHeader if header is empty, nil otherwise
 func ParseAuthHeader(authHeader string) (apiKey string, agentID string, error error) {
-	// Sanitize header for logging (show only first 4 chars)
-	sanitized := ""
-	if len(authHeader) > 4 {
-		sanitized = authHeader[:4] + "..."
-	} else if len(authHeader) > 0 {
-		sanitized = "..."
-	}
-	log.Printf("Parsing auth header: sanitized=%s, length=%d", sanitized, len(authHeader))
+	log.Printf("Parsing auth header: sanitized=%s, length=%d", sanitizeForLogging(authHeader), len(authHeader))
 
 	if authHeader == "" {
 		log.Print("Auth header missing, returning error")
