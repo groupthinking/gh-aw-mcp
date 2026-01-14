@@ -53,7 +53,9 @@ func TestCloseEndpoint_Success(t *testing.T) {
 	assert.Equal(t, "Gateway shutdown initiated", response["message"], "Expected shutdown message")
 
 	// Should report 2 servers terminated
-	assert.Equal(t, float64(2), response["serversTerminated"], "Expected 2 servers terminated")
+	serversTerminated, ok := response["serversTerminated"].(float64)
+	require.True(t, ok, "serversTerminated should be a number")
+	assert.InDelta(t, 2.0, serversTerminated, 0.01, "Expected 2 servers terminated")
 
 	// Verify server is marked as shutdown
 	assert.True(t, us.IsShutdown(), "Expected server to be marked as shutdown")
