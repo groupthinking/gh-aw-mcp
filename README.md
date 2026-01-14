@@ -391,6 +391,34 @@ Supported JSON-RPC 2.0 methods:
 
 ## Security Features
 
+### Authentication
+
+MCPG implements MCP specification 7.1 for API key authentication.
+
+**Authentication Header Format:**
+- Per MCP spec 7.1: Authorization header MUST contain the API key directly
+- Format: `Authorization: <api-key>` (plain API key, NOT Bearer scheme)
+- Example: `Authorization: my-secret-api-key-123`
+
+**Configuration:**
+- Set via `MCP_GATEWAY_API_KEY` environment variable
+- When configured, all endpoints except `/health` require authentication
+- When not configured, authentication is disabled
+
+**Implementation:**
+- The `internal/auth` package provides centralized authentication logic
+- `auth.ParseAuthHeader()` - Parses Authorization headers per MCP spec 7.1
+- `auth.ValidateAPIKey()` - Validates provided API keys
+- Backward compatibility for Bearer tokens is maintained
+
+**Example Request:**
+```bash
+curl -X POST http://localhost:8000/mcp/github \
+  -H "Authorization: my-api-key" \
+  -H "Content-Type: application/json" \
+  -d '{"jsonrpc": "2.0", "method": "tools/list", "id": 1}'
+```
+
 ### Enhanced Error Debugging
 
 Command failures now include extensive debugging information:

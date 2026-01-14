@@ -10,6 +10,10 @@ import (
 
 // authMiddleware implements API key authentication per spec section 7.1
 // Per spec: Authorization header MUST contain the API key directly (NOT Bearer scheme)
+// 
+// For header parsing logic, see internal/auth package which provides:
+//   - ParseAuthHeader() for extracting API keys and agent IDs
+//   - ValidateAPIKey() for key validation
 func authMiddleware(apiKey string, next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		// Extract Authorization header

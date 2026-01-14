@@ -29,6 +29,7 @@ Quick reference for AI agents working with MCP Gateway (Go-based MCP proxy serve
 - `internal/launcher/` - Backend process management
 - `internal/difc/` - Security labels (not enabled)
 - `internal/guard/` - Security guards (NoopGuard active)
+- `internal/auth/` - Authentication header parsing and middleware
 - `internal/logger/` - Debug logging framework (micro logger)
 - `internal/timeutil/` - Time formatting utilities
 
@@ -121,6 +122,7 @@ golangci-lint run --enable=gosec,testifylint --timeout=5m
 **Add MCP Server**: Update config.toml with new server entry  
 **Add Route**: Edit `internal/server/routed.go` or `unified.go`  
 **Add Guard**: Implement in `internal/guard/` and register  
+**Add Auth Logic**: Implement in `internal/auth/` package  
 **Add Unit Test**: Create `*_test.go` in the appropriate `internal/` package  
 **Add Integration Test**: Create test in `test/integration/` that uses the binary
 
