@@ -1,0 +1,56 @@
+name: Sync Documentation from gh-aw
+
+on:
+  schedule:
+    # Run daily at 2:00 AM UTC
+    - cron: '0 2 * * *'
+  workflow_dispatch: # Allow manual triggering
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  sync-docs:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Sync documentation
+        run: ./scripts/sync-docs.sh
+
+      - name: Check for changes
+        id: check_changes
+        run: |
+          if git diff --quiet docs/; then
+            echo "has_changes=false" >> $GITHUB_OUTPUT
+            echo "No documentation changes detected"
+          else
+            echo "has_changes=true" >> $GITHUB_OUTPUT
+            echo "Documentation changes detected"
+          fi
+
+      - name: Create Pull Request
+        if: steps.check_changes.outputs.has_changes == 'true'
+        uses: peter-evans/create-pull-request@v6
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          commit-message: "docs: sync MCP Gateway documentation from gh-aw"
+          title: "docs: sync MCP Gateway documentation from gh-aw"
+          body: |
+            This PR contains automated documentation updates synced from the [githubnext/gh-aw](https://github.com/githubnext/gh-aw) repository.
+            
+            The following documentation has been updated:
+            - `docs/mcp-gateway.md` - MCP Gateway Specification
+            
+            **Source**: https://github.com/githubnext/gh-aw/blob/main/docs/src/content/docs/reference/mcp-gateway.md
+            
+            This sync is performed daily to keep the documentation up-to-date with the main gh-aw repository.
+          branch: docs/sync-from-gh-aw
+          delete-branch: true
+          labels: |
+            documentation
+            automated

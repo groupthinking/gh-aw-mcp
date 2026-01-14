@@ -44,7 +44,7 @@ Quick reference for AI agents working with MCP Gateway (Go-based MCP proxy serve
 
 ## Config Examples
 
-**Configuration Spec**: See **[MCP Gateway Configuration Reference](https://github.com/githubnext/gh-aw/blob/main/docs/src/content/docs/reference/mcp-gateway.md)** for complete specification.
+**Configuration Spec**: See **[MCP Gateway Configuration Reference](docs/mcp-gateway.md)** for complete specification.
 
 **TOML** (`config.toml`):
 ```toml

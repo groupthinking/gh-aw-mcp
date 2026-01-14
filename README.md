@@ -4,7 +4,7 @@ A gateway for Model Context Protocol (MCP) servers.
 
 This gateway is used with [GitHub Agentic Workflows](https://github.com/githubnext/gh-aw) via the `sandbox.mcp` configuration to provide MCP server access to AI agents running in sandboxed environments.
 
-📖 **[Full Configuration Specification](https://github.com/githubnext/gh-aw/blob/main/docs/src/content/docs/reference/mcp-gateway.md)** - Complete reference for all configuration options and validation rules.
+📖 **[Full Configuration Specification](docs/mcp-gateway.md)** - Complete reference for all configuration options and validation rules.
 
 ## Features
 
@@ -85,7 +85,7 @@ args = ["/path/to/filesystem-server.js"]
 
 ### JSON Stdin Format
 
-For the complete JSON configuration specification with all validation rules, see the **[MCP Gateway Configuration Reference](https://github.com/githubnext/gh-aw/blob/main/docs/src/content/docs/reference/mcp-gateway.md)**.
+For the complete JSON configuration specification with all validation rules, see the **[MCP Gateway Configuration Reference](docs/mcp-gateway.md)**.
 
 ```json
 {
@@ -159,7 +159,7 @@ For the complete JSON configuration specification with all validation rules, see
   - `mode` must be either `"ro"` or `"rw"`
   - Both source and destination paths are required (cannot be empty)
 
-See **[Configuration Specification](https://github.com/githubnext/gh-aw/blob/main/docs/src/content/docs/reference/mcp-gateway.md)** for complete validation rules.
+See **[Configuration Specification](docs/mcp-gateway.md)** for complete validation rules.
 
 #### Gateway Configuration Fields (Reserved)
 
