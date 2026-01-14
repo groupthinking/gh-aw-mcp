@@ -6,39 +6,39 @@ import (
 
 func TestParseAuthHeader(t *testing.T) {
 	tests := []struct {
-		name           string
-		authHeader     string
-		wantAPIKey     string
-		wantAgentID    string
-		wantErr        error
+		name        string
+		authHeader  string
+		wantAPIKey  string
+		wantAgentID string
+		wantErr     error
 	}{
 		{
-			name:           "Empty header",
-			authHeader:     "",
-			wantAPIKey:     "",
-			wantAgentID:    "",
-			wantErr:        ErrMissingAuthHeader,
+			name:        "Empty header",
+			authHeader:  "",
+			wantAPIKey:  "",
+			wantAgentID: "",
+			wantErr:     ErrMissingAuthHeader,
 		},
 		{
-			name:           "Plain API key (MCP spec 7.1)",
-			authHeader:     "my-secret-api-key",
-			wantAPIKey:     "my-secret-api-key",
-			wantAgentID:    "my-secret-api-key",
-			wantErr:        nil,
+			name:        "Plain API key (MCP spec 7.1)",
+			authHeader:  "my-secret-api-key",
+			wantAPIKey:  "my-secret-api-key",
+			wantAgentID: "my-secret-api-key",
+			wantErr:     nil,
 		},
 		{
-			name:           "Bearer token (backward compatibility)",
-			authHeader:     "Bearer my-token-123",
-			wantAPIKey:     "my-token-123",
-			wantAgentID:    "my-token-123",
-			wantErr:        nil,
+			name:        "Bearer token (backward compatibility)",
+			authHeader:  "Bearer my-token-123",
+			wantAPIKey:  "my-token-123",
+			wantAgentID: "my-token-123",
+			wantErr:     nil,
 		},
 		{
-			name:           "Agent format",
-			authHeader:     "Agent agent-123",
-			wantAPIKey:     "agent-123",
-			wantAgentID:    "agent-123",
-			wantErr:        nil,
+			name:        "Agent format",
+			authHeader:  "Agent agent-123",
+			wantAPIKey:  "agent-123",
+			wantAgentID: "agent-123",
+			wantErr:     nil,
 		},
 	}
 

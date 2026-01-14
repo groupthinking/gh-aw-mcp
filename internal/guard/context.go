@@ -31,7 +31,7 @@ func SetAgentIDInContext(ctx context.Context, agentID string) context.Context {
 }
 
 // ExtractAgentIDFromAuthHeader extracts agent ID from Authorization header
-// 
+//
 // Note: For MCP spec 7.1 compliant parsing, see internal/auth.ParseAuthHeader()
 // which provides centralized authentication header parsing.
 //
