@@ -18,4 +18,4 @@ ENV SERENA_CONTEXT=codex
 ENV SERENA_PROJECT=/workspace
 
 # Entrypoint runs the Serena MCP server with Go support
-ENTRYPOINT ["serena", "start-mcp-server", "--context", "${SERENA_CONTEXT}", "--project", "${SERENA_PROJECT}"]
+ENTRYPOINT ["serena", "start-mcp-server", "--context", "codex", "--project", "/workspace"]
