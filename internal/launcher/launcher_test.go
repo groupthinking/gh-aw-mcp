@@ -3,6 +3,7 @@ package launcher
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -14,171 +15,132 @@ import (
 	"github.com/githubnext/gh-aw-mcpg/internal/config"
 )
 
-func TestHTTPConnection(t *testing.T) {
-	// Create a mock HTTP server that handles initialize
-	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		response := map[string]interface{}{
-			"jsonrpc": "2.0",
-			"id":      1,
-			"result": map[string]interface{}{
-				"protocolVersion": "2024-11-05",
-				"capabilities":    map[string]interface{}{},
-				"serverInfo": map[string]interface{}{
-					"name":    "test-server",
-					"version": "1.0.0",
-				},
-			},
-		}
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(response)
-	}))
-	defer mockServer.Close()
+// loadConfigFromJSON is a test helper that creates a config from JSON via stdin
+func loadConfigFromJSON(t *testing.T, jsonConfig string) *config.Config {
+	t.Helper()
 
-	// Create test config with HTTP server
-	jsonConfig := `{
-		"mcpServers": {
-			"safeinputs": {
-				"type": "http",
-				"url": "` + mockServer.URL + `",
-				"headers": {
-					"Authorization": "test-auth-secret"
-				}
-			}
-		},
-		"gateway": {
-			"port": 3001,
-			"domain": "localhost",
-			"apiKey": "test-key"
-		}
-	}`
+	r, w, err := os.Pipe()
+	require.NoError(t, err, "Failed to create pipe")
 
-	// Parse config via stdin
-	r, w, _ := os.Pipe()
 	oldStdin := os.Stdin
 	os.Stdin = r
+	t.Cleanup(func() { os.Stdin = oldStdin })
+
 	go func() {
-		w.Write([]byte(jsonConfig))
+		_, _ = w.Write([]byte(jsonConfig))
 		w.Close()
 	}()
 
 	cfg, err := config.LoadFromStdin()
-	os.Stdin = oldStdin
+	require.NoError(t, err, "Failed to load config from stdin")
 
-	require.NoError(t, err, "Failed to load config")
-
-	// Verify HTTP server is loaded
-	httpServer, ok := cfg.Servers["safeinputs"]
-	if !ok {
-		t.Fatal("HTTP server 'safeinputs' not found")
-	}
-
-	if httpServer.Type != "http" {
-		t.Errorf("Expected type 'http', got '%s'", httpServer.Type)
-	}
-
-	if httpServer.URL != mockServer.URL {
-		t.Errorf("Expected URL '%s', got '%s'", mockServer.URL, httpServer.URL)
-	}
-
-	if httpServer.Headers["Authorization"] != "test-auth-secret" {
-		t.Errorf("Expected Authorization header 'test-auth-secret', got '%s'", httpServer.Headers["Authorization"])
-	}
-
-	// Test launcher
-	ctx := context.Background()
-	l := New(ctx, cfg)
-
-	// Get connection
-	conn, err := GetOrLaunch(l, "safeinputs")
-	require.NoError(t, err, "Failed to get connection")
-
-	assert.True(t, conn.IsHTTP(), "Connection should be HTTP")
-
-	if conn.GetHTTPURL() != mockServer.URL {
-		t.Errorf("Expected URL '%s', got '%s'", mockServer.URL, conn.GetHTTPURL())
-	}
-
-	if conn.GetHTTPHeaders()["Authorization"] != "test-auth-secret" {
-		t.Errorf("Expected Authorization header 'test-auth-secret', got '%s'", conn.GetHTTPHeaders()["Authorization"])
-	}
+	return cfg
 }
 
-func TestHTTPConnectionWithVariableExpansion(t *testing.T) {
-	// Set test environment variable
-	os.Setenv("TEST_AUTH_TOKEN", "secret-token-value")
-	defer os.Unsetenv("TEST_AUTH_TOKEN")
-
-	// Create a mock HTTP server that handles initialize
-	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		response := map[string]interface{}{
-			"jsonrpc": "2.0",
-			"id":      1,
-			"result": map[string]interface{}{
-				"protocolVersion": "2024-11-05",
-				"capabilities":    map[string]interface{}{},
-				"serverInfo": map[string]interface{}{
-					"name":    "test-server",
-					"version": "1.0.0",
-				},
-			},
-		}
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(response)
-	}))
-	defer mockServer.Close()
-
-	// Create test config with variable expansion
-	jsonConfig := `{
-		"mcpServers": {
-			"safeinputs": {
-				"type": "http",
-				"url": "` + mockServer.URL + `",
-				"headers": {
-					"Authorization": "${TEST_AUTH_TOKEN}"
-				}
-			}
+func TestHTTPConnection(t *testing.T) {
+	tests := []struct {
+		name          string
+		serverID      string
+		authHeader    string
+		authValue     string
+		setupEnv      func(*testing.T)
+		wantAuthValue string
+		wantIsHTTP    bool
+	}{
+		{
+			name:          "basic HTTP connection",
+			serverID:      "safeinputs",
+			authHeader:    "Authorization",
+			authValue:     "test-auth-secret",
+			setupEnv:      func(t *testing.T) {},
+			wantAuthValue: "test-auth-secret",
+			wantIsHTTP:    true,
 		},
-		"gateway": {
-			"port": 3001,
-			"domain": "localhost",
-			"apiKey": "test-key"
-		}
-	}`
-
-	// Parse config via stdin
-	r, w, _ := os.Pipe()
-	oldStdin := os.Stdin
-	os.Stdin = r
-	go func() {
-		w.Write([]byte(jsonConfig))
-		w.Close()
-	}()
-
-	cfg, err := config.LoadFromStdin()
-	os.Stdin = oldStdin
-
-	require.NoError(t, err, "Failed to load config")
-
-	// Verify HTTP server is loaded with expanded variable
-	httpServer, ok := cfg.Servers["safeinputs"]
-	if !ok {
-		t.Fatal("HTTP server 'safeinputs' not found")
+		{
+			name:       "HTTP connection with variable expansion",
+			serverID:   "safeinputs",
+			authHeader: "Authorization",
+			authValue:  "${TEST_AUTH_TOKEN}",
+			setupEnv: func(t *testing.T) {
+				t.Setenv("TEST_AUTH_TOKEN", "secret-token-value")
+			},
+			wantAuthValue: "secret-token-value",
+			wantIsHTTP:    true,
+		},
+		{
+			name:          "HTTP connection with custom header",
+			serverID:      "custom-server",
+			authHeader:    "X-API-Key",
+			authValue:     "custom-key-123",
+			setupEnv:      func(t *testing.T) {},
+			wantAuthValue: "custom-key-123",
+			wantIsHTTP:    true,
+		},
 	}
 
-	if httpServer.Headers["Authorization"] != "secret-token-value" {
-		t.Errorf("Expected Authorization header 'secret-token-value' (expanded), got '%s'", httpServer.Headers["Authorization"])
-	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Setup environment if needed
+			tt.setupEnv(t)
 
-	// Test launcher
-	ctx := context.Background()
-	l := New(ctx, cfg)
+			// Create a mock HTTP server
+			mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				response := map[string]interface{}{
+					"jsonrpc": "2.0",
+					"id":      1,
+					"result": map[string]interface{}{
+						"protocolVersion": "2024-11-05",
+						"capabilities":    map[string]interface{}{},
+						"serverInfo": map[string]interface{}{
+							"name":    "test-server",
+							"version": "1.0.0",
+						},
+					},
+				}
+				w.Header().Set("Content-Type", "application/json")
+				json.NewEncoder(w).Encode(response)
+			}))
+			defer mockServer.Close()
 
-	// Get connection
-	conn, err := GetOrLaunch(l, "safeinputs")
-	require.NoError(t, err, "Failed to get connection")
+			// Create test config with HTTP server
+			jsonConfig := fmt.Sprintf(`{
+				"mcpServers": {
+					"%s": {
+						"type": "http",
+						"url": "%s",
+						"headers": {
+							"%s": "%s"
+						}
+					}
+				},
+				"gateway": {
+					"port": 3001,
+					"domain": "localhost",
+					"apiKey": "test-key"
+				}
+			}`, tt.serverID, mockServer.URL, tt.authHeader, tt.authValue)
 
-	if conn.GetHTTPHeaders()["Authorization"] != "secret-token-value" {
-		t.Errorf("Expected Authorization header 'secret-token-value', got '%s'", conn.GetHTTPHeaders()["Authorization"])
+			cfg := loadConfigFromJSON(t, jsonConfig)
+
+			// Verify HTTP server is loaded
+			httpServer, ok := cfg.Servers[tt.serverID]
+			require.True(t, ok, "HTTP server '%s' not found", tt.serverID)
+			assert.Equal(t, "http", httpServer.Type)
+			assert.Equal(t, mockServer.URL, httpServer.URL)
+			assert.Equal(t, tt.wantAuthValue, httpServer.Headers[tt.authHeader])
+
+			// Test launcher
+			ctx := context.Background()
+			l := New(ctx, cfg)
+
+			// Get connection
+			conn, err := GetOrLaunch(l, tt.serverID)
+			require.NoError(t, err, "Failed to get connection")
+
+			assert.Equal(t, tt.wantIsHTTP, conn.IsHTTP(), "Connection HTTP status mismatch")
+			assert.Equal(t, mockServer.URL, conn.GetHTTPURL())
+			assert.Equal(t, tt.wantAuthValue, conn.GetHTTPHeaders()[tt.authHeader])
+		})
 	}
 }
 
@@ -202,40 +164,20 @@ func TestMixedHTTPAndStdioServers(t *testing.T) {
 		}
 	}`
 
-	// Parse config via stdin
-	r, w, _ := os.Pipe()
-	oldStdin := os.Stdin
-	os.Stdin = r
-	go func() {
-		w.Write([]byte(jsonConfig))
-		w.Close()
-	}()
-
-	cfg, err := config.LoadFromStdin()
-	os.Stdin = oldStdin
-
-	require.NoError(t, err, "Failed to load config")
+	cfg := loadConfigFromJSON(t, jsonConfig)
 
 	// Verify both servers are loaded
-	if len(cfg.Servers) != 2 {
-		t.Errorf("Expected 2 servers, got %d", len(cfg.Servers))
-	}
+	assert.Len(t, cfg.Servers, 2, "Expected 2 servers")
 
 	// Check HTTP server
 	httpServer, ok := cfg.Servers["http-server"]
-	if !ok {
-		t.Error("HTTP server not found")
-	} else if httpServer.Type != "http" {
-		t.Errorf("Expected HTTP server type 'http', got '%s'", httpServer.Type)
-	}
+	require.True(t, ok, "HTTP server not found")
+	assert.Equal(t, "http", httpServer.Type)
 
 	// Check stdio server
 	stdioServer, ok := cfg.Servers["stdio-server"]
-	if !ok {
-		t.Error("stdio server not found")
-	} else if stdioServer.Type != "stdio" {
-		t.Errorf("Expected stdio server type 'stdio', got '%s'", stdioServer.Type)
-	}
+	require.True(t, ok, "stdio server not found")
+	assert.Equal(t, "stdio", stdioServer.Type)
 }
 
 func TestSanitizeEnvForLogging(t *testing.T) {
@@ -309,34 +251,200 @@ func TestSanitizeEnvForLogging(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			result := sanitizeEnvForLogging(tt.input)
 
-			// Check if both are nil
-			if tt.expected == nil && result == nil {
+			if tt.expected == nil {
+				assert.Nil(t, result)
 				return
 			}
 
-			// Check if one is nil
-			if (tt.expected == nil) != (result == nil) {
-				t.Errorf("Expected nil=%v, got nil=%v", tt.expected == nil, result == nil)
-				return
-			}
+			require.NotNil(t, result, "Expected non-nil result")
+			assert.Equal(t, len(tt.expected), len(result), "Map length mismatch")
 
-			// Check length
-			if len(result) != len(tt.expected) {
-				t.Errorf("Expected %d entries, got %d", len(tt.expected), len(result))
-				return
-			}
-
-			// Check each entry
 			for key, expectedValue := range tt.expected {
-				actualValue, ok := result[key]
-				if !ok {
-					t.Errorf("Missing key %s in result", key)
-					continue
-				}
-				if actualValue != expectedValue {
-					t.Errorf("For key %s: expected %s, got %s", key, expectedValue, actualValue)
-				}
+				assert.Equal(t, expectedValue, result[key], "Value mismatch for key %s", key)
 			}
 		})
 	}
+}
+
+func TestGetOrLaunch_InvalidServerID(t *testing.T) {
+	jsonConfig := `{
+		"mcpServers": {
+			"valid-server": {
+				"type": "http",
+				"url": "http://example.com"
+			}
+		},
+		"gateway": {
+			"port": 3001,
+			"domain": "localhost",
+			"apiKey": "test-key"
+		}
+	}`
+
+	cfg := loadConfigFromJSON(t, jsonConfig)
+	ctx := context.Background()
+	l := New(ctx, cfg)
+
+	// Try to get a non-existent server
+	conn, err := GetOrLaunch(l, "non-existent-server")
+	assert.Error(t, err, "Expected error for non-existent server")
+	assert.Nil(t, conn, "Expected nil connection")
+	assert.Contains(t, err.Error(), "not found in config")
+}
+
+func TestGetOrLaunch_Reuse(t *testing.T) {
+	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		response := map[string]interface{}{
+			"jsonrpc": "2.0",
+			"id":      1,
+			"result": map[string]interface{}{
+				"protocolVersion": "2024-11-05",
+				"capabilities":    map[string]interface{}{},
+				"serverInfo": map[string]interface{}{
+					"name":    "test-server",
+					"version": "1.0.0",
+				},
+			},
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(response)
+	}))
+	defer mockServer.Close()
+
+	jsonConfig := fmt.Sprintf(`{
+		"mcpServers": {
+			"test-server": {
+				"type": "http",
+				"url": "%s"
+			}
+		},
+		"gateway": {
+			"port": 3001,
+			"domain": "localhost",
+			"apiKey": "test-key"
+		}
+	}`, mockServer.URL)
+
+	cfg := loadConfigFromJSON(t, jsonConfig)
+	ctx := context.Background()
+	l := New(ctx, cfg)
+
+	// First call - should create new connection
+	conn1, err := GetOrLaunch(l, "test-server")
+	require.NoError(t, err)
+	require.NotNil(t, conn1)
+
+	// Second call - should reuse existing connection
+	conn2, err := GetOrLaunch(l, "test-server")
+	require.NoError(t, err)
+	require.NotNil(t, conn2)
+
+	// Verify they're the same connection object
+	assert.Equal(t, conn1, conn2, "Should reuse the same connection")
+}
+
+func TestServerIDs(t *testing.T) {
+	jsonConfig := `{
+		"mcpServers": {
+			"server-one": {
+				"type": "http",
+				"url": "http://example.com/one"
+			},
+			"server-two": {
+				"type": "http",
+				"url": "http://example.com/two"
+			},
+			"server-three": {
+				"type": "stdio",
+				"container": "test:latest"
+			}
+		},
+		"gateway": {
+			"port": 3001,
+			"domain": "localhost",
+			"apiKey": "test-key"
+		}
+	}`
+
+	cfg := loadConfigFromJSON(t, jsonConfig)
+	ctx := context.Background()
+	l := New(ctx, cfg)
+
+	ids := l.ServerIDs()
+	assert.Len(t, ids, 3, "Should return all server IDs")
+	assert.ElementsMatch(t, []string{"server-one", "server-two", "server-three"}, ids)
+}
+
+func TestServerIDs_Empty(t *testing.T) {
+	jsonConfig := `{
+		"mcpServers": {},
+		"gateway": {
+			"port": 3001,
+			"domain": "localhost",
+			"apiKey": "test-key"
+		}
+	}`
+
+	cfg := loadConfigFromJSON(t, jsonConfig)
+	ctx := context.Background()
+	l := New(ctx, cfg)
+
+	ids := l.ServerIDs()
+	assert.Empty(t, ids, "Should return empty slice for no servers")
+}
+
+func TestClose(t *testing.T) {
+	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		response := map[string]interface{}{
+			"jsonrpc": "2.0",
+			"id":      1,
+			"result": map[string]interface{}{
+				"protocolVersion": "2024-11-05",
+				"capabilities":    map[string]interface{}{},
+				"serverInfo": map[string]interface{}{
+					"name":    "test-server",
+					"version": "1.0.0",
+				},
+			},
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(response)
+	}))
+	defer mockServer.Close()
+
+	jsonConfig := fmt.Sprintf(`{
+		"mcpServers": {
+			"test-server": {
+				"type": "http",
+				"url": "%s"
+			}
+		},
+		"gateway": {
+			"port": 3001,
+			"domain": "localhost",
+			"apiKey": "test-key"
+		}
+	}`, mockServer.URL)
+
+	cfg := loadConfigFromJSON(t, jsonConfig)
+	ctx := context.Background()
+	l := New(ctx, cfg)
+
+	// Create a connection
+	conn, err := GetOrLaunch(l, "test-server")
+	require.NoError(t, err)
+	require.NotNil(t, conn)
+
+	// Verify connection exists
+	l.mu.RLock()
+	assert.Len(t, l.connections, 1, "Should have one connection")
+	l.mu.RUnlock()
+
+	// Close all connections
+	l.Close()
+
+	// Verify connections map is cleared
+	l.mu.RLock()
+	assert.Len(t, l.connections, 0, "Connections should be cleared after Close")
+	l.mu.RUnlock()
 }

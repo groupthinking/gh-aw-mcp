@@ -87,6 +87,87 @@ args = ["run", "--rm", "-e", "GITHUB_PERSONAL_ACCESS_TOKEN", "-i", "ghcr.io/gith
 - Godoc comments for exports
 - Mock external dependencies (Docker, network)
 
+## Testing with Testify
+
+**ALWAYS use testify for test assertions** - The project uses [stretchr/testify](https://github.com/stretchr/testify) for all test assertions.
+
+### Assert vs Require
+
+- **`require`**: Use for critical checks - test stops on failure
+- **`assert`**: Use for non-critical checks - test continues on failure
+
+```go
+import (
+    "github.com/stretchr/testify/assert"
+    "github.com/stretchr/testify/require"
+)
+
+func TestExample(t *testing.T) {
+    result, err := DoSomething()
+    require.NoError(t, err)  // Stop if error - can't continue
+    assert.Equal(t, "expected", result.Field)  // Continue even if fails
+}
+```
+
+### Bound Asserters
+
+For tests with multiple assertions, use bound asserters to reduce repetition:
+
+```go
+func TestMultipleAssertions(t *testing.T) {
+    assert := assert.New(t)
+    require := require.New(t)
+    
+    result := GetResult()
+    require.NotNil(result)  // Stop if nil
+    
+    // Cleaner - no need to pass 't' repeatedly
+    assert.Equal("value1", result.Field1)
+    assert.Equal("value2", result.Field2)
+    assert.True(result.Active)
+}
+```
+
+### Specific Assertion Methods
+
+Use specific assertion methods instead of generic ones for better error messages:
+
+```go
+// ❌ Avoid generic assertions
+assert.True(t, len(items) == 0)
+assert.True(t, err == nil)
+assert.True(t, strings.Contains(msg, "error"))
+
+// ✅ Use specific assertions
+assert.Empty(t, items)
+assert.NoError(t, err)
+assert.Contains(t, msg, "error")
+```
+
+### Common Patterns
+
+```go
+// Length checking
+assert.Len(t, items, 5, "Expected 5 items")
+
+// Unordered slice comparison
+assert.ElementsMatch(t, expected, actual, "Slices should contain same elements")
+
+// Nil checking
+assert.NotNil(t, obj, "Object should not be nil")
+assert.Nil(t, err, "Error should be nil")
+
+// Error checking (prefer NoError over Nil for errors)
+assert.NoError(t, err, "Operation should succeed")
+assert.Error(t, err, "Operation should fail")
+
+// HTTP status codes
+assert.Equal(t, http.StatusOK, response.StatusCode, "Should return 200 OK")
+
+// JSON comparison (ignores formatting)
+assert.JSONEq(t, expectedJSON, actualJSON)
+```
+
 ## Linting
 
 **golangci-lint** is integrated and runs as part of `make lint`:
@@ -96,9 +177,17 @@ args = ["run", "--rm", "-e", "GITHUB_PERSONAL_ACCESS_TOKEN", "-i", "ghcr.io/gith
 - Install: `make install` (installs golangci-lint v2.8.0)
 - Run manually: `golangci-lint run --timeout=5m`
 
-**Note**: Some linters (gosec, testifylint) are disabled to minimize noise. Enable them for stricter checks:
+**testifylint**: Available but disabled due to requiring extensive test refactoring across the codebase.
+- Automatically catches common testify mistakes:
+  - Suggests `assert.Empty(t, x)` instead of `assert.True(t, len(x) == 0)`
+  - Suggests `assert.True(t, x)` instead of `assert.Equal(t, true, x)`
+  - Suggests `assert.NoError(t, err)` instead of `assert.Nil(t, err)`
+- To run on specific files: `golangci-lint run --enable=testifylint --timeout=5m <files>`
+- To run on entire codebase: `golangci-lint run --enable=testifylint --timeout=5m`
+
+**Note**: Some linters (gosec, testifylint, errcheck) are disabled to minimize noise. Enable them for stricter checks:
 ```bash
-golangci-lint run --enable=gosec,testifylint --timeout=5m
+golangci-lint run --enable=gosec,testifylint,errcheck --timeout=5m
 ```
 
 ## Test Structure
