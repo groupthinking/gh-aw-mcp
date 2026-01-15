@@ -46,6 +46,16 @@ func TestSerenaContainerBasic(t *testing.T) {
 			containerName: "serena-python:local",
 			skipReason:    "Python container not built",
 		},
+		{
+			name:          "Java Container",
+			containerName: "serena-java:local",
+			skipReason:    "Java container not built",
+		},
+		{
+			name:          "TypeScript Container",
+			containerName: "serena-typescript:local",
+			skipReason:    "TypeScript container not built",
+		},
 	}
 
 	for _, tc := range testCases {
@@ -229,5 +239,21 @@ func createSampleProject(t *testing.T, dir string) {
 
 	packageJson := filepath.Join(dir, "package.json")
 	err = os.WriteFile(packageJson, []byte(`{"name": "test", "version": "1.0.0"}`+"\n"), 0644)
+	require.NoError(t, err)
+
+	// Create Java files
+	pomXml := filepath.Join(dir, "pom.xml")
+	err = os.WriteFile(pomXml, []byte(`<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0">
+    <modelVersion>4.0.0</modelVersion>
+    <groupId>com.example</groupId>
+    <artifactId>test</artifactId>
+    <version>1.0.0</version>
+</project>
+`), 0644)
+	require.NoError(t, err)
+
+	mainJava := filepath.Join(dir, "Main.java")
+	err = os.WriteFile(mainJava, []byte("public class Main { public static void main(String[] args) {} }\n"), 0644)
 	require.NoError(t, err)
 }
