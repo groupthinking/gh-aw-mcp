@@ -10,12 +10,12 @@ Serena is an AI-powered code intelligence tool that provides language service in
 
 | Language   | Container Image | Dockerfile |
 |------------|----------------|------------|
-| Go         | `ghcr.io/githubnext/serena-go:latest` | `Dockerfile.go` |
-| TypeScript | `ghcr.io/githubnext/serena-typescript:latest` | `Dockerfile.typescript` |
-| Python     | `ghcr.io/githubnext/serena-python:latest` | `Dockerfile.python` |
-| Java       | `ghcr.io/githubnext/serena-java:latest` | `Dockerfile.java` |
-| Rust       | `ghcr.io/githubnext/serena-rust:latest` | `Dockerfile.rust` |
-| C#         | `ghcr.io/githubnext/serena-csharp:latest` | `Dockerfile.csharp` |
+| Go         | `ghcr.io/githubnext/serena-go:latest` | `Dockerfile-go` |
+| TypeScript | `ghcr.io/githubnext/serena-typescript:latest` | `Dockerfile-typescript` |
+| Python     | `ghcr.io/githubnext/serena-python:latest` | `Dockerfile-python` |
+| Java       | `ghcr.io/githubnext/serena-java:latest` | `Dockerfile-java` |
+| Rust       | `ghcr.io/githubnext/serena-rust:latest` | `Dockerfile-rust` |
+| C#         | `ghcr.io/githubnext/serena-csharp:latest` | `Dockerfile-csharp` |
 
 ## Usage
 
@@ -98,14 +98,14 @@ Each container includes:
 Build a specific language container:
 
 ```bash
-docker build -f serena/Dockerfile.go -t serena-go:local .
+docker build -f serena/Dockerfile-go -t serena-go:local .
 ```
 
 Build all containers:
 
 ```bash
 for lang in go typescript python java rust csharp; do
-  docker build -f serena/Dockerfile.$lang -t serena-$lang:local .
+  docker build -f serena/Dockerfile-$lang -t serena-$lang:local .
 done
 ```
 
