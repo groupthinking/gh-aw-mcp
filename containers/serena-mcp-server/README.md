@@ -12,7 +12,7 @@ A containerized version of the [Serena MCP Server](https://github.com/oraios/ser
 ## Supported Languages
 
 - **Python** (3.11+) - via pyright and python-lsp-server
-- **Java** (JDK 17) - via Eclipse JDT Language Server
+- **Java** (JDK 21) - via Eclipse JDT Language Server
 - **JavaScript/TypeScript** - via typescript-language-server
 - **Go** - via gopls
 
@@ -136,7 +136,7 @@ docker run --rm -i \
 - Requires Python 3.11+
 
 ### Java
-- OpenJDK 17 is pre-installed
+- OpenJDK 21 is pre-installed (via default-jdk package)
 - Eclipse JDT Language Server available via npm
 - Works with Maven and Gradle projects
 

@@ -13,7 +13,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     git \
     curl \
     wget \
-    # Java Runtime Environment (for Java language support)
+    # Java Development Kit (for Java language support and compilation)
     default-jdk \
     # Node.js (for JavaScript/TypeScript language support)
     nodejs \
@@ -33,8 +33,10 @@ ENV PATH="${GOPATH}/bin:/usr/bin:${PATH}"
 
 # Install Serena MCP server from GitHub using pip
 # Serena is a Python package, so we can install it directly
+# Try GitHub first, then fall back to PyPI package name if available
 RUN pip install --no-cache-dir git+https://github.com/oraios/serena.git || \
-    pip install --no-cache-dir serena-agent
+    (echo "GitHub installation failed, trying PyPI..." && \
+     pip install --no-cache-dir serena-agent)
 
 # Install common language servers that Serena may need
 # These are installed globally to be available to Serena
