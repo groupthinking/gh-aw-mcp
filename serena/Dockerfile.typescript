@@ -1,0 +1,21 @@
+# Serena MCP Server - TypeScript Language Support
+FROM node:22-alpine AS base
+
+# Install necessary tools
+RUN apk add --no-cache git python3 py3-pip
+
+# Install Serena from GitHub
+RUN pip3 install --break-system-packages git+https://github.com/oraios/serena
+
+# Install TypeScript and language server
+RUN npm install -g typescript typescript-language-server
+
+# Set up working directory
+WORKDIR /workspace
+
+# Default environment variables
+ENV SERENA_CONTEXT=codex
+ENV SERENA_PROJECT=/workspace
+
+# Entrypoint runs the Serena MCP server with TypeScript support
+ENTRYPOINT ["serena", "start-mcp-server", "--context", "${SERENA_CONTEXT}", "--project", "${SERENA_PROJECT}"]

@@ -1,0 +1,26 @@
+# Serena MCP Server - Java Language Support
+FROM eclipse-temurin:21-alpine AS base
+
+# Install necessary tools
+RUN apk add --no-cache git python3 py3-pip wget
+
+# Install Serena from GitHub
+RUN pip3 install --break-system-packages git+https://github.com/oraios/serena
+
+# Install Eclipse JDT Language Server
+RUN mkdir -p /opt/jdtls && \
+    wget -q https://download.eclipse.org/jdtls/snapshots/jdt-language-server-latest.tar.gz && \
+    tar -xzf jdt-language-server-latest.tar.gz -C /opt/jdtls && \
+    rm jdt-language-server-latest.tar.gz
+
+ENV PATH="/opt/jdtls/bin:${PATH}"
+
+# Set up working directory
+WORKDIR /workspace
+
+# Default environment variables
+ENV SERENA_CONTEXT=codex
+ENV SERENA_PROJECT=/workspace
+
+# Entrypoint runs the Serena MCP server with Java support
+ENTRYPOINT ["serena", "start-mcp-server", "--context", "${SERENA_CONTEXT}", "--project", "${SERENA_PROJECT}"]

@@ -1,0 +1,21 @@
+# Serena MCP Server - Rust Language Support
+FROM rust:1.75-alpine AS base
+
+# Install necessary tools
+RUN apk add --no-cache git python3 py3-pip musl-dev
+
+# Install Serena from GitHub
+RUN pip3 install --break-system-packages git+https://github.com/oraios/serena
+
+# Install rust-analyzer (Rust language server)
+RUN rustup component add rust-analyzer
+
+# Set up working directory
+WORKDIR /workspace
+
+# Default environment variables
+ENV SERENA_CONTEXT=codex
+ENV SERENA_PROJECT=/workspace
+
+# Entrypoint runs the Serena MCP server with Rust support
+ENTRYPOINT ["serena", "start-mcp-server", "--context", "${SERENA_CONTEXT}", "--project", "${SERENA_PROJECT}"]
