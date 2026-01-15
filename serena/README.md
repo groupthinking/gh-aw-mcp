@@ -232,6 +232,50 @@ The workflow builds:
 1. **Unified container:** `ghcr.io/githubnext/aw-serena:latest`
 2. **Language-specific containers:** All 6 individual language images
 
+## Testing
+
+A comprehensive test suite is available for verifying Serena containers:
+
+### MCP Test Client
+
+Located in `test/mcp-client/`, the test client provides:
+- Python MCP client library for testing stdio-based MCP servers
+- Pytest test suite for Serena containers
+- Docker test client container with all dependencies
+- Integration with Go test suite
+
+**Quick test:**
+
+```bash
+# Test a container with Python client
+cd test/mcp-client
+python3 mcp_client.py aw-serena:local /path/to/project
+
+# Run full pytest suite
+pytest -v test_serena.py
+
+# Run in test client container
+docker build -f serena/Dockerfile.test-client -t mcp-test-client .
+docker run --rm \
+  -v /var/run/docker.sock:/var/run/docker.sock \
+  -v $(pwd):/workspace \
+  -e USE_LOCAL_IMAGES=1 \
+  mcp-test-client \
+  /workspace/test/mcp-client/test_serena.py
+```
+
+**Go integration tests:**
+
+```bash
+# Run Serena integration tests
+go test -v ./test/integration -run TestSerena
+
+# Run all integration tests
+make test-integration
+```
+
+For detailed testing documentation, see [test/mcp-client/README.md](../test/mcp-client/README.md).
+
 ## Image Size Comparison
 
 | Container Type | Approximate Size | Use Case |
