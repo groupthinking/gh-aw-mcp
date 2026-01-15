@@ -39,13 +39,13 @@ func loadConfigFromJSON(t *testing.T, jsonConfig string) *config.Config {
 
 func TestHTTPConnection(t *testing.T) {
 	tests := []struct {
-		name            string
-		serverID        string
-		authHeader      string
-		authValue       string
-		setupEnv        func(*testing.T)
-		wantAuthValue   string
-		wantIsHTTP      bool
+		name          string
+		serverID      string
+		authHeader    string
+		authValue     string
+		setupEnv      func(*testing.T)
+		wantAuthValue string
+		wantIsHTTP    bool
 	}{
 		{
 			name:          "basic HTTP connection",
@@ -68,11 +68,11 @@ func TestHTTPConnection(t *testing.T) {
 			wantIsHTTP:    true,
 		},
 		{
-			name:       "HTTP connection with custom header",
-			serverID:   "custom-server",
-			authHeader: "X-API-Key",
-			authValue:  "custom-key-123",
-			setupEnv:   func(t *testing.T) {},
+			name:          "HTTP connection with custom header",
+			serverID:      "custom-server",
+			authHeader:    "X-API-Key",
+			authValue:     "custom-key-123",
+			setupEnv:      func(t *testing.T) {},
 			wantAuthValue: "custom-key-123",
 			wantIsHTTP:    true,
 		},
