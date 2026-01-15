@@ -15,6 +15,8 @@ import (
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
+var logTransport = logger.New("server:transport")
+
 // HTTPTransport wraps the SDK's HTTP transport
 type HTTPTransport struct {
 	Addr string
@@ -22,6 +24,7 @@ type HTTPTransport struct {
 
 // Start implements sdk.Transport interface
 func (t *HTTPTransport) Start(ctx context.Context) error {
+	logTransport.Printf("Starting HTTP transport: addr=%s", t.Addr)
 	// The SDK will handle the actual HTTP server setup
 	// We just need to provide the address
 	log.Printf("HTTP transport ready on %s", t.Addr)
@@ -76,6 +79,7 @@ func withResponseLogging(handler http.Handler) http.Handler {
 // CreateHTTPServerForMCP creates an HTTP server that handles MCP over streamable HTTP transport
 // If apiKey is provided, all requests except /health require authentication (spec 7.1)
 func CreateHTTPServerForMCP(addr string, unifiedServer *UnifiedServer, apiKey string) *http.Server {
+	logTransport.Printf("Creating HTTP server for MCP: addr=%s, auth_enabled=%v", addr, apiKey != "")
 	mux := http.NewServeMux()
 
 	// OAuth discovery endpoint - return 404 since we don't use OAuth
@@ -85,6 +89,7 @@ func CreateHTTPServerForMCP(addr string, unifiedServer *UnifiedServer, apiKey st
 	})
 	mux.Handle("/mcp/.well-known/oauth-authorization-server", withResponseLogging(oauthHandler))
 
+	logTransport.Print("Registering streamable HTTP handler for MCP protocol")
 	// Create StreamableHTTP handler for MCP protocol (supports POST requests)
 	// This is what Codex uses with transport = "streamablehttp"
 	streamableHandler := sdk.NewStreamableHTTPHandler(func(r *http.Request) *sdk.Server {
@@ -110,6 +115,7 @@ func CreateHTTPServerForMCP(addr string, unifiedServer *UnifiedServer, apiKey st
 
 		// Reject requests without Authorization header
 		if sessionID == "" {
+			logTransport.Printf("Rejecting connection: no Authorization header, remote=%s, path=%s", r.RemoteAddr, r.URL.Path)
 			logger.LogErrorMd("client", "MCP connection rejected: no Authorization header, remote=%s, path=%s", r.RemoteAddr, r.URL.Path)
 			log.Printf("[%s] %s %s - REJECTED: No Authorization header", r.RemoteAddr, r.Method, r.URL.Path)
 			// Return nil to reject the connection
@@ -163,6 +169,7 @@ func CreateHTTPServerForMCP(addr string, unifiedServer *UnifiedServer, apiKey st
 
 	// Close endpoint for graceful shutdown (spec 5.1.3)
 	closeHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		logTransport.Printf("Close endpoint called: method=%s, remote=%s", r.Method, r.RemoteAddr)
 		log.Printf("[%s] %s %s", r.RemoteAddr, r.Method, r.URL.Path)
 		logger.LogInfo("shutdown", "Close endpoint called, remote=%s", r.RemoteAddr)
 
@@ -185,6 +192,7 @@ func CreateHTTPServerForMCP(addr string, unifiedServer *UnifiedServer, apiKey st
 
 		// Initiate shutdown and get server count
 		serversTerminated := unifiedServer.InitiateShutdown()
+		logTransport.Printf("Shutdown initiated: servers_terminated=%d", serversTerminated)
 
 		// Return success response (spec 5.1.3)
 		w.Header().Set("Content-Type", "application/json")
