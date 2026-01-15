@@ -200,7 +200,7 @@ func formatRPCMessageMarkdown(info *RPCMessageInfo) string {
 	if info.ServerID != "" {
 		if info.Method != "" {
 			message = fmt.Sprintf("**%s**%s`%s`", info.ServerID, dir, info.Method)
-			
+
 			// For tools/call, extract and display the tool name
 			if info.Method == "tools/call" && info.Payload != "" {
 				var data map[string]interface{}
