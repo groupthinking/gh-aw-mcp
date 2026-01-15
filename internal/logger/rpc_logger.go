@@ -200,6 +200,18 @@ func formatRPCMessageMarkdown(info *RPCMessageInfo) string {
 	if info.ServerID != "" {
 		if info.Method != "" {
 			message = fmt.Sprintf("**%s**%s`%s`", info.ServerID, dir, info.Method)
+			
+			// For tools/call, extract and display the tool name
+			if info.Method == "tools/call" && info.Payload != "" {
+				var data map[string]interface{}
+				if err := json.Unmarshal([]byte(info.Payload), &data); err == nil {
+					if params, ok := data["params"].(map[string]interface{}); ok {
+						if toolName, ok := params["name"].(string); ok && toolName != "" {
+							message += fmt.Sprintf(" `%s`", toolName)
+						}
+					}
+				}
+			}
 		} else {
 			message = fmt.Sprintf("**%s**%s`resp`", info.ServerID, dir)
 		}

@@ -259,6 +259,32 @@ func TestFormatRPCMessageMarkdown(t *testing.T) {
 			want:    []string{"**github**→`tools/list`"},
 			notWant: []string{"```json"}, // Should NOT show JSON block when empty
 		},
+		{
+			name: "tools/call with tool name",
+			info: &RPCMessageInfo{
+				Direction:   RPCDirectionOutbound,
+				MessageType: RPCMessageRequest,
+				ServerID:    "github",
+				Method:      "tools/call",
+				PayloadSize: 100,
+				Payload:     `{"jsonrpc":"2.0","method":"tools/call","params":{"name":"search_code","arguments":{"query":"test"}}}`,
+			},
+			want:    []string{"**github**→`tools/call` `search_code`", "```json", `"arguments"`},
+			notWant: []string{`"jsonrpc"`, `"method"`},
+		},
+		{
+			name: "tools/call without tool name in params",
+			info: &RPCMessageInfo{
+				Direction:   RPCDirectionOutbound,
+				MessageType: RPCMessageRequest,
+				ServerID:    "github",
+				Method:      "tools/call",
+				PayloadSize: 50,
+				Payload:     `{"jsonrpc":"2.0","method":"tools/call","params":{}}`,
+			},
+			want:    []string{"**github**→`tools/call`", "```json", `"params"`},
+			notWant: []string{`"jsonrpc"`, `"method"`},
+		},
 	}
 
 	for _, tt := range tests {
