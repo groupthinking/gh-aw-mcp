@@ -1,9 +1,32 @@
 ---
-description: GitHub Agentic Workflows
+description: GitHub Agentic Workflows for gh-aw-mcpg Repository
 applyTo: ".github/workflows/*.md,.github/workflows/**/*.md"
 ---
 
-# GitHub Agentic Workflows
+# GitHub Agentic Workflows for gh-aw-mcpg
+
+## About This Repository
+
+This documentation applies to the **gh-aw-mcpg** (MCP Gateway) repository, which is a Go-based proxy server for Model Context Protocol (MCP) servers. This repository uses GitHub Agentic Workflows to automate development tasks such as:
+
+- **Test improvement** (`test-improver.md`, `test-coverage-improver.md`) - Analyzes and enhances test coverage and quality
+- **Code quality** (`go-logger.md`, `duplicate-code-detector.md`) - Improves logging practices and detects code duplication
+- **Compliance checking** (`daily-compliance-checker.md`) - Ensures code meets security and quality standards
+- **Refactoring** (`semantic-function-refactor.md`, `go-fan.md`) - Automated code improvements
+- **Release management** (`release.md`) - Automates release processes
+- **Issue management** (`issue-monster.md`, `plan.md`) - Handles issue triage and planning
+
+### MCP Gateway Context
+
+When working with workflows in this repository, keep in mind:
+
+- **Go 1.25.0** is the primary language - workflows often use Go-specific tools
+- **MCP Protocol** - This project implements the Model Context Protocol, which workflows may need to understand
+- **Docker Integration** - The gateway launches MCP servers as Docker containers
+- **Testing Framework** - Uses `testify` for assertions; workflows should maintain this pattern
+- **Build System** - Uses `make` with targets like `make test`, `make lint`, `make build`, `make agent-finished`
+
+See [AGENTS.md](../../AGENTS.md) for quick reference on building, testing, and linting this repository.
 
 ## File Format Overview
 
@@ -11,23 +34,40 @@ Agentic workflows use a **markdown + YAML frontmatter** format:
 
 ```markdown
 ---
+name: Test Improver
+description: Analyzes test files and suggests improvements
 on:
-  issues:
-    types: [opened]
+  schedule: daily
+  workflow_dispatch:
 permissions:
-  issues: write
-timeout-minutes: 10
+  contents: read
+  issues: read
+  pull-requests: read
 safe-outputs:
-  create-issue: # for bugs, features
-  create-discussion: # for status, audits, reports, logs
+  create-pull-request:
+    title-prefix: "[test-improver] "
+    labels: [testing, improvement, automation]
+    draft: true
+tools:
+  github:
+    toolsets: [default]
+  edit:
+  bash:
+    - "go test -v ./..."
+    - "go test -coverprofile=coverage.out ./..."
 ---
 
-# Workflow Title
+# Test Improver
 
-Natural language description of what the AI should do.
+Analyze test files in the `internal/` directory and suggest improvements for:
+- Better testify assertions usage
+- Increased test coverage
+- Cleaner test structure
 
-Use GitHub context expressions like ${{ github.event.issue.number }}.
+Use GitHub context expressions like ${{ github.event.issue.number }} when needed.
 ```
+
+**Example from gh-aw-mcpg**: See [.github/workflows/test-improver.md](../../.github/workflows/test-improver.md) for a real workflow in this repository.
 
 ## Compiling Workflows
 
@@ -67,6 +107,95 @@ gh aw compile --strict --actionlint --zizmor --poutine
 ```
 
 **Best Practice**: Always run `gh aw compile` after every workflow change to ensure the GitHub Actions YAML is up to date.
+
+## MCP Gateway-Specific Workflow Patterns
+
+When creating or modifying workflows for the gh-aw-mcpg repository, follow these patterns:
+
+### Go Development Workflows
+
+Workflows that modify Go code should:
+
+1. **Set up Go environment** with the correct version:
+   ```yaml
+   steps:
+     - name: Set up Go
+       uses: actions/setup-go@v6
+       with:
+         go-version-file: go.mod
+         cache: true
+   ```
+
+2. **Include Go tooling in bash allowlist**:
+   ```yaml
+   tools:
+     bash:
+       - "go test ./..."
+       - "go build -o awmg"
+       - "go vet ./..."
+       - "make agent-finished"  # Runs format, build, lint, and tests
+   ```
+
+3. **Use testify for test modifications** - The repository uses `github.com/stretchr/testify` for assertions
+
+4. **Follow the validation workflow**:
+   - Format code: `make format` or `go fmt ./...`
+   - Build: `make build`
+   - Lint: `make lint` (runs go vet, gofmt checks, and golangci-lint)
+   - Test: `make test-all` (runs both unit and integration tests)
+   - Or use the all-in-one: `make agent-finished`
+
+### Common Tool Configurations
+
+**For test improvement workflows**:
+```yaml
+tools:
+  serena: ["go"]        # Code understanding and analysis
+  cache-memory: true    # Cache information between runs
+  github:
+    toolsets: [default]
+  edit:
+  bash:
+    - "find internal -name '*_test.go' -type f"
+    - "go test -v ./..."
+    - "go test -coverprofile=coverage.out ./..."
+```
+
+**For code refactoring workflows**:
+```yaml
+tools:
+  github:
+    toolsets: [default]
+  edit:
+  bash:
+    - "find internal -name '*.go' -type f ! -name '*_test.go'"
+    - "grep -r 'pattern' internal --include='*.go'"
+    - "make agent-finished"
+```
+
+**For logging enhancement workflows**:
+```yaml
+tools:
+  github:
+    toolsets: [default]
+  edit:
+  bash:
+    - "grep -r 'var log = logger.New' internal --include='*.go'"
+    - "go build -o awmg"
+    - "go vet ./..."
+```
+
+### MCP Protocol Considerations
+
+Since this repository implements the MCP (Model Context Protocol), workflows may need to:
+
+- Understand JSON-RPC 2.0 message formats
+- Work with Docker containers for MCP server backends
+- Handle stdio transport communication
+- Validate against MCP specification requirements
+- Consider authentication and security aspects
+
+Reference the [README.md](../../README.md) and [AGENTS.md](../../AGENTS.md) for protocol details and development guidelines.
 
 ## Complete Frontmatter Schema
 
