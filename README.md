@@ -178,6 +178,51 @@ See **[Configuration Specification](https://github.com/githubnext/gh-aw/blob/mai
 - **Passthrough**: Set value to empty string (`""`) to pass through from host
 - **Expansion**: Use `${VAR_NAME}` syntax for dynamic substitution (fails if undefined)
 
+## Available MCP Server Containers
+
+### Serena MCP Server
+
+Serena is an AI-powered code intelligence MCP server with language service integration. Pre-built containers are available for multiple programming languages:
+
+| Language   | Container Image |
+|------------|----------------|
+| Go         | `ghcr.io/githubnext/serena-go:latest` |
+| TypeScript | `ghcr.io/githubnext/serena-typescript:latest` |
+| Python     | `ghcr.io/githubnext/serena-python:latest` |
+| Java       | `ghcr.io/githubnext/serena-java:latest` |
+| Rust       | `ghcr.io/githubnext/serena-rust:latest` |
+| C#         | `ghcr.io/githubnext/serena-csharp:latest` |
+
+**Example configuration:**
+
+```json
+{
+  "mcpServers": {
+    "serena-go": {
+      "type": "stdio",
+      "container": "ghcr.io/githubnext/serena-go:latest",
+      "mounts": [
+        "${PWD}:/workspace:rw"
+      ],
+      "env": {
+        "SERENA_PROJECT": "/workspace",
+        "SERENA_CONTEXT": "codex"
+      }
+    }
+  }
+}
+```
+
+For more details, see [serena/README.md](serena/README.md).
+
+### Other MCP Servers
+
+The MCP Gateway can work with any MCP server that supports stdio transport. Popular examples include:
+
+- **GitHub MCP Server**: `ghcr.io/github/github-mcp-server:latest`
+- **Filesystem MCP Server**: Custom filesystem access tools
+- **Custom MCP Servers**: Any containerized MCP server implementation
+
 ## Usage
 
 ```
