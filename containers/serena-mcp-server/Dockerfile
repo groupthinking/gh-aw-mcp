@@ -43,7 +43,6 @@ RUN pip install --no-cache-dir git+https://github.com/oraios/serena.git || \
 RUN npm install -g \
     typescript \
     typescript-language-server \
-    @vscode/java-language-server \
     && rm -rf /root/.npm
 
 # Install Python language server (pyright is included in Serena dependencies)

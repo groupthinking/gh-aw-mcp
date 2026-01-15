@@ -12,7 +12,7 @@ A containerized version of the [Serena MCP Server](https://github.com/oraios/ser
 ## Supported Languages
 
 - **Python** (3.11+) - via pyright and python-lsp-server
-- **Java** (JDK 21) - via Eclipse JDT Language Server
+- **Java** (JDK 21) - via Serena's built-in LSP integration
 - **JavaScript/TypeScript** - via typescript-language-server
 - **Go** - via gopls
 
@@ -137,8 +137,9 @@ docker run --rm -i \
 
 ### Java
 - OpenJDK 21 is pre-installed (via default-jdk package)
-- Eclipse JDT Language Server available via npm
+- Java language server support provided by Serena's built-in LSP integration
 - Works with Maven and Gradle projects
+- Note: Eclipse JDT Language Server is managed by Serena internally
 
 ### JavaScript/TypeScript
 - Node.js and npm are pre-installed
