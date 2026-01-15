@@ -182,7 +182,40 @@ See **[Configuration Specification](https://github.com/githubnext/gh-aw/blob/mai
 
 ### Serena MCP Server
 
-Serena is an AI-powered code intelligence MCP server with language service integration. Pre-built containers are available for multiple programming languages:
+Serena is an AI-powered code intelligence MCP server with language service integration. Two types of containers are available:
+
+#### Unified Multi-Language Container
+
+**`ghcr.io/githubnext/aw-serena:latest`** - Single container with support for all languages (Go, TypeScript, Python, Java, Rust, C#)
+
+- ✅ Works with all languages out-of-the-box
+- ✅ Ideal for multi-language projects
+- ❌ Large size (~2-4GB)
+- ❌ Slower startup
+
+**Example configuration:**
+
+```json
+{
+  "mcpServers": {
+    "serena": {
+      "type": "stdio",
+      "container": "ghcr.io/githubnext/aw-serena:latest",
+      "mounts": [
+        "${PWD}:/workspace:rw"
+      ],
+      "env": {
+        "SERENA_PROJECT": "/workspace",
+        "SERENA_CONTEXT": "codex"
+      }
+    }
+  }
+}
+```
+
+#### Language-Specific Containers
+
+Optimized containers for individual languages (~200-600MB each):
 
 | Language   | Container Image |
 |------------|----------------|
@@ -192,6 +225,10 @@ Serena is an AI-powered code intelligence MCP server with language service integ
 | Java       | `ghcr.io/githubnext/serena-java:latest` |
 | Rust       | `ghcr.io/githubnext/serena-rust:latest` |
 | C#         | `ghcr.io/githubnext/serena-csharp:latest` |
+
+- ✅ Small, fast, secure
+- ✅ Best for single-language projects
+- ❌ Need to choose the right image
 
 **Example configuration:**
 
@@ -213,7 +250,9 @@ Serena is an AI-powered code intelligence MCP server with language service integ
 }
 ```
 
-For more details, see [serena/README.md](serena/README.md).
+For more details and trade-off analysis, see [serena/README.md](serena/README.md).
+
+**📖 [Complete Usage Guide](serena/USAGE.md)** - Learn how to enable specific languages, optimize performance, and troubleshoot common issues.
 
 ### Other MCP Servers
 

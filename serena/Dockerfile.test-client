@@ -1,0 +1,41 @@
+# MCP Testing Client Container
+# This container provides a test environment for verifying MCP server behavior
+# It includes tools for making MCP requests and validating responses
+
+FROM python:3.12-alpine
+
+# Install necessary tools
+RUN apk add --no-cache \
+    git \
+    curl \
+    jq \
+    bash \
+    docker-cli \
+    ca-certificates
+
+# Install Python testing and MCP client libraries
+RUN pip3 install --no-cache-dir \
+    pytest \
+    pytest-asyncio \
+    pytest-timeout \
+    httpx \
+    websockets \
+    pydantic
+
+# Install MCP SDK if available (for testing)
+# Note: Adjust based on actual MCP SDK availability
+RUN pip3 install --no-cache-dir requests || true
+
+# Create test workspace
+WORKDIR /test
+
+# Copy test scripts
+COPY test/mcp-client/*.py /test/ 2>/dev/null || true
+COPY test/mcp-client/*.sh /test/ 2>/dev/null || true
+
+# Make scripts executable
+RUN chmod +x /test/*.sh 2>/dev/null || true
+
+# Default command runs pytest
+ENTRYPOINT ["pytest"]
+CMD ["-v", "/test"]
