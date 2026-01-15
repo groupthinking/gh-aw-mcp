@@ -47,3 +47,5 @@ go.work.sum
 # Test configuration files
 test-*.toml
 test-*.json
+__pycache__/
+*.pyc
