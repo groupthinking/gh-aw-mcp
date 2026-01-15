@@ -14,29 +14,27 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     wget \
     # Java Runtime Environment (for Java language support)
-    openjdk-17-jdk \
+    default-jdk \
     # Node.js (for JavaScript/TypeScript language support)
     nodejs \
     npm \
     # Go runtime (for Go language support)
-    golang \
+    golang-go \
     # Additional utilities
     ca-certificates \
-    && rm -rf /var/lib/apt/lists/*
+    && rm -rf /var/lib/apt/lists/* \
+    && update-ca-certificates
 
 # Set environment variables for language runtimes
-ENV JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64
+ENV JAVA_HOME=/usr/lib/jvm/default-java
 ENV PATH="${JAVA_HOME}/bin:${PATH}"
 ENV GOPATH=/go
-ENV PATH="${GOPATH}/bin:/usr/local/go/bin:${PATH}"
+ENV PATH="${GOPATH}/bin:/usr/bin:${PATH}"
 
-# Install uv for Python package management (required for Serena)
-RUN curl -LsSf https://astral.sh/uv/install.sh | sh
-ENV PATH="/root/.local/bin:${PATH}"
-
-# Install Serena MCP server from GitHub
-# Using --from git+ ensures we get the latest version
-RUN uv tool install --force git+https://github.com/oraios/serena
+# Install Serena MCP server from GitHub using pip
+# Serena is a Python package, so we can install it directly
+RUN pip install --no-cache-dir git+https://github.com/oraios/serena.git || \
+    pip install --no-cache-dir serena-agent
 
 # Install common language servers that Serena may need
 # These are installed globally to be available to Serena
