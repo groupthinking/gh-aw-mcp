@@ -48,7 +48,7 @@ jobs:
           tags: |
             type=raw,value=latest,enable={{is_default_branch}}
             type=ref,event=pr
-            type=sha,prefix={{branch}}-
+            type=sha
             type=raw,value=${{ github.event.inputs.version }},enable=${{ github.event.inputs.version != '' }}
 
       - name: Build and push (multi-arch)
