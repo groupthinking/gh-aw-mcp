@@ -17,6 +17,7 @@ This gateway is used with [GitHub Agentic Workflows](https://github.com/githubne
   - **Unified**: Single endpoint `/mcp` that routes to configured servers
 - **Docker Support**: Launch backend MCP servers as Docker containers
 - **Stdio Transport**: JSON-RPC 2.0 over stdin/stdout for MCP communication
+- **Tool Filtering**: Pass environment variables and headers to backend servers for tool filtering (see [docs/TOOL_FILTERING.md](docs/TOOL_FILTERING.md))
 - **Container Detection**: Automatic detection of containerized environments with security warnings
 - **Enhanced Debugging**: Detailed error context and troubleshooting suggestions for command failures
 
