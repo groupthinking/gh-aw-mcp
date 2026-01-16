@@ -14,6 +14,7 @@ import (
 	"github.com/githubnext/gh-aw-mcpg/internal/launcher"
 	"github.com/githubnext/gh-aw-mcpg/internal/logger"
 	"github.com/githubnext/gh-aw-mcpg/internal/mcp"
+	"github.com/githubnext/gh-aw-mcpg/internal/middleware"
 	"github.com/githubnext/gh-aw-mcpg/internal/sys"
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 )
@@ -257,9 +258,15 @@ func (us *UnifiedServer) registerToolsFromBackend(serverID string) error {
 			return result, data, err
 		}
 
+		// Wrap handler with jqschema middleware if applicable
+		finalHandler := handler
+		if middleware.ShouldApplyMiddleware(prefixedName) {
+			finalHandler = middleware.WrapToolHandler(handler, prefixedName)
+		}
+
 		// Store handler for routed mode to reuse
 		us.toolsMu.Lock()
-		us.tools[prefixedName].Handler = handler
+		us.tools[prefixedName].Handler = finalHandler
 		us.toolsMu.Unlock()
 
 		// Register the tool with the SDK
@@ -269,7 +276,7 @@ func (us *UnifiedServer) registerToolsFromBackend(serverID string) error {
 		sdk.AddTool(us.server, &sdk.Tool{
 			Name:        prefixedName,
 			Description: toolDesc,
-		}, handler)
+		}, finalHandler)
 
 		log.Printf("Registered tool: %s", prefixedName)
 	}
