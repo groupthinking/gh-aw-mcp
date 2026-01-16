@@ -274,14 +274,27 @@ func (us *UnifiedServer) registerToolsFromBackend(serverID string) error {
 		us.tools[prefixedName].Handler = handler
 		us.toolsMu.Unlock()
 
-		// Register the tool with the SDK
-		// Note: InputSchema is intentionally omitted to avoid validation errors
-		// when backend MCP servers use different JSON Schema versions (e.g., draft-07)
-		// than what the SDK supports (draft-2020-12)
-		sdk.AddTool(us.server, &sdk.Tool{
+		// Register the tool with the SDK using the Server.AddTool method (not sdk.AddTool function)
+		// The method version does NOT perform schema validation, allowing us to include
+		// InputSchema from backends that use different JSON Schema versions (e.g., draft-07)
+		// without validation errors. This is critical for clients to understand tool parameters.
+		//
+		// We need to wrap our typed handler to match the simpler ToolHandler signature.
+		// The typed handler signature: func(context.Context, *CallToolRequest, interface{}) (*CallToolResult, interface{}, error)
+		// The simple handler signature: func(context.Context, *CallToolRequest) (*CallToolResult, error)
+		wrappedHandler := func(ctx context.Context, req *sdk.CallToolRequest) (*sdk.CallToolResult, error) {
+			// Call the original typed handler
+			// The third parameter would be the pre-unmarshaled/validated input if using sdk.AddTool,
+			// but we handle unmarshaling ourselves in the handler, so we pass nil
+			result, _, err := handler(ctx, req, nil)
+			return result, err
+		}
+
+		us.server.AddTool(&sdk.Tool{
 			Name:        prefixedName,
 			Description: toolDesc,
-		}, handler)
+			InputSchema: normalizedSchema, // Include the schema for clients to understand parameters
+		}, wrappedHandler)
 
 		log.Printf("Registered tool: %s", prefixedName)
 	}
