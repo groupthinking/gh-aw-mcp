@@ -2,6 +2,9 @@ package auth
 
 import (
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestSanitizeForLogging(t *testing.T) {
@@ -40,13 +43,27 @@ func TestSanitizeForLogging(t *testing.T) {
 			input: "Bearer my-token-123",
 			want:  "Bear...",
 		},
+		{
+			name:  "Unicode characters",
+			input: "key-with-émojis-🔑",
+			want:  "key-...",
+		},
+		{
+			name:  "Very long API key",
+			input: "my-super-long-api-key-with-many-characters-12345678901234567890",
+			want:  "my-s...",
+		},
+		{
+			name:  "Special characters",
+			input: "key!@#$%^&*()",
+			want:  "key!...",
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := sanitizeForLogging(tt.input); got != tt.want {
-				t.Errorf("sanitizeForLogging() = %v, want %v", got, tt.want)
-			}
+			got := sanitizeForLogging(tt.input)
+			assert.Equal(t, tt.want, got)
 		})
 	}
 }
@@ -87,24 +104,69 @@ func TestParseAuthHeader(t *testing.T) {
 			wantAgentID: "agent-123",
 			wantErr:     nil,
 		},
+		{
+			name:        "Bearer with multiple spaces",
+			authHeader:  "Bearer  my-token",
+			wantAPIKey:  " my-token",
+			wantAgentID: " my-token",
+			wantErr:     nil,
+		},
+		{
+			name:        "Lowercase bearer (not supported)",
+			authHeader:  "bearer my-token",
+			wantAPIKey:  "bearer my-token",
+			wantAgentID: "bearer my-token",
+			wantErr:     nil,
+		},
+		{
+			name:        "Agent with multiple spaces",
+			authHeader:  "Agent  agent-id",
+			wantAPIKey:  " agent-id",
+			wantAgentID: " agent-id",
+			wantErr:     nil,
+		},
+		{
+			name:        "Whitespace only header",
+			authHeader:  "   ",
+			wantAPIKey:  "   ",
+			wantAgentID: "   ",
+			wantErr:     nil,
+		},
+		{
+			name:        "API key with special characters",
+			authHeader:  "key!@#$%^&*()",
+			wantAPIKey:  "key!@#$%^&*()",
+			wantAgentID: "key!@#$%^&*()",
+			wantErr:     nil,
+		},
+		{
+			name:        "Very long API key",
+			authHeader:  "my-super-long-api-key-with-many-characters-12345678901234567890",
+			wantAPIKey:  "my-super-long-api-key-with-many-characters-12345678901234567890",
+			wantAgentID: "my-super-long-api-key-with-many-characters-12345678901234567890",
+			wantErr:     nil,
+		},
+		{
+			name:        "Bearer with trailing space",
+			authHeader:  "Bearer my-token ",
+			wantAPIKey:  "my-token ",
+			wantAgentID: "my-token ",
+			wantErr:     nil,
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			gotAPIKey, gotAgentID, gotErr := ParseAuthHeader(tt.authHeader)
 
-			if gotErr != tt.wantErr {
-				t.Errorf("ParseAuthHeader() error = %v, wantErr %v", gotErr, tt.wantErr)
-				return
+			if tt.wantErr != nil {
+				require.ErrorIs(t, gotErr, tt.wantErr)
+			} else {
+				require.NoError(t, gotErr)
 			}
 
-			if gotAPIKey != tt.wantAPIKey {
-				t.Errorf("ParseAuthHeader() gotAPIKey = %v, want %v", gotAPIKey, tt.wantAPIKey)
-			}
-
-			if gotAgentID != tt.wantAgentID {
-				t.Errorf("ParseAuthHeader() gotAgentID = %v, want %v", gotAgentID, tt.wantAgentID)
-			}
+			assert.Equal(t, tt.wantAPIKey, gotAPIKey)
+			assert.Equal(t, tt.wantAgentID, gotAgentID)
 		})
 	}
 }
@@ -140,13 +202,36 @@ func TestValidateAPIKey(t *testing.T) {
 			expected: "required-key",
 			want:     false,
 		},
+		{
+			name:     "Both empty",
+			provided: "",
+			expected: "",
+			want:     true,
+		},
+		{
+			name:     "Case sensitive - should not match",
+			provided: "My-Secret-Key",
+			expected: "my-secret-key",
+			want:     false,
+		},
+		{
+			name:     "Keys with whitespace - exact match required",
+			provided: "key with spaces",
+			expected: "key with spaces",
+			want:     true,
+		},
+		{
+			name:     "Keys with whitespace - trailing space different",
+			provided: "my-key ",
+			expected: "my-key",
+			want:     false,
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := ValidateAPIKey(tt.provided, tt.expected); got != tt.want {
-				t.Errorf("ValidateAPIKey() = %v, want %v", got, tt.want)
-			}
+			got := ValidateAPIKey(tt.provided, tt.expected)
+			assert.Equal(t, tt.want, got)
 		})
 	}
 }
