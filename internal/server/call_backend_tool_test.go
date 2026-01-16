@@ -119,7 +119,7 @@ func TestCallBackendTool_ReturnsNonNilCallToolResult(t *testing.T) {
 	// This assertion will FAIL with the old buggy code (which returned nil)
 	// and PASS with the fix (which returns a proper CallToolResult)
 	require.NotNil(result, "CRITICAL BUG: callBackendTool MUST return non-nil CallToolResult on success!")
-	
+
 	// Additional validations
 	require.NoError(err, "Tool call should succeed without error")
 	require.NotNil(data, "Data should not be nil")
