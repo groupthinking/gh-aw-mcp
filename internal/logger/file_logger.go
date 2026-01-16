@@ -28,14 +28,6 @@ var (
 // InitFileLogger initializes the global file logger
 // If the log directory doesn't exist and can't be created, falls back to stdout
 func InitFileLogger(logDir, fileName string) error {
-	globalLoggerMu.Lock()
-	defer globalLoggerMu.Unlock()
-
-	if globalFileLogger != nil {
-		// Close existing logger
-		globalFileLogger.Close()
-	}
-
 	fl := &FileLogger{
 		logDir:   logDir,
 		fileName: fileName,
@@ -49,7 +41,7 @@ func InitFileLogger(logDir, fileName string) error {
 		log.Printf("WARNING: Falling back to stdout for logging")
 		fl.useFallback = true
 		fl.logger = log.New(os.Stdout, "", 0) // We'll add our own timestamp
-		globalFileLogger = fl
+		initGlobalFileLogger(fl)
 		return nil
 	}
 
@@ -58,7 +50,7 @@ func InitFileLogger(logDir, fileName string) error {
 
 	log.Printf("Logging to file: %s", filepath.Join(logDir, fileName))
 
-	globalFileLogger = fl
+	initGlobalFileLogger(fl)
 	return nil
 }
 
@@ -155,13 +147,5 @@ func LogDebug(category, format string, args ...interface{}) {
 
 // CloseGlobalLogger closes the global file logger
 func CloseGlobalLogger() error {
-	globalLoggerMu.Lock()
-	defer globalLoggerMu.Unlock()
-
-	if globalFileLogger != nil {
-		err := globalFileLogger.Close()
-		globalFileLogger = nil
-		return err
-	}
-	return nil
+	return closeGlobalFileLogger()
 }

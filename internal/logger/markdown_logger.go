@@ -26,14 +26,6 @@ var (
 
 // InitMarkdownLogger initializes the global markdown logger
 func InitMarkdownLogger(logDir, fileName string) error {
-	globalMarkdownMu.Lock()
-	defer globalMarkdownMu.Unlock()
-
-	if globalMarkdownLogger != nil {
-		// Close existing logger
-		globalMarkdownLogger.Close()
-	}
-
 	ml := &MarkdownLogger{
 		logDir:   logDir,
 		fileName: fileName,
@@ -44,14 +36,14 @@ func InitMarkdownLogger(logDir, fileName string) error {
 	if err != nil {
 		// File initialization failed - set fallback mode
 		ml.useFallback = true
-		globalMarkdownLogger = ml
+		initGlobalMarkdownLogger(ml)
 		return nil
 	}
 
 	ml.logFile = file
 	ml.initialized = false // Will be initialized on first write
 
-	globalMarkdownLogger = ml
+	initGlobalMarkdownLogger(ml)
 	return nil
 }
 
@@ -222,13 +214,5 @@ func LogDebugMd(category, format string, args ...interface{}) {
 
 // CloseMarkdownLogger closes the global markdown logger
 func CloseMarkdownLogger() error {
-	globalMarkdownMu.Lock()
-	defer globalMarkdownMu.Unlock()
-
-	if globalMarkdownLogger != nil {
-		err := globalMarkdownLogger.Close()
-		globalMarkdownLogger = nil
-		return err
-	}
-	return nil
+	return closeGlobalMarkdownLogger()
 }

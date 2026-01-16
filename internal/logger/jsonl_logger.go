@@ -37,14 +37,6 @@ type JSONLRPCMessage struct {
 
 // InitJSONLLogger initializes the global JSONL logger
 func InitJSONLLogger(logDir, fileName string) error {
-	globalJSONLMu.Lock()
-	defer globalJSONLMu.Unlock()
-
-	if globalJSONLLogger != nil {
-		// Close existing logger
-		globalJSONLLogger.Close()
-	}
-
 	jl := &JSONLLogger{
 		logDir:   logDir,
 		fileName: fileName,
@@ -59,7 +51,7 @@ func InitJSONLLogger(logDir, fileName string) error {
 	jl.logFile = file
 	jl.encoder = json.NewEncoder(file)
 
-	globalJSONLLogger = jl
+	initGlobalJSONLLogger(jl)
 	return nil
 }
 
@@ -103,15 +95,7 @@ func (jl *JSONLLogger) LogMessage(entry *JSONLRPCMessage) error {
 
 // CloseJSONLLogger closes the global JSONL logger
 func CloseJSONLLogger() error {
-	globalJSONLMu.Lock()
-	defer globalJSONLMu.Unlock()
-
-	if globalJSONLLogger != nil {
-		err := globalJSONLLogger.Close()
-		globalJSONLLogger = nil
-		return err
-	}
-	return nil
+	return closeGlobalJSONLLogger()
 }
 
 // LogRPCMessageJSONL logs an RPC message to the global JSONL logger
