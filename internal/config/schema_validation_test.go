@@ -391,7 +391,7 @@ func TestValidateStringPatterns(t *testing.T) {
 			shouldErr: false,
 		},
 		{
-			name: "invalid mount pattern - missing mode",
+			name: "valid mount without mode",
 			config: &StdinConfig{
 				MCPServers: map[string]*StdinServerConfig{
 					"test": {
@@ -401,8 +401,7 @@ func TestValidateStringPatterns(t *testing.T) {
 					},
 				},
 			},
-			shouldErr: true,
-			errorMsg:  "does not match required pattern",
+			shouldErr: false,
 		},
 		{
 			name: "valid http url pattern",
@@ -556,7 +555,7 @@ func TestEnhancedErrorMessages(t *testing.T) {
 				"Location:",
 				"Error:",
 				"Details:",
-				"https://github.com/githubnext/gh-aw/blob/main/docs/public/schemas/mcp-gateway-config.schema.json",
+				"https://raw.githubusercontent.com/githubnext/gh-aw/main/docs/public/schemas/mcp-gateway-config.schema.json",
 			},
 		},
 		{

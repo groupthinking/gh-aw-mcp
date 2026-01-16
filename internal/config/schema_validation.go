@@ -1,24 +1,23 @@
 package config
 
 import (
-	_ "embed"
 	"encoding/json"
 	"fmt"
+	"io"
+	"net/http"
 	"regexp"
 	"strings"
+	"time"
 
 	"github.com/githubnext/gh-aw-mcpg/internal/config/rules"
 	"github.com/santhosh-tekuri/jsonschema/v5"
 )
 
-//go:embed schemas/mcp-gateway-config.schema.json
-var schemaJSON []byte
-
 var (
 	// Compile regex patterns from schema for additional validation
 	containerPattern = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9./_-]*(:([a-zA-Z0-9._-]+|latest))?$`)
 	urlPattern       = regexp.MustCompile(`^https?://.+`)
-	mountPattern     = regexp.MustCompile(`^[^:]+:[^:]+:(ro|rw)$`)
+	mountPattern     = regexp.MustCompile(`^[^:]+:[^:]+(:(ro|rw))?$`)
 	domainVarPattern = regexp.MustCompile(`^\$\{[A-Z_][A-Z0-9_]*\}$`)
 
 	// gatewayVersion stores the version string to include in error messages
@@ -32,25 +31,126 @@ func SetVersion(version string) {
 	}
 }
 
+// fetchAndFixSchema fetches the JSON schema from the remote URL and fixes
+// regex patterns that use negative lookahead (not supported in JSON Schema Draft 7)
+func fetchAndFixSchema(url string) ([]byte, error) {
+	client := &http.Client{
+		Timeout: 10 * time.Second,
+	}
+
+	resp, err := client.Get(url)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch schema from %s: %w", url, err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("failed to fetch schema: HTTP %d", resp.StatusCode)
+	}
+
+	schemaBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read schema response: %w", err)
+	}
+
+	// Fix regex patterns that use negative lookahead
+	var schema map[string]interface{}
+	if err := json.Unmarshal(schemaBytes, &schema); err != nil {
+		return nil, fmt.Errorf("failed to parse schema: %w", err)
+	}
+
+	// Fix the customServerConfig pattern that uses negative lookahead
+	// The oneOf constraint in mcpServerConfig will still ensure that stdio/http
+	// types are validated correctly. We replace the pattern with an enum that excludes
+	// stdio and http, which achieves the same validation goal without negative lookahead.
+	if definitions, ok := schema["definitions"].(map[string]interface{}); ok {
+		if customServerConfig, ok := definitions["customServerConfig"].(map[string]interface{}); ok {
+			if properties, ok := customServerConfig["properties"].(map[string]interface{}); ok {
+				if typeField, ok := properties["type"].(map[string]interface{}); ok {
+					// Remove the pattern entirely - the oneOf logic combined with the fact
+					// that stdioServerConfig has enum: ["stdio"] and httpServerConfig has
+					// enum: ["http"] will ensure proper validation
+					delete(typeField, "pattern")
+					// Also remove the type constraint since we want it to only match in the oneOf context
+					delete(typeField, "type")
+					// Add a not constraint to exclude stdio and http
+					typeField["not"] = map[string]interface{}{
+						"enum": []string{"stdio", "http"},
+					}
+				}
+			}
+		}
+	}
+
+	// Fix the customSchemas patternProperties
+	if properties, ok := schema["properties"].(map[string]interface{}); ok {
+		if customSchemas, ok := properties["customSchemas"].(map[string]interface{}); ok {
+			if patternProps, ok := customSchemas["patternProperties"].(map[string]interface{}); ok {
+				// Find and replace the pattern property key with negative lookahead
+				for key, value := range patternProps {
+					if strings.Contains(key, "(?!") {
+						// Replace with a simple pattern that matches any lowercase word
+						// The validation logic will handle ensuring it's not stdio/http
+						delete(patternProps, key)
+						patternProps["^[a-z][a-z0-9-]*$"] = value
+						break
+					}
+				}
+			}
+		}
+	}
+
+	fixedBytes, err := json.Marshal(schema)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal fixed schema: %w", err)
+	}
+
+	return fixedBytes, nil
+}
+
 // validateJSONSchema validates the raw JSON configuration against the JSON schema
 func validateJSONSchema(data []byte) error {
+	// Fetch the schema from the remote URL (source of truth)
+	schemaURL := "https://raw.githubusercontent.com/githubnext/gh-aw/main/docs/public/schemas/mcp-gateway-config.schema.json"
+	schemaJSON, err := fetchAndFixSchema(schemaURL)
+	if err != nil {
+		return fmt.Errorf("failed to fetch schema: %w", err)
+	}
+
 	// Parse the schema
 	var schemaData interface{}
 	if err := json.Unmarshal(schemaJSON, &schemaData); err != nil {
-		return fmt.Errorf("failed to parse embedded schema: %w", err)
+		return fmt.Errorf("failed to parse schema: %w", err)
 	}
 
 	// Compile the schema
 	compiler := jsonschema.NewCompiler()
 	compiler.Draft = jsonschema.Draft7
 
-	// Add the schema with its $id
-	schemaURL := "https://github.com/githubnext/gh-aw/blob/main/docs/public/schemas/mcp-gateway-config.schema.json"
+	// Add the schema with its $id from the remote schema
+	// Note: The remote schema uses https://docs.github.com/gh-aw/schemas/mcp-gateway-config.schema.json
+	// as its $id, so we need to register it there as well
+	var schemaObj map[string]interface{}
+	if err := json.Unmarshal(schemaJSON, &schemaObj); err != nil {
+		return fmt.Errorf("failed to parse schema JSON: %w", err)
+	}
+	
+	schemaID, ok := schemaObj["$id"].(string)
+	if !ok || schemaID == "" {
+		schemaID = schemaURL
+	}
+
+	// Add the schema with both URLs
 	if err := compiler.AddResource(schemaURL, strings.NewReader(string(schemaJSON))); err != nil {
 		return fmt.Errorf("failed to add schema resource: %w", err)
 	}
+	if schemaID != schemaURL {
+		if err := compiler.AddResource(schemaID, strings.NewReader(string(schemaJSON))); err != nil {
+			return fmt.Errorf("failed to add schema resource with $id: %w", err)
+		}
+	}
 
-	schema, err := compiler.Compile(schemaURL)
+	schema, err := compiler.Compile(schemaID)
 	if err != nil {
 		return fmt.Errorf("failed to compile schema: %w", err)
 	}

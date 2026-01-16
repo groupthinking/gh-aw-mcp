@@ -8,7 +8,7 @@ import (
 // Documentation URL constants
 const (
 	ConfigSpecURL = "https://github.com/githubnext/gh-aw/blob/main/docs/src/content/docs/reference/mcp-gateway.md"
-	SchemaURL     = "https://github.com/githubnext/gh-aw/blob/main/docs/public/schemas/mcp-gateway-config.schema.json"
+	SchemaURL     = "https://raw.githubusercontent.com/githubnext/gh-aw/main/docs/public/schemas/mcp-gateway-config.schema.json"
 )
 
 // ValidationError represents a configuration validation error with context
@@ -104,24 +104,29 @@ func TimeoutPositive(timeout int, fieldName, jsonPath string) *ValidationError {
 	return nil
 }
 
-// MountFormat validates a mount specification in the format "source:dest:mode"
+// MountFormat validates a mount specification in the format "source:dest" or "source:dest:mode"
 // Returns nil if valid, *ValidationError if invalid
 // Per MCP Gateway specification v1.7.0 section 4.1.5:
 // - Host path MUST be an absolute path
 // - Container path MUST be an absolute path
-// - Mode MUST be either "ro" (read-only) or "rw" (read-write)
+// - Mode (if provided) MUST be either "ro" (read-only) or "rw" (read-write)
 func MountFormat(mount, jsonPath string, index int) *ValidationError {
 	parts := strings.Split(mount, ":")
-	if len(parts) != 3 {
+	if len(parts) < 2 || len(parts) > 3 {
 		return &ValidationError{
 			Field:      "mounts",
-			Message:    fmt.Sprintf("invalid mount format '%s' (expected 'source:dest:mode')", mount),
+			Message:    fmt.Sprintf("invalid mount format '%s' (expected 'source:dest' or 'source:dest:mode')", mount),
 			JSONPath:   fmt.Sprintf("%s.mounts[%d]", jsonPath, index),
-			Suggestion: "Use format 'source:dest:mode' where mode is 'ro' (read-only) or 'rw' (read-write)",
+			Suggestion: "Use format 'source:dest' or 'source:dest:mode' where mode is 'ro' (read-only) or 'rw' (read-write)",
 		}
 	}
 
-	source, dest, mode := parts[0], parts[1], parts[2]
+	source := parts[0]
+	dest := parts[1]
+	mode := ""
+	if len(parts) == 3 {
+		mode = parts[2]
+	}
 
 	// Validate source is not empty
 	if source == "" {
@@ -163,8 +168,8 @@ func MountFormat(mount, jsonPath string, index int) *ValidationError {
 		}
 	}
 
-	// Validate mode
-	if mode != "ro" && mode != "rw" {
+	// Validate mode if provided
+	if mode != "" && mode != "ro" && mode != "rw" {
 		return &ValidationError{
 			Field:      "mounts",
 			Message:    fmt.Sprintf("invalid mount mode '%s' (must be 'ro' or 'rw')", mode),

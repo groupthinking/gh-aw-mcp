@@ -189,12 +189,11 @@ func TestMountFormat(t *testing.T) {
 			shouldErr: false,
 		},
 		{
-			name:      "invalid format - missing mode",
+			name:      "valid mount without mode",
 			mount:     "/host/path:/container/path",
 			jsonPath:  "mcpServers.github",
 			index:     0,
-			shouldErr: true,
-			errMsg:    "invalid mount format",
+			shouldErr: false,
 		},
 		{
 			name:      "invalid format - too many colons",
