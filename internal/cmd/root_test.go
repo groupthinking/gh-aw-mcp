@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 
 	"github.com/githubnext/gh-aw-mcpg/internal/config"
@@ -138,9 +137,10 @@ TEST_VAR3=value with spaces
 
 		// Save and restore environment variables
 		origVals := map[string]string{
-			"TEST_VAR1": os.Getenv("TEST_VAR1"),
-			"TEST_VAR2": os.Getenv("TEST_VAR2"),
-			"TEST_VAR3": os.Getenv("TEST_VAR3"),
+			"TEST_VAR1":  os.Getenv("TEST_VAR1"),
+			"TEST_VAR2":  os.Getenv("TEST_VAR2"),
+			"TEST_VAR3":  os.Getenv("TEST_VAR3"),
+			"EMPTY_LINE": os.Getenv("EMPTY_LINE"),
 		}
 		t.Cleanup(func() {
 			for key, val := range origVals {
@@ -160,6 +160,7 @@ TEST_VAR3=value with spaces
 		assert.Equal(t, "value1", os.Getenv("TEST_VAR1"))
 		assert.Equal(t, "value2", os.Getenv("TEST_VAR2"))
 		assert.Equal(t, "value with spaces", os.Getenv("TEST_VAR3"))
+		assert.Equal(t, "", os.Getenv("EMPTY_LINE"))
 	})
 
 	t.Run("nonexistent file", func(t *testing.T) {
@@ -212,7 +213,7 @@ TEST_VAR3=value with spaces
 func TestWriteGatewayConfig(t *testing.T) {
 	t.Run("unified mode with API key", func(t *testing.T) {
 		cfg := &config.Config{
-			Servers: map[string]*config.Server{
+			Servers: map[string]*config.ServerConfig{
 				"test-server": {
 					Type: "stdio",
 				},
@@ -236,7 +237,7 @@ func TestWriteGatewayConfig(t *testing.T) {
 
 	t.Run("routed mode without API key", func(t *testing.T) {
 		cfg := &config.Config{
-			Servers: map[string]*config.Server{
+			Servers: map[string]*config.ServerConfig{
 				"server1": {Type: "stdio"},
 				"server2": {Type: "stdio"},
 			},
@@ -256,7 +257,7 @@ func TestWriteGatewayConfig(t *testing.T) {
 
 	t.Run("with tools field", func(t *testing.T) {
 		cfg := &config.Config{
-			Servers: map[string]*config.Server{
+			Servers: map[string]*config.ServerConfig{
 				"test-server": {
 					Type:  "stdio",
 					Tools: []string{"tool1", "tool2"},
@@ -276,7 +277,7 @@ func TestWriteGatewayConfig(t *testing.T) {
 
 	t.Run("IPv6 address", func(t *testing.T) {
 		cfg := &config.Config{
-			Servers: map[string]*config.Server{
+			Servers: map[string]*config.ServerConfig{
 				"test-server": {Type: "stdio"},
 			},
 		}
@@ -291,7 +292,7 @@ func TestWriteGatewayConfig(t *testing.T) {
 
 	t.Run("invalid listen address uses defaults", func(t *testing.T) {
 		cfg := &config.Config{
-			Servers: map[string]*config.Server{
+			Servers: map[string]*config.ServerConfig{
 				"test-server": {Type: "stdio"},
 			},
 		}
