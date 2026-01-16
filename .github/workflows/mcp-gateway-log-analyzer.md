@@ -7,8 +7,9 @@ on:
 
 permissions:
   contents: read
-  issues: write
   actions: read
+  issues: read
+  pull-requests: read
 
 engine: copilot
 
@@ -156,7 +157,157 @@ Group errors into categories:
    - Non-critical warnings
    - Deprecated feature usage
 
-## Step 5: Create Comprehensive Issue 📝
+## Step 5: Create Test Cases for Reproduction 🧪
+
+For each significant error identified (Critical and High Priority errors), attempt to create a test case that reproduces the issue:
+
+### 5.1 Analyze Error Context
+
+For each error, examine:
+- **Error type**: What kind of failure occurred (startup, protocol, container, etc.)
+- **Preconditions**: What state or configuration led to the error
+- **Trigger**: What action or request caused the error
+- **Environment**: Docker version, Go version, OS details from logs
+- **Configuration**: Relevant config.toml or environment variable settings
+
+### 5.2 Identify Reproducible Errors
+
+Determine if the error is reproducible by checking:
+- **Consistency**: Does it occur in multiple workflow runs?
+- **Conditions**: Are the conditions clear and replicable?
+- **Isolation**: Can the error be isolated from other issues?
+- **Testability**: Can it be tested without external dependencies?
+
+### 5.3 Create Test Case Files
+
+For reproducible errors, create test case specifications in memory (do not create actual files):
+
+**Test Case Template:**
+```go
+// TestCase: [Brief Description]
+// Category: [Critical/High Priority]
+// Related Error: [Error message excerpt]
+// Workflow Run: [Link to workflow run]
+
+func Test[ErrorCategory][BriefName](t *testing.T) {
+    // Setup: Describe the preconditions needed
+    // - Configuration requirements
+    // - Environment state
+    // - Mock/stub requirements
+    
+    // Trigger: Describe how to trigger the error
+    // - Specific function call
+    // - API request
+    // - Configuration that causes failure
+    
+    // Expected: The error that should occur
+    // - Error message pattern
+    // - Error type
+    // - Exit code or status
+    
+    // Example implementation structure:
+    // t.Run("reproduce_[error_name]", func(t *testing.T) {
+    //     // Arrange
+    //     config := &Config{...}
+    //     
+    //     // Act
+    //     result, err := FunctionThatFails(config)
+    //     
+    //     // Assert
+    //     assert.Error(t, err)
+    //     assert.Contains(t, err.Error(), "expected error message")
+    // })
+}
+```
+
+### 5.4 Document Test Case in Issue
+
+For each test case created, include in the issue:
+- **Test File Location**: Where the test should be added (e.g., `internal/server/routed_test.go`)
+- **Test Description**: What the test validates
+- **Reproduction Steps**: Manual steps to reproduce if automated test is not possible
+- **Code Snippet**: The test case code structure
+- **Expected Outcome**: What should happen when the bug is fixed
+
+### 5.5 Bash-Based Reproduction Scripts
+
+For errors that can be reproduced with command-line steps, create bash reproduction scripts:
+
+```bash
+#!/bin/bash
+# Reproduction script for: [Error Description]
+# Workflow Run: [Link]
+
+# Setup
+export DOCKER_API_VERSION=1.43
+export TEST_CONFIG="test-config.toml"
+
+# Create minimal config that triggers the error
+cat > $TEST_CONFIG <<EOF
+[servers.test]
+container = "ghcr.io/github/test-mcp-server:latest"
+# ... relevant config that causes error
+EOF
+
+# Execute command that reproduces error
+./awmg --config $TEST_CONFIG 2>&1 | tee error-reproduction.log
+
+# Expected output:
+# ERROR: [expected error message]
+
+# Cleanup
+rm $TEST_CONFIG error-reproduction.log
+```
+
+### 5.6 Integration Test Scenarios
+
+For complex errors involving multiple components, outline integration test scenarios:
+
+```markdown
+**Integration Test Scenario: [Error Name]**
+
+**Components Involved:**
+- MCP Gateway server
+- Docker container management
+- GitHub MCP server
+- Authentication layer
+
+**Test Steps:**
+1. Start gateway with [specific configuration]
+2. Attempt to [specific operation]
+3. Verify error occurs: [expected error]
+4. Verify error is logged to: [log file]
+5. Verify gateway state: [expected state]
+
+**Success Criteria:**
+- Error reproduces consistently
+- Error message matches logs
+- System recovers appropriately (or doesn't)
+```
+
+### 5.7 Test Case Summary
+
+Create a summary of all test cases to include in the issue:
+
+```markdown
+## 🧪 Reproducible Test Cases
+
+| Priority | Error Category | Test Case | Reproducibility | Location |
+|----------|---------------|-----------|-----------------|----------|
+| Critical | Gateway Startup | TestGatewayStartupFailure | ✅ Consistent | internal/server/server_test.go |
+| High | Docker Connection | TestDockerDaemonFailure | ✅ Consistent | internal/launcher/docker_test.go |
+| High | Protocol Error | TestInvalidJSONRPC | ⚠️ Intermittent | internal/mcp/protocol_test.go |
+```
+
+### 5.8 Non-Reproducible Errors
+
+For errors that cannot be easily reproduced:
+- Document why reproduction is difficult
+- Suggest observability improvements (additional logging, metrics)
+- Recommend investigation approaches
+- Note if more data is needed from future occurrences
+
+## Step 6: Create Comprehensive Issue 📝
 
 If errors are found, create a GitHub issue using the safe-outputs create-issue tool:
 
@@ -198,6 +349,8 @@ Found **[N]** errors across **[M]** workflow runs in the last 24 hours.
 
 **Suggested Fix:** [Potential solution or investigation path]
 
+**Test Case:** [If reproducible, reference the test case below]
+
 ---
 
 ## High Priority Errors
@@ -215,6 +368,41 @@ Found **[N]** errors across **[M]** workflow runs in the last 24 hours.
 ## Low Priority Issues
 
 [Brief list of minor issues]
+
+---
+
+## 🧪 Reproducible Test Cases
+
+[Include test case summary table from Step 5.7]
+
+### Test Case Details
+
+For each reproducible error, provide:
+
+#### 1. [Test Case Name]
+
+**Error Category:** [Critical/High/Medium]
+
+**Related Error:** [Brief error description]
+
+**Test File:** `[path/to/test_file.go]`
+
+**Test Code:**
+```go
+[Test case code from Step 5.3]
+```
+
+**Manual Reproduction Steps:**
+```bash
+[Bash script from Step 5.5 if applicable]
+```
+
+**Expected Behavior After Fix:**
+- [What should happen instead]
+- [How to verify the fix]
+
+**Integration Test Scenario:**
+[Integration test details from Step 5.6 if applicable]
 
 ---
 
@@ -247,7 +435,7 @@ Found **[N]** errors across **[M]** workflow runs in the last 24 hours.
 - **Assignee:** @lpcox
 - **Labels:** `bug`, `mcp-gateway`, `automation`
 
-## Step 6: Success Case - No Errors Found ✅
+## Step 7: Success Case - No Errors Found ✅
 
 If NO errors are found in the analyzed period:
 
@@ -279,6 +467,8 @@ Analyzed [N] workflow runs across [M] workflows
 - Suggest potential fixes or investigation paths
 - Link to specific workflow runs for reproduction
 - Prioritize errors by severity and impact
+- Create reproducible test cases for Critical and High Priority errors
+- Provide clear reproduction steps for developers
 
 ### Efficiency
 - Use bash tools for log parsing (grep, awk, jq)
@@ -378,13 +568,17 @@ Your workflow run should result in:
 
 1. **If errors found:**
    - A detailed GitHub issue with categorized findings
+   - Test cases for reproducible Critical and High Priority errors
+   - Bash reproduction scripts where applicable
+   - Integration test scenarios for complex errors
    - Assigned to @lpcox
    - Tagged with appropriate labels
    - Clear action items for investigation
+   - Ready-to-use test code for developers
 
 2. **If no errors found:**
    - No issue created
    - Success message in workflow logs
    - Clean exit
 
-Begin your analysis! Fetch recent workflow runs, download artifacts, analyze logs for errors, and report comprehensive findings.
+Begin your analysis! Fetch recent workflow runs, download artifacts, analyze logs for errors, create reproduction test cases, and report comprehensive findings.
