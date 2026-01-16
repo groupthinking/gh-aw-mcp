@@ -251,7 +251,7 @@ func TestCallTool_MissingArguments(t *testing.T) {
 		require.NoError(t, err)
 
 		assert.NotNil(t, receivedParams, "Params should be sent to backend")
-		
+
 		// Arguments should be present, even if nil/empty
 		_, hasArguments := receivedParams["arguments"]
 		assert.True(t, hasArguments, "Arguments field should be present even if nil")
@@ -269,11 +269,11 @@ func TestCallTool_MissingArguments(t *testing.T) {
 		require.NoError(t, err)
 
 		assert.NotNil(t, receivedParams, "Params should be sent to backend")
-		
+
 		// Arguments should be present as an object
 		arguments, hasArguments := receivedParams["arguments"]
 		assert.True(t, hasArguments, "Arguments field should be present")
-		
+
 		// It should be an empty map
 		if argsMap, ok := arguments.(map[string]interface{}); ok {
 			assert.Empty(t, argsMap, "Arguments should be an empty map")

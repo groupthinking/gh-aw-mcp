@@ -758,17 +758,17 @@ func (c *Connection) callTool(params interface{}) (*Response, error) {
 		return nil, fmt.Errorf("failed to marshal params: %w", err)
 	}
 	logConn.Printf("callTool: marshaled params=%s", string(paramsJSON))
-	
+
 	if err := json.Unmarshal(paramsJSON, &callParams); err != nil {
 		return nil, fmt.Errorf("invalid params: %w", err)
 	}
-	
+
 	// Ensure arguments is never nil - default to empty map
 	// This is required by the MCP protocol which expects arguments to always be present
 	if callParams.Arguments == nil {
 		callParams.Arguments = make(map[string]interface{})
 	}
-	
+
 	logConn.Printf("callTool: parsed name=%s, arguments=%+v", callParams.Name, callParams.Arguments)
 
 	result, err := c.session.CallTool(c.ctx, &sdk.CallToolParams{
