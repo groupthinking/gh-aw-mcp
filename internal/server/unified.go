@@ -209,12 +209,15 @@ func (us *UnifiedServer) registerToolsFromBackend(serverID string) error {
 		toolDesc := fmt.Sprintf("[%s] %s", serverID, tool.Description)
 		toolNames = append(toolNames, prefixedName)
 
+		// Normalize the input schema to fix common validation issues
+		normalizedSchema := mcp.NormalizeInputSchema(tool.InputSchema, prefixedName)
+
 		// Store tool info for routed mode
 		us.toolsMu.Lock()
 		us.tools[prefixedName] = &ToolInfo{
 			Name:        prefixedName,
 			Description: toolDesc,
-			InputSchema: tool.InputSchema,
+			InputSchema: normalizedSchema,
 			BackendID:   serverID,
 		}
 		us.toolsMu.Unlock()
