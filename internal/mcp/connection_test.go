@@ -564,3 +564,142 @@ data: {"jsonrpc":"2.0","id":` + idStr + `,"result":{"tools":[]}}
 
 	t.Logf("Successfully parsed SSE-formatted response from server")
 }
+
+// TestNewMCPClient tests the newMCPClient helper function
+func TestNewMCPClient(t *testing.T) {
+	client := newMCPClient()
+	require.NotNil(t, client, "newMCPClient should return a non-nil client")
+}
+
+// TestCreateJSONRPCRequest tests the createJSONRPCRequest helper function
+func TestCreateJSONRPCRequest(t *testing.T) {
+	tests := []struct {
+		name      string
+		requestID uint64
+		method    string
+		params    interface{}
+	}{
+		{
+			name:      "simple request with nil params",
+			requestID: 1,
+			method:    "initialize",
+			params:    nil,
+		},
+		{
+			name:      "request with map params",
+			requestID: 42,
+			method:    "tools/list",
+			params:    map[string]interface{}{"filter": "test"},
+		},
+		{
+			name:      "request with struct params",
+			requestID: 100,
+			method:    "tools/call",
+			params:    struct{ Name string }{Name: "test-tool"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			request := createJSONRPCRequest(tt.requestID, tt.method, tt.params)
+
+			assert.Equal(t, "2.0", request["jsonrpc"], "jsonrpc version should be 2.0")
+			assert.Equal(t, tt.requestID, request["id"], "id should match requestID")
+			assert.Equal(t, tt.method, request["method"], "method should match")
+			assert.Equal(t, tt.params, request["params"], "params should match")
+		})
+	}
+}
+
+// TestSetupHTTPRequest tests the setupHTTPRequest helper function
+func TestSetupHTTPRequest(t *testing.T) {
+	tests := []struct {
+		name           string
+		url            string
+		requestBody    []byte
+		headers        map[string]string
+		expectError    bool
+		expectedMethod string
+	}{
+		{
+			name:           "basic request with no custom headers",
+			url:            "http://example.com/mcp",
+			requestBody:    []byte(`{"test": "data"}`),
+			headers:        map[string]string{},
+			expectError:    false,
+			expectedMethod: "POST",
+		},
+		{
+			name:        "request with custom headers",
+			url:         "http://example.com/mcp",
+			requestBody: []byte(`{"test": "data"}`),
+			headers: map[string]string{
+				"Authorization": "Bearer token123",
+				"X-Custom":      "value",
+			},
+			expectError:    false,
+			expectedMethod: "POST",
+		},
+		{
+			name:           "request with empty body",
+			url:            "http://example.com/mcp",
+			requestBody:    []byte{},
+			headers:        map[string]string{},
+			expectError:    false,
+			expectedMethod: "POST",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx := context.Background()
+			req, err := setupHTTPRequest(ctx, tt.url, tt.requestBody, tt.headers)
+
+			if tt.expectError {
+				assert.Error(t, err, "Expected error")
+				return
+			}
+
+			require.NoError(t, err, "setupHTTPRequest should not return error")
+			require.NotNil(t, req, "Request should not be nil")
+
+			// Verify method
+			assert.Equal(t, tt.expectedMethod, req.Method, "Method should be POST")
+
+			// Verify URL
+			assert.Equal(t, tt.url, req.URL.String(), "URL should match")
+
+			// Verify standard headers
+			assert.Equal(t, "application/json", req.Header.Get("Content-Type"), "Content-Type should be application/json")
+			assert.Equal(t, "application/json, text/event-stream", req.Header.Get("Accept"), "Accept header should be set")
+
+			// Verify custom headers
+			for key, value := range tt.headers {
+				assert.Equal(t, value, req.Header.Get(key), "Custom header %s should match", key)
+			}
+		})
+	}
+}
+
+// TestNewHTTPConnection tests the newHTTPConnection helper function
+func TestNewHTTPConnection(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	client := newMCPClient()
+	url := "http://example.com/mcp"
+	headers := map[string]string{"Authorization": "test"}
+	httpClient := &http.Client{}
+
+	conn := newHTTPConnection(ctx, cancel, client, nil, url, headers, httpClient, HTTPTransportStreamable)
+
+	require.NotNil(t, conn, "Connection should not be nil")
+	assert.Equal(t, client, conn.client, "Client should match")
+	assert.Equal(t, ctx, conn.ctx, "Context should match")
+	assert.NotNil(t, conn.cancel, "Cancel function should not be nil")
+	assert.True(t, conn.isHTTP, "isHTTP should be true")
+	assert.Equal(t, url, conn.httpURL, "URL should match")
+	assert.Equal(t, headers, conn.headers, "Headers should match")
+	assert.Equal(t, httpClient, conn.httpClient, "HTTP client should match")
+	assert.Equal(t, HTTPTransportStreamable, conn.httpTransportType, "Transport type should match")
+}
