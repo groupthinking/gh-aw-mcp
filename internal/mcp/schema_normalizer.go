@@ -12,9 +12,9 @@ var logSchemaNormalizer = logger.New("mcp:schema_normalizer")
 // that can cause downstream validation errors.
 //
 // Known issues fixed:
-// 1. Object schemas without properties: When a schema declares "type": "object"
-//    but is missing the required "properties" field, we add an empty properties
-//    object to make it valid per JSON Schema standards.
+//  1. Object schemas without properties: When a schema declares "type": "object"
+//     but is missing the required "properties" field, we add an empty properties
+//     object to make it valid per JSON Schema standards.
 func NormalizeInputSchema(schema map[string]interface{}, toolName string) map[string]interface{} {
 	if schema == nil {
 		return schema
