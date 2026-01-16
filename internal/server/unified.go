@@ -287,7 +287,7 @@ func (us *UnifiedServer) registerToolsFromBackend(serverID string) error {
 			result, _, err := handler(ctx, req, nil)
 			return result, err
 		}
-		
+
 		us.server.AddTool(&sdk.Tool{
 			Name:        prefixedName,
 			Description: toolDesc,

@@ -7,11 +7,11 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/githubnext/gh-aw-mcpg/internal/config"
 	"encoding/json"
+	"github.com/githubnext/gh-aw-mcpg/internal/config"
+	"io"
 	"net/http"
 	"net/http/httptest"
-	"io"
 )
 
 // TestToolsListIncludesInputSchema verifies that tools/list responses include
@@ -108,7 +108,7 @@ func TestToolsListIncludesInputSchema(t *testing.T) {
 	us.toolsMu.RUnlock()
 
 	require.NotEmpty(t, tools, "Should have registered tools")
-	
+
 	// Find our test tool
 	var testTool *ToolInfo
 	for name, tool := range tools {
@@ -120,7 +120,7 @@ func TestToolsListIncludesInputSchema(t *testing.T) {
 	}
 
 	require.NotNil(t, testTool, "Should have found test tool")
-	
+
 	// Verify the tool has InputSchema
 	assert.NotNil(t, testTool.InputSchema, "Tool MUST have InputSchema")
 	assert.NotEmpty(t, testTool.InputSchema, "InputSchema should not be empty")
@@ -131,6 +131,6 @@ func TestToolsListIncludesInputSchema(t *testing.T) {
 
 	properties := testTool.InputSchema["properties"].(map[string]interface{})
 	assert.Contains(t, properties, "body", "InputSchema should define the 'body' parameter")
-	
+
 	t.Logf("✓ Tool has proper InputSchema: %+v", testTool.InputSchema)
 }
