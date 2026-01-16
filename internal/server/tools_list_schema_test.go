@@ -129,7 +129,9 @@ func TestToolsListIncludesInputSchema(t *testing.T) {
 	assert.Equal(t, "object", testTool.InputSchema["type"], "InputSchema should have type: object")
 	assert.Contains(t, testTool.InputSchema, "properties", "InputSchema should have properties")
 
-	properties, ok := testTool.InputSchema["properties"].(map[string]interface{})
+	propertiesValue := testTool.InputSchema["properties"]
+	require.NotNil(t, propertiesValue, "properties value should not be nil")
+	properties, ok := propertiesValue.(map[string]interface{})
 	require.True(t, ok, "properties should be a map[string]interface{}")
 	assert.Contains(t, properties, "body", "InputSchema should define the 'body' parameter")
 

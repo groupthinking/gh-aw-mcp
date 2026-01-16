@@ -283,7 +283,9 @@ func (us *UnifiedServer) registerToolsFromBackend(serverID string) error {
 		// The typed handler signature: func(context.Context, *CallToolRequest, interface{}) (*CallToolResult, interface{}, error)
 		// The simple handler signature: func(context.Context, *CallToolRequest) (*CallToolResult, error)
 		wrappedHandler := func(ctx context.Context, req *sdk.CallToolRequest) (*sdk.CallToolResult, error) {
-			// Call the original handler - the third parameter (interface{}) is SDK internal state
+			// Call the original typed handler
+			// The third parameter would be the pre-unmarshaled/validated input if using sdk.AddTool,
+			// but we handle unmarshaling ourselves in the handler, so we pass nil
 			result, _, err := handler(ctx, req, nil)
 			return result, err
 		}
