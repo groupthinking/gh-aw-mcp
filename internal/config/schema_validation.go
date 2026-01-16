@@ -134,7 +134,7 @@ func validateJSONSchema(data []byte) error {
 	if err := json.Unmarshal(schemaJSON, &schemaObj); err != nil {
 		return fmt.Errorf("failed to parse schema JSON: %w", err)
 	}
-	
+
 	schemaID, ok := schemaObj["$id"].(string)
 	if !ok || schemaID == "" {
 		schemaID = schemaURL
