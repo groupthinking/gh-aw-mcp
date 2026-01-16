@@ -189,6 +189,11 @@ func (us *UnifiedServer) registerToolsFromBackend(serverID string) error {
 		return fmt.Errorf("failed to list tools: %w", err)
 	}
 
+	// Check if the backend returned an error
+	if result.Error != nil {
+		return fmt.Errorf("backend error listing tools: code=%d, message=%s", result.Error.Code, result.Error.Message)
+	}
+
 	// Parse the result
 	var listResult struct {
 		Tools []struct {
@@ -441,6 +446,11 @@ func (g *guardBackendCaller) CallTool(ctx context.Context, toolName string, args
 		return nil, err
 	}
 
+	// Check if the backend returned an error
+	if response.Error != nil {
+		return nil, fmt.Errorf("backend error: code=%d, message=%s", response.Error.Code, response.Error.Message)
+	}
+
 	// Parse the result
 	var result interface{}
 	if err := json.Unmarshal(response.Result, &result); err != nil {
@@ -514,6 +524,11 @@ func (us *UnifiedServer) callBackendTool(ctx context.Context, serverID, toolName
 	}, serverID)
 	if err != nil {
 		return &sdk.CallToolResult{IsError: true}, nil, err
+	}
+
+	// Check if the backend returned an error
+	if response.Error != nil {
+		return &sdk.CallToolResult{IsError: true}, nil, fmt.Errorf("backend error: code=%d, message=%s", response.Error.Code, response.Error.Message)
 	}
 
 	// Parse the backend result

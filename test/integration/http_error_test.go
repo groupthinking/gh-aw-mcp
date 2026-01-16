@@ -377,12 +377,17 @@ func TestHTTPError_RequestFailure(t *testing.T) {
 	t.Log("✓ Connection established successfully")
 
 	// Try to make a request that should fail
-	_, err = conn.SendRequest("tools/list", nil)
-	require.NotNil(t, err, "Expected request to fail, but it succeeded")
+	resp, err := conn.SendRequest("tools/list", nil)
+	require.NoError(t, err, "Unexpected error making request")
+	require.NotNil(t, resp, "Expected response")
 
-	// Verify error is properly propagated
-	if err != nil {
-		t.Logf("✓ Request failure error properly propagated: %v", err)
+	// Verify the response contains an error
+	require.NotNil(t, resp.Error, "Expected response to contain an error field")
+	require.Contains(t, resp.Error.Message, "503", "Expected error to mention HTTP 503 status")
+
+	// Verify error is properly propagated in the response
+	if resp.Error != nil {
+		t.Logf("✓ Request failure error properly propagated in response: code=%d, message=%s", resp.Error.Code, resp.Error.Message)
 	}
 }
 
