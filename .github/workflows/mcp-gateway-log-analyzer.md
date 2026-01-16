@@ -24,6 +24,7 @@ safe-outputs:
 tools:
   github:
     toolsets: [default, actions]
+    github-token: ${{ secrets.GH_AW_MCP_MULTIREPO_TOKEN }}
   bash: ["*"]
 
 timeout-minutes: 30
