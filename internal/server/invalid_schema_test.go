@@ -18,6 +18,14 @@ import (
 func TestInvalidSchemaFromBackend(t *testing.T) {
 	var initReceived bool
 
+	// Define an invalid schema pattern: object type without properties field
+	// This violates JSON Schema spec and could cause "object schema missing properties" errors
+	invalidSchema := map[string]interface{}{
+		"type": "object",
+		// INVALID: object type without "properties" field
+		// This violates JSON Schema spec
+	}
+
 	// Create a mock backend that returns a tool with an invalid schema
 	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var req struct {
@@ -60,11 +68,7 @@ func TestInvalidSchemaFromBackend(t *testing.T) {
 						{
 							"name":        "get_commit",
 							"description": "Get commit details",
-							"inputSchema": map[string]interface{}{
-								"type": "object",
-								// INVALID: object type without "properties" field
-								// This violates JSON Schema spec
-							},
+							"inputSchema": invalidSchema,
 						},
 					},
 				},
@@ -129,6 +133,10 @@ func TestInvalidSchemaFromBackend(t *testing.T) {
 func TestEmptySchemaFromBackend(t *testing.T) {
 	var initReceived bool
 
+	// Define an explicitly empty schema for testing
+	// Empty schemas like {} are technically valid JSON but may be rejected by tool callers
+	emptySchema := make(map[string]interface{})
+
 	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var req struct {
 			Method string          `json:"method"`
@@ -169,9 +177,7 @@ func TestEmptySchemaFromBackend(t *testing.T) {
 						{
 							"name":        "get_commit",
 							"description": "Get commit details",
-							"inputSchema": map[string]interface{}{
-								// Completely empty - no type, no properties, nothing
-							},
+							"inputSchema": emptySchema,
 						},
 					},
 				},
@@ -307,7 +313,7 @@ func TestMissingSchemaFromBackend(t *testing.T) {
 
 	// When backend doesn't send inputSchema, it will be nil or empty
 	t.Logf("InputSchema when not provided by backend: %+v", toolInfo.InputSchema)
-	
+
 	if toolInfo.InputSchema == nil {
 		t.Logf("✓ InputSchema is nil when not provided by backend")
 	} else if len(toolInfo.InputSchema) == 0 {

@@ -17,7 +17,7 @@ import (
 // from backend servers to clients in unified mode
 func TestUnifiedModeInputSchemaPassthrough(t *testing.T) {
 	var initReceived bool
-	
+
 	// Create a mock HTTP MCP server that returns tools with InputSchema
 	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var req struct {
@@ -28,7 +28,7 @@ func TestUnifiedModeInputSchemaPassthrough(t *testing.T) {
 		json.NewDecoder(r.Body).Decode(&req)
 
 		w.Header().Set("Content-Type", "application/json")
-		
+
 		if req.Method == "initialize" {
 			initReceived = true
 			// Return valid initialize response
@@ -85,7 +85,7 @@ func TestUnifiedModeInputSchemaPassthrough(t *testing.T) {
 			json.NewEncoder(w).Encode(response)
 			return
 		}
-		
+
 		// Default response for other methods
 		response := map[string]interface{}{
 			"jsonrpc": "2.0",
@@ -112,7 +112,7 @@ func TestUnifiedModeInputSchemaPassthrough(t *testing.T) {
 	us, err := NewUnified(ctx, cfg)
 	require.NoError(t, err, "Failed to create unified server")
 	defer us.Close()
-	
+
 	require.True(t, initReceived, "Expected initialize to be called on backend")
 
 	// Now check what tools are registered
@@ -122,17 +122,17 @@ func TestUnifiedModeInputSchemaPassthrough(t *testing.T) {
 	us.toolsMu.RUnlock()
 
 	require.True(t, exists, "Expected tool 'github___get_commit' to be registered")
-	
+
 	// Check if InputSchema is stored internally
 	assert.NotNil(t, toolInfo.InputSchema, "Expected InputSchema to be stored internally")
 	if toolInfo.InputSchema != nil {
 		t.Logf("✓ InputSchema is stored internally: %+v", toolInfo.InputSchema)
-		
+
 		// Check that it has the expected structure
 		schemaType, hasType := toolInfo.InputSchema["type"]
 		assert.True(t, hasType, "Expected InputSchema to have 'type' field")
 		assert.Equal(t, "object", schemaType, "Expected InputSchema type to be 'object'")
-		
+
 		properties, hasProperties := toolInfo.InputSchema["properties"]
 		assert.True(t, hasProperties, "Expected InputSchema to have 'properties' field")
 		assert.NotNil(t, properties, "Expected properties to be non-nil")
@@ -146,7 +146,7 @@ func TestUnifiedModeInputSchemaPassthrough(t *testing.T) {
 	//
 	// However, this means clients calling tools/list via the SDK won't receive InputSchema
 	// This test confirms that InputSchema is stored internally but may not be passed to clients
-	
+
 	t.Logf("✓ Test confirms: InputSchema IS stored internally in gateway")
 	t.Logf("⚠️  However, it may not be passed through to SDK clients")
 	t.Logf("   See unified.go:261-264 where tools are registered without InputSchema")

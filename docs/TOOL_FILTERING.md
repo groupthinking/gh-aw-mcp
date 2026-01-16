@@ -110,8 +110,8 @@ The GitHub MCP Server also supports predefined toolsets. Consult the [GitHub MCP
 
 1. **Stdio Backends**: The gateway passes environment variables from the `env` configuration field to the backend process
 2. **HTTP Backends**: The gateway includes headers from the `headers` configuration field in all HTTP requests to the backend
-3. **Backend Processing**: The backend server reads these values and filters its tool list accordingly
-4. **No Gateway Filtering**: The gateway itself does NOT filter tools - it relies on backends to do their own filtering
+3. **Backend Processing**: The backend server reads these values and performs its own tool filtering based on the values provided
+4. **Gateway Role**: The gateway acts as a conduit, passing filtering configuration to backends but not performing the filtering itself - the actual tool filtering logic resides in the backend servers
 
 ## Schema Handling
 
