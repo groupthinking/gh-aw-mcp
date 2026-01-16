@@ -137,18 +137,30 @@ TEST_VAR3=value with spaces
 		require.NoError(t, err)
 
 		// Save and restore environment variables
-		origVals := map[string]string{
-			"TEST_VAR1": os.Getenv("TEST_VAR1"),
-			"TEST_VAR2": os.Getenv("TEST_VAR2"),
-			"TEST_VAR3": os.Getenv("TEST_VAR3"),
-		}
+		origTestVar1, testVar1WasSet := os.LookupEnv("TEST_VAR1")
+		origTestVar2, testVar2WasSet := os.LookupEnv("TEST_VAR2")
+		origTestVar3, testVar3WasSet := os.LookupEnv("TEST_VAR3")
+		origEmptyLine, emptyLineWasSet := os.LookupEnv("EMPTY_LINE")
 		t.Cleanup(func() {
-			for key, val := range origVals {
-				if val != "" {
-					os.Setenv(key, val)
-				} else {
-					os.Unsetenv(key)
-				}
+			if testVar1WasSet {
+				require.NoError(t, os.Setenv("TEST_VAR1", origTestVar1))
+			} else {
+				require.NoError(t, os.Unsetenv("TEST_VAR1"))
+			}
+			if testVar2WasSet {
+				require.NoError(t, os.Setenv("TEST_VAR2", origTestVar2))
+			} else {
+				require.NoError(t, os.Unsetenv("TEST_VAR2"))
+			}
+			if testVar3WasSet {
+				require.NoError(t, os.Setenv("TEST_VAR3", origTestVar3))
+			} else {
+				require.NoError(t, os.Unsetenv("TEST_VAR3"))
+			}
+			if emptyLineWasSet {
+				require.NoError(t, os.Setenv("EMPTY_LINE", origEmptyLine))
+			} else {
+				require.NoError(t, os.Unsetenv("EMPTY_LINE"))
 			}
 		})
 
@@ -160,6 +172,7 @@ TEST_VAR3=value with spaces
 		assert.Equal(t, "value1", os.Getenv("TEST_VAR1"))
 		assert.Equal(t, "value2", os.Getenv("TEST_VAR2"))
 		assert.Equal(t, "value with spaces", os.Getenv("TEST_VAR3"))
+		assert.Equal(t, "", os.Getenv("EMPTY_LINE"))
 	})
 
 	t.Run("nonexistent file", func(t *testing.T) {
