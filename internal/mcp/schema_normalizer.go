@@ -1,12 +1,8 @@
 package mcp
 
 import (
-	"log"
-
 	"github.com/githubnext/gh-aw-mcpg/internal/logger"
 )
-
-var logSchemaNormalizer = logger.New("mcp:schema_normalizer")
 
 // NormalizeInputSchema fixes common schema validation issues in tool definitions
 // that can cause downstream validation errors.
@@ -38,8 +34,6 @@ func NormalizeInputSchema(schema map[string]interface{}, toolName string) map[st
 	// If it's an object type but missing both properties and additionalProperties,
 	// add an empty properties object to make it valid
 	if !hasProperties && !hasAdditionalProperties {
-		log.Printf("Schema normalization: Adding empty properties to object schema for tool '%s'", toolName)
-		logSchemaNormalizer.Printf("Normalizing schema for tool %s: adding empty properties to object type", toolName)
 		logger.LogWarn("backend", "Tool schema normalized: %s - added empty properties to object type schema", toolName)
 
 		// Create a copy of the schema to avoid modifying the original
