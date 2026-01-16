@@ -636,11 +636,6 @@ func (c *Connection) sendHTTPRequest(ctx context.Context, method string, params 
 
 	logConn.Printf("Received HTTP response: status=%d, body_len=%d", httpResp.StatusCode, len(responseBody))
 
-	// Check for HTTP errors
-	if httpResp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("HTTP error: status=%d, body=%s", httpResp.StatusCode, string(responseBody))
-	}
-
 	// Parse JSON-RPC response
 	// The response might be in SSE format (event: message\ndata: {...})
 	// Try to parse as JSON first, if that fails, try SSE format
@@ -651,6 +646,19 @@ func (c *Connection) sendHTTPRequest(ctx context.Context, method string, params 
 		logConn.Printf("Initial JSON parse failed, attempting SSE format parsing")
 		sseData, sseErr := parseSSEResponse(responseBody)
 		if sseErr != nil {
+			// If we have a non-OK HTTP status and can't parse the response,
+			// construct a JSON-RPC error response with HTTP error details
+			if httpResp.StatusCode != http.StatusOK {
+				logConn.Printf("HTTP error status=%d, body cannot be parsed as JSON-RPC", httpResp.StatusCode)
+				return &Response{
+					JSONRPC: "2.0",
+					Error: &ResponseError{
+						Code:    -32603, // Internal error
+						Message: fmt.Sprintf("HTTP %d: %s", httpResp.StatusCode, http.StatusText(httpResp.StatusCode)),
+						Data:    json.RawMessage(responseBody),
+					},
+				}, nil
+			}
 			// Include the response body to help debug what the server actually returned
 			bodyPreview := string(responseBody)
 			if len(bodyPreview) > 500 {
@@ -661,9 +669,37 @@ func (c *Connection) sendHTTPRequest(ctx context.Context, method string, params 
 
 		// Successfully extracted JSON from SSE, now parse it
 		if err := json.Unmarshal(sseData, &rpcResponse); err != nil {
+			// If we have a non-OK HTTP status and can't parse the SSE data,
+			// construct a JSON-RPC error response with HTTP error details
+			if httpResp.StatusCode != http.StatusOK {
+				logConn.Printf("HTTP error status=%d, SSE data cannot be parsed as JSON-RPC", httpResp.StatusCode)
+				return &Response{
+					JSONRPC: "2.0",
+					Error: &ResponseError{
+						Code:    -32603, // Internal error
+						Message: fmt.Sprintf("HTTP %d: %s", httpResp.StatusCode, http.StatusText(httpResp.StatusCode)),
+						Data:    json.RawMessage(responseBody),
+					},
+				}, nil
+			}
 			return nil, fmt.Errorf("failed to parse JSON data extracted from SSE response: %w\nJSON data: %s", err, string(sseData))
 		}
 		logConn.Printf("Successfully parsed SSE-formatted response")
+	}
+
+	// Check for HTTP errors after parsing
+	// If we have a non-OK status but successfully parsed a JSON-RPC response,
+	// pass it through (it may already contain an error field)
+	if httpResp.StatusCode != http.StatusOK {
+		logConn.Printf("HTTP error status=%d with valid JSON-RPC response, passing through", httpResp.StatusCode)
+		// If the response doesn't already have an error, construct one
+		if rpcResponse.Error == nil {
+			rpcResponse.Error = &ResponseError{
+				Code:    -32603, // Internal error
+				Message: fmt.Sprintf("HTTP %d: %s", httpResp.StatusCode, http.StatusText(httpResp.StatusCode)),
+				Data:    responseBody,
+			}
+		}
 	}
 
 	return &rpcResponse, nil
