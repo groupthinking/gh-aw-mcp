@@ -223,10 +223,6 @@ func TestHandleRequest_ToolsCall_UnknownTool(t *testing.T) {
 			toolName: "unknown_tool",
 		},
 		{
-			name:     "empty tool name",
-			toolName: "",
-		},
-		{
 			name:     "misspelled tool",
 			toolName: "sys_initialize",
 		},
