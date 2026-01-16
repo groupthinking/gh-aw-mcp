@@ -142,24 +142,24 @@ TEST_VAR3=value with spaces
 		origEmptyLine, emptyLineWasSet := os.LookupEnv("EMPTY_LINE")
 		t.Cleanup(func() {
 			if testVar1WasSet {
-				_ = os.Setenv("TEST_VAR1", origTestVar1)
+				require.NoError(t, os.Setenv("TEST_VAR1", origTestVar1))
 			} else {
-				_ = os.Unsetenv("TEST_VAR1")
+				require.NoError(t, os.Unsetenv("TEST_VAR1"))
 			}
 			if testVar2WasSet {
-				_ = os.Setenv("TEST_VAR2", origTestVar2)
+				require.NoError(t, os.Setenv("TEST_VAR2", origTestVar2))
 			} else {
-				_ = os.Unsetenv("TEST_VAR2")
+				require.NoError(t, os.Unsetenv("TEST_VAR2"))
 			}
 			if testVar3WasSet {
-				_ = os.Setenv("TEST_VAR3", origTestVar3)
+				require.NoError(t, os.Setenv("TEST_VAR3", origTestVar3))
 			} else {
-				_ = os.Unsetenv("TEST_VAR3")
+				require.NoError(t, os.Unsetenv("TEST_VAR3"))
 			}
 			if emptyLineWasSet {
-				_ = os.Setenv("EMPTY_LINE", origEmptyLine)
+				require.NoError(t, os.Setenv("EMPTY_LINE", origEmptyLine))
 			} else {
-				_ = os.Unsetenv("EMPTY_LINE")
+				require.NoError(t, os.Unsetenv("EMPTY_LINE"))
 			}
 		})
 
