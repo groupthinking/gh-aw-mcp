@@ -494,6 +494,51 @@ func (g *guardBackendCaller) CallTool(ctx context.Context, toolName string, args
 	return result, nil
 }
 
+// convertToCallToolResult converts backend result data to SDK CallToolResult format
+// The backend returns a JSON object with a "content" field containing an array of content items
+func convertToCallToolResult(data interface{}) (*sdk.CallToolResult, error) {
+	// Try to marshal and unmarshal to get the structure
+	dataBytes, err := json.Marshal(data)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal backend result: %w", err)
+	}
+
+	// Parse the backend result structure
+	var backendResult struct {
+		Content []struct {
+			Type string `json:"type"`
+			Text string `json:"text,omitempty"`
+		} `json:"content"`
+		IsError bool `json:"isError,omitempty"`
+	}
+
+	if err := json.Unmarshal(dataBytes, &backendResult); err != nil {
+		return nil, fmt.Errorf("failed to parse backend result structure: %w", err)
+	}
+
+	// Convert content items to SDK Content format
+	content := make([]sdk.Content, 0, len(backendResult.Content))
+	for _, item := range backendResult.Content {
+		switch item.Type {
+		case "text":
+			content = append(content, &sdk.TextContent{
+				Text: item.Text,
+			})
+		default:
+			// For unknown types, try to preserve as text
+			log.Printf("Warning: Unknown content type '%s', treating as text", item.Type)
+			content = append(content, &sdk.TextContent{
+				Text: item.Text,
+			})
+		}
+	}
+
+	return &sdk.CallToolResult{
+		Content: content,
+		IsError: backendResult.IsError,
+	}, nil
+}
+
 // callBackendTool calls a tool on a backend server with DIFC enforcement
 func (us *UnifiedServer) callBackendTool(ctx context.Context, serverID, toolName string, args interface{}) (*sdk.CallToolResult, interface{}, error) {
 	// Note: Session validation happens at the tool registration level via closures
@@ -625,7 +670,13 @@ func (us *UnifiedServer) callBackendTool(ctx context.Context, serverID, toolName
 		}
 	}
 
-	return nil, finalResult, nil
+	// Convert finalResult to SDK CallToolResult format
+	callResult, err := convertToCallToolResult(finalResult)
+	if err != nil {
+		return &sdk.CallToolResult{IsError: true}, nil, fmt.Errorf("failed to convert result: %w", err)
+	}
+
+	return callResult, finalResult, nil
 }
 
 // Run starts the unified MCP server on the specified transport
