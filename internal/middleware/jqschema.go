@@ -127,7 +127,7 @@ func WrapToolHandler(
 			logMiddleware.Printf("Failed to save payload: tool=%s, queryID=%s, error=%v", toolName, queryID, saveErr)
 			// Continue even if save fails - don't break the tool call
 		} else {
-			logMiddleware.Printf("Saved payload: tool=%s, queryID=%s, path=%s, size=%d bytes", 
+			logMiddleware.Printf("Saved payload: tool=%s, queryID=%s, path=%s, size=%d bytes",
 				toolName, queryID, filePath, len(payloadJSON))
 		}
 
@@ -163,12 +163,12 @@ func WrapToolHandler(
 
 		// Create rewritten response
 		rewrittenResponse := map[string]interface{}{
-			"queryID":       queryID,
-			"payloadPath":   filePath,
-			"preview":       preview,
-			"schema":        schemaJSON,
-			"originalSize":  len(payloadJSON),
-			"truncated":     len(payloadStr) > 500,
+			"queryID":      queryID,
+			"payloadPath":  filePath,
+			"preview":      preview,
+			"schema":       schemaJSON,
+			"originalSize": len(payloadJSON),
+			"truncated":    len(payloadStr) > 500,
 		}
 
 		logMiddleware.Printf("Rewritten response: tool=%s, queryID=%s, originalSize=%d, truncated=%v",

@@ -8,9 +8,9 @@ import (
 	"strings"
 	"testing"
 
+	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
 func TestGenerateRandomID(t *testing.T) {
