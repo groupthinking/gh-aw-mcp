@@ -157,7 +157,7 @@ Group errors into categories:
 
 ## Step 5: Create Comprehensive Issue 📝
 
-If errors are found, create a GitHub issue in the `githubnext/gh-aw-mcpg` repository:
+If errors are found, create a GitHub issue using the safe-outputs create-issue tool:
 
 ### Issue Title Format:
 ```
@@ -331,8 +331,11 @@ Analyzed [N] workflow runs across [M] workflows
 
 ### Downloading Artifacts
 
-Use GitHub API to download artifacts:
+**Note:** You should primarily use the GitHub MCP server's `download_workflow_run_artifact` tool to download artifacts. The bash example below is provided for reference only if the MCP tool is unavailable.
+
+Use GitHub API to download artifacts (if MCP tools are not available):
 ```bash
+# Note: GITHUB_TOKEN will be available in the workflow environment
 # Get artifact download URL
 artifact_url=$(curl -s -H "Authorization: Bearer $GITHUB_TOKEN" \
   "https://api.github.com/repos/githubnext/gh-aw/actions/artifacts/$artifact_id/zip" \
