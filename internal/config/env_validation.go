@@ -210,6 +210,10 @@ func validateContainerID(containerID string) error {
 // runDockerInspect is a helper function that executes docker inspect with a given format template.
 // It validates the container ID before running the command and returns the output as a string.
 //
+// Security Note: This is an internal helper function that should only be called with
+// hardcoded format templates defined within this package. The formatTemplate parameter
+// is not validated as it is never exposed to user input.
+//
 // Parameters:
 //   - containerID: The Docker container ID to inspect (validated before use)
 //   - formatTemplate: The Go template format string for docker inspect (e.g., "{{.Config.OpenStdin}}")
