@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 
 	"github.com/githubnext/gh-aw-mcpg/internal/config"
@@ -201,7 +200,7 @@ TEST_VAR3=value with spaces
 func TestWriteGatewayConfig(t *testing.T) {
 	t.Run("unified mode with API key", func(t *testing.T) {
 		cfg := &config.Config{
-			Servers: map[string]*config.Server{
+			Servers: map[string]*config.ServerConfig{
 				"test-server": {
 					Type: "stdio",
 				},
@@ -225,7 +224,7 @@ func TestWriteGatewayConfig(t *testing.T) {
 
 	t.Run("routed mode without API key", func(t *testing.T) {
 		cfg := &config.Config{
-			Servers: map[string]*config.Server{
+			Servers: map[string]*config.ServerConfig{
 				"server1": {Type: "stdio"},
 				"server2": {Type: "stdio"},
 			},
@@ -245,7 +244,7 @@ func TestWriteGatewayConfig(t *testing.T) {
 
 	t.Run("with tools field", func(t *testing.T) {
 		cfg := &config.Config{
-			Servers: map[string]*config.Server{
+			Servers: map[string]*config.ServerConfig{
 				"test-server": {
 					Type:  "stdio",
 					Tools: []string{"tool1", "tool2"},
@@ -265,7 +264,7 @@ func TestWriteGatewayConfig(t *testing.T) {
 
 	t.Run("IPv6 address", func(t *testing.T) {
 		cfg := &config.Config{
-			Servers: map[string]*config.Server{
+			Servers: map[string]*config.ServerConfig{
 				"test-server": {Type: "stdio"},
 			},
 		}
@@ -280,7 +279,7 @@ func TestWriteGatewayConfig(t *testing.T) {
 
 	t.Run("invalid listen address uses defaults", func(t *testing.T) {
 		cfg := &config.Config{
-			Servers: map[string]*config.Server{
+			Servers: map[string]*config.ServerConfig{
 				"test-server": {Type: "stdio"},
 			},
 		}
