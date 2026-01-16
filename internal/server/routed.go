@@ -44,7 +44,7 @@ func CreateHTTPServerForRoutedMode(addr string, unifiedServer *UnifiedServer, ap
 	}
 	logRouted.Printf("Registering routes for %d backends: %v", len(allBackends), allBackends)
 
-	// Create a proxy for each backend server (including sys)
+	// Create a proxy for each backend server (sys included only when DIFC is enabled)
 	for _, serverID := range allBackends {
 		// Capture serverID for the closure
 		backendID := serverID
