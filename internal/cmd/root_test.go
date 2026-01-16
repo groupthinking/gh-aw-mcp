@@ -1,13 +1,10 @@
 package cmd
 
 import (
-	"bytes"
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 
-	"github.com/githubnext/gh-aw-mcpg/internal/config"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -206,104 +203,6 @@ TEST_VAR3=value with spaces
 
 		err = loadEnvFile(envFile)
 		require.NoError(t, err, "Empty file should not cause error")
-	})
-}
-
-func TestWriteGatewayConfig(t *testing.T) {
-	t.Run("unified mode with API key", func(t *testing.T) {
-		cfg := &config.Config{
-			Servers: map[string]*config.Server{
-				"test-server": {
-					Type: "stdio",
-				},
-			},
-			Gateway: &config.GatewayConfig{
-				APIKey: "test-api-key",
-			},
-		}
-
-		var buf bytes.Buffer
-		err := writeGatewayConfig(cfg, "127.0.0.1:3000", "unified", &buf)
-		require.NoError(t, err)
-
-		output := buf.String()
-		assert.Contains(t, output, `"mcpServers"`)
-		assert.Contains(t, output, `"test-server"`)
-		assert.Contains(t, output, `"type": "http"`)
-		assert.Contains(t, output, `"url": "http://127.0.0.1:3000/mcp"`)
-		assert.Contains(t, output, `"Authorization": "test-api-key"`)
-	})
-
-	t.Run("routed mode without API key", func(t *testing.T) {
-		cfg := &config.Config{
-			Servers: map[string]*config.Server{
-				"server1": {Type: "stdio"},
-				"server2": {Type: "stdio"},
-			},
-		}
-
-		var buf bytes.Buffer
-		err := writeGatewayConfig(cfg, "localhost:8080", "routed", &buf)
-		require.NoError(t, err)
-
-		output := buf.String()
-		assert.Contains(t, output, `"server1"`)
-		assert.Contains(t, output, `"server2"`)
-		assert.Contains(t, output, `"http://localhost:8080/mcp/server1"`)
-		assert.Contains(t, output, `"http://localhost:8080/mcp/server2"`)
-		assert.NotContains(t, output, `"Authorization"`)
-	})
-
-	t.Run("with tools field", func(t *testing.T) {
-		cfg := &config.Config{
-			Servers: map[string]*config.Server{
-				"test-server": {
-					Type:  "stdio",
-					Tools: []string{"tool1", "tool2"},
-				},
-			},
-		}
-
-		var buf bytes.Buffer
-		err := writeGatewayConfig(cfg, "127.0.0.1:3000", "unified", &buf)
-		require.NoError(t, err)
-
-		output := buf.String()
-		assert.Contains(t, output, `"tools"`)
-		assert.Contains(t, output, `"tool1"`)
-		assert.Contains(t, output, `"tool2"`)
-	})
-
-	t.Run("IPv6 address", func(t *testing.T) {
-		cfg := &config.Config{
-			Servers: map[string]*config.Server{
-				"test-server": {Type: "stdio"},
-			},
-		}
-
-		var buf bytes.Buffer
-		err := writeGatewayConfig(cfg, "[::1]:3000", "unified", &buf)
-		require.NoError(t, err)
-
-		output := buf.String()
-		assert.Contains(t, output, `"url": "http://::1:3000/mcp"`)
-	})
-
-	t.Run("invalid listen address uses defaults", func(t *testing.T) {
-		cfg := &config.Config{
-			Servers: map[string]*config.Server{
-				"test-server": {Type: "stdio"},
-			},
-		}
-
-		var buf bytes.Buffer
-		err := writeGatewayConfig(cfg, "invalid-address", "unified", &buf)
-		require.NoError(t, err)
-
-		output := buf.String()
-		// Should fall back to default host and port
-		assert.Contains(t, output, DefaultListenIPv4)
-		assert.Contains(t, output, DefaultListenPort)
 	})
 }
 
