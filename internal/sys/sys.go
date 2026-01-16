@@ -38,6 +38,10 @@ func (s *SysServer) HandleRequest(method string, params json.RawMessage) (interf
 			log.Printf("Failed to unmarshal tool call params: %v", err)
 			return nil, fmt.Errorf("invalid params: %w", err)
 		}
+		if callParams.Name == "" {
+			log.Printf("Tool call missing name field")
+			return nil, fmt.Errorf("invalid params: missing tool name")
+		}
 		log.Printf("Calling tool: name=%s", callParams.Name)
 		return s.callTool(callParams.Name, callParams.Arguments)
 	default:
