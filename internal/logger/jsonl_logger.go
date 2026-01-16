@@ -63,14 +63,6 @@ func (jl *JSONLLogger) Close() error {
 	return closeLogFile(jl.logFile, &jl.mu, "JSONL")
 }
 
-// sanitizePayload sanitizes a payload by applying regex patterns to the entire string
-// It takes raw bytes, applies regex sanitization in one pass, and returns sanitized bytes
-// This function is deprecated and will be removed in a future version.
-// Use sanitize.SanitizeJSON() directly instead.
-func sanitizePayload(payloadBytes []byte) json.RawMessage {
-	return sanitize.SanitizeJSON(payloadBytes)
-}
-
 // LogMessage logs an RPC message to the JSONL file
 func (jl *JSONLLogger) LogMessage(entry *JSONLRPCMessage) error {
 	jl.mu.Lock()
@@ -113,7 +105,7 @@ func LogRPCMessageJSONL(direction RPCMessageDirection, messageType RPCMessageTyp
 		Type:      string(messageType),
 		ServerID:  serverID,
 		Method:    method,
-		Payload:   sanitizePayload(payloadBytes),
+		Payload:   sanitize.SanitizeJSON(payloadBytes),
 	}
 
 	if err != nil {
