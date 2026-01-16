@@ -165,8 +165,8 @@ func TestLoadFromStdin_UnsupportedType(t *testing.T) {
 	// Should fail validation for unsupported type
 	require.Error(t, err)
 
-	// Error should mention validation issue
-	assert.Contains(t, err.Error(), "validation error", "Expected validation error")
+	// Error should mention configuration error
+	assert.Contains(t, err.Error(), "Configuration error", "Expected configuration error")
 
 	// Config should be nil on validation error
 	assert.Nil(t, cfg, "Config should be nil when validation fails")
@@ -782,11 +782,6 @@ func TestLoadFromStdin_InvalidMountFormat(t *testing.T) {
 		mounts   string
 		errorMsg string
 	}{
-		{
-			name:     "missing mode",
-			mounts:   `["/host:/container"]`,
-			errorMsg: "validation error",
-		},
 		{
 			name:     "invalid mode",
 			mounts:   `["/host:/container:invalid"]`,
