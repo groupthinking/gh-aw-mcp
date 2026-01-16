@@ -233,9 +233,21 @@ func (us *UnifiedServer) registerToolsFromBackend(serverID string) error {
 
 		// Create the handler function
 		handler := func(ctx context.Context, req *sdk.CallToolRequest, args interface{}) (*sdk.CallToolResult, interface{}, error) {
+			// Extract arguments from the request params (not the args parameter which is SDK internal state)
+			var toolArgs map[string]interface{}
+			if req.Params.Arguments != nil {
+				if err := json.Unmarshal(req.Params.Arguments, &toolArgs); err != nil {
+					logger.LogError("client", "Failed to unmarshal tool arguments, tool=%s, error=%v", toolNameCopy, err)
+					return &sdk.CallToolResult{IsError: true}, nil, fmt.Errorf("failed to parse arguments: %w", err)
+				}
+			} else {
+				// No arguments provided, use empty map
+				toolArgs = make(map[string]interface{})
+			}
+
 			// Log the MCP tool call request
 			sessionID := us.getSessionID(ctx)
-			argsJSON, _ := json.Marshal(args)
+			argsJSON, _ := json.Marshal(toolArgs)
 			logger.LogInfo("client", "MCP tool call request, session=%s, tool=%s, args=%s", sessionID, toolNameCopy, string(argsJSON))
 
 			// Check session is initialized
@@ -244,7 +256,7 @@ func (us *UnifiedServer) registerToolsFromBackend(serverID string) error {
 				return &sdk.CallToolResult{IsError: true}, nil, err
 			}
 
-			result, data, err := us.callBackendTool(ctx, serverIDCopy, toolNameCopy, args)
+			result, data, err := us.callBackendTool(ctx, serverIDCopy, toolNameCopy, toolArgs)
 
 			// Log the MCP tool call response
 			if err != nil {
@@ -282,12 +294,21 @@ func (us *UnifiedServer) registerToolsFromBackend(serverID string) error {
 func (us *UnifiedServer) registerSysTools() error {
 	// Create sys_init handler
 	sysInitHandler := func(ctx context.Context, req *sdk.CallToolRequest, args interface{}) (*sdk.CallToolResult, interface{}, error) {
+		// Extract arguments from the request params
+		var toolArgs map[string]interface{}
+		if req.Params.Arguments != nil {
+			if err := json.Unmarshal(req.Params.Arguments, &toolArgs); err != nil {
+				logger.LogError("client", "Failed to unmarshal sys_init arguments, error=%v", err)
+				return &sdk.CallToolResult{IsError: true}, nil, fmt.Errorf("failed to parse arguments: %w", err)
+			}
+		} else {
+			toolArgs = make(map[string]interface{})
+		}
+
 		// Extract token from args
 		token := ""
-		if argsMap, ok := args.(map[string]interface{}); ok {
-			if t, ok := argsMap["token"].(string); ok {
-				token = t
-			}
+		if t, ok := toolArgs["token"].(string); ok {
+			token = t
 		}
 
 		// Get session ID from context

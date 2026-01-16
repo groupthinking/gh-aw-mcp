@@ -218,21 +218,65 @@ func TestCallTool_MissingArguments(t *testing.T) {
 	require.NoError(t, err)
 	defer conn.Close()
 
-	// Send request with arguments field omitted
-	params := map[string]interface{}{
-		"name": "test_tool",
-		// No "arguments" field
-	}
+	// Test 1: Send request with arguments field omitted entirely
+	t.Run("omitted arguments field", func(t *testing.T) {
+		receivedParams = nil
+		params := map[string]interface{}{
+			"name": "test_tool",
+			// No "arguments" field
+		}
 
-	_, err = conn.SendRequestWithServerID(context.Background(), "tools/call", params, "test-server")
-	require.NoError(t, err)
+		_, err = conn.SendRequestWithServerID(context.Background(), "tools/call", params, "test-server")
+		require.NoError(t, err)
 
-	// Verify arguments field exists in the request sent to backend
-	assert.NotNil(t, receivedParams, "Params should be sent to backend")
-	assert.Contains(t, receivedParams, "name", "Name should be present")
+		// Verify arguments field exists in the request sent to backend
+		assert.NotNil(t, receivedParams, "Params should be sent to backend")
+		assert.Contains(t, receivedParams, "name", "Name should be present")
 
-	// The arguments field should be present (even if empty/null)
-	// This is the key: the MCP spec requires arguments to be present
-	_, hasArguments := receivedParams["arguments"]
-	assert.True(t, hasArguments, "Arguments field should be present in backend request even if not provided by client")
+		// The arguments field should be present (even if empty)
+		// This is the key: the MCP spec requires arguments to be present
+		_, hasArguments := receivedParams["arguments"]
+		assert.True(t, hasArguments, "Arguments field should be present in backend request even if not provided by client")
+	})
+
+	// Test 2: Send request with explicit null arguments
+	t.Run("null arguments", func(t *testing.T) {
+		receivedParams = nil
+		params := map[string]interface{}{
+			"name":      "test_tool",
+			"arguments": nil,
+		}
+
+		_, err = conn.SendRequestWithServerID(context.Background(), "tools/call", params, "test-server")
+		require.NoError(t, err)
+
+		assert.NotNil(t, receivedParams, "Params should be sent to backend")
+		
+		// Arguments should be present, even if nil/empty
+		_, hasArguments := receivedParams["arguments"]
+		assert.True(t, hasArguments, "Arguments field should be present even if nil")
+	})
+
+	// Test 3: Send request with empty arguments object
+	t.Run("empty arguments object", func(t *testing.T) {
+		receivedParams = nil
+		params := map[string]interface{}{
+			"name":      "test_tool",
+			"arguments": map[string]interface{}{},
+		}
+
+		_, err = conn.SendRequestWithServerID(context.Background(), "tools/call", params, "test-server")
+		require.NoError(t, err)
+
+		assert.NotNil(t, receivedParams, "Params should be sent to backend")
+		
+		// Arguments should be present as an object
+		arguments, hasArguments := receivedParams["arguments"]
+		assert.True(t, hasArguments, "Arguments field should be present")
+		
+		// It should be an empty map
+		if argsMap, ok := arguments.(map[string]interface{}); ok {
+			assert.Empty(t, argsMap, "Arguments should be an empty map")
+		}
+	})
 }
