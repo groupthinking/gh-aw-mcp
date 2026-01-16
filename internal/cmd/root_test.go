@@ -205,4 +205,3 @@ TEST_VAR3=value with spaces
 		require.NoError(t, err, "Empty file should not cause error")
 	})
 }
-
