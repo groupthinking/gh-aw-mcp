@@ -71,7 +71,7 @@ func TestNormalizeInputSchema_ObjectWithProperties(t *testing.T) {
 				"type": "number",
 			},
 		},
-		"required": []string{"name"},
+		"required": []interface{}{"name"},
 	}
 
 	result := NormalizeInputSchema(schema, "test-tool")
