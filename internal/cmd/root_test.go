@@ -9,6 +9,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/githubnext/gh-aw-mcpg/internal/config"
 )
 
 func TestGetDefaultLogDir(t *testing.T) {
@@ -388,4 +390,3 @@ func TestWriteGatewayConfig(t *testing.T) {
 		assert.Contains(t, output, DefaultListenPort)
 	})
 }
-
