@@ -71,6 +71,80 @@ type Connection struct {
 	httpTransportType HTTPTransportType // Type of HTTP transport in use
 }
 
+// newMCPClient creates a new MCP SDK client with standard implementation details
+func newMCPClient() *sdk.Client {
+	return sdk.NewClient(&sdk.Implementation{
+		Name:    "awmg",
+		Version: "1.0.0",
+	}, nil)
+}
+
+// newHTTPConnection creates a new HTTP Connection struct with common fields
+func newHTTPConnection(ctx context.Context, cancel context.CancelFunc, client *sdk.Client, session *sdk.ClientSession, url string, headers map[string]string, httpClient *http.Client, transportType HTTPTransportType) *Connection {
+	return &Connection{
+		client:            client,
+		session:           session,
+		ctx:               ctx,
+		cancel:            cancel,
+		isHTTP:            true,
+		httpURL:           url,
+		headers:           headers,
+		httpClient:        httpClient,
+		httpTransportType: transportType,
+	}
+}
+
+// createJSONRPCRequest creates a JSON-RPC 2.0 request map
+func createJSONRPCRequest(requestID uint64, method string, params interface{}) map[string]interface{} {
+	return map[string]interface{}{
+		"jsonrpc": "2.0",
+		"id":      requestID,
+		"method":  method,
+		"params":  params,
+	}
+}
+
+// ensureToolCallArguments ensures that the arguments field exists in tools/call params
+// The MCP protocol requires the arguments field to always be present, even if empty
+func ensureToolCallArguments(params interface{}) interface{} {
+	// Convert params to map if it isn't already
+	paramsMap, ok := params.(map[string]interface{})
+	if !ok {
+		// If params isn't a map, return as-is (this shouldn't happen for tools/call)
+		return params
+	}
+
+	// Check if arguments field exists
+	if _, hasArgs := paramsMap["arguments"]; !hasArgs {
+		// Add empty arguments map if missing
+		paramsMap["arguments"] = make(map[string]interface{})
+	} else if paramsMap["arguments"] == nil {
+		// Replace nil with empty map
+		paramsMap["arguments"] = make(map[string]interface{})
+	}
+
+	return paramsMap
+}
+
+// setupHTTPRequest creates and configures an HTTP request with standard headers
+func setupHTTPRequest(ctx context.Context, url string, requestBody []byte, headers map[string]string) (*http.Request, error) {
+	httpReq, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewReader(requestBody))
+	if err != nil {
+		return nil, fmt.Errorf("failed to create HTTP request: %w", err)
+	}
+
+	// Set standard headers
+	httpReq.Header.Set("Content-Type", "application/json")
+	httpReq.Header.Set("Accept", "application/json, text/event-stream")
+
+	// Add configured headers (e.g., Authorization)
+	for key, value := range headers {
+		httpReq.Header.Set(key, value)
+	}
+
+	return httpReq, nil
+}
+
 // NewConnection creates a new MCP connection using the official SDK
 func NewConnection(ctx context.Context, command string, args []string, env map[string]string) (*Connection, error) {
 	logger.LogInfo("backend", "Creating new MCP backend connection, command=%s, args=%v", command, args)
@@ -78,10 +152,7 @@ func NewConnection(ctx context.Context, command string, args []string, env map[s
 	ctx, cancel := context.WithCancel(ctx)
 
 	// Create MCP client
-	client := sdk.NewClient(&sdk.Implementation{
-		Name:    "awmg",
-		Version: "1.0.0",
-	}, nil)
+	client := newMCPClient()
 
 	// Expand Docker -e flags that reference environment variables
 	// Docker's `-e VAR_NAME` expects VAR_NAME to be in the environment
@@ -239,10 +310,7 @@ func NewHTTPConnection(ctx context.Context, url string, headers map[string]strin
 // tryStreamableHTTPTransport attempts to connect using the streamable HTTP transport (2025-03-26 spec)
 func tryStreamableHTTPTransport(ctx context.Context, cancel context.CancelFunc, url string, headers map[string]string, httpClient *http.Client) (*Connection, error) {
 	// Create MCP client
-	client := sdk.NewClient(&sdk.Implementation{
-		Name:    "awmg",
-		Version: "1.0.0",
-	}, nil)
+	client := newMCPClient()
 
 	// Create streamable HTTP transport
 	transport := &sdk.StreamableClientTransport{
@@ -261,17 +329,7 @@ func tryStreamableHTTPTransport(ctx context.Context, cancel context.CancelFunc, 
 		return nil, fmt.Errorf("streamable HTTP transport connect failed: %w", err)
 	}
 
-	conn := &Connection{
-		client:            client,
-		session:           session,
-		ctx:               ctx,
-		cancel:            cancel,
-		isHTTP:            true,
-		httpURL:           url,
-		headers:           headers,
-		httpClient:        httpClient,
-		httpTransportType: HTTPTransportStreamable,
-	}
+	conn := newHTTPConnection(ctx, cancel, client, session, url, headers, httpClient, HTTPTransportStreamable)
 
 	logger.LogInfo("backend", "Streamable HTTP transport connected successfully")
 	logConn.Printf("Connected with streamable HTTP transport")
@@ -281,10 +339,7 @@ func tryStreamableHTTPTransport(ctx context.Context, cancel context.CancelFunc, 
 // trySSETransport attempts to connect using the SSE transport (2024-11-05 spec)
 func trySSETransport(ctx context.Context, cancel context.CancelFunc, url string, headers map[string]string, httpClient *http.Client) (*Connection, error) {
 	// Create MCP client
-	client := sdk.NewClient(&sdk.Implementation{
-		Name:    "awmg",
-		Version: "1.0.0",
-	}, nil)
+	client := newMCPClient()
 
 	// Create SSE transport
 	transport := &sdk.SSEClientTransport{
@@ -302,17 +357,7 @@ func trySSETransport(ctx context.Context, cancel context.CancelFunc, url string,
 		return nil, fmt.Errorf("SSE transport connect failed: %w", err)
 	}
 
-	conn := &Connection{
-		client:            client,
-		session:           session,
-		ctx:               ctx,
-		cancel:            cancel,
-		isHTTP:            true,
-		httpURL:           url,
-		headers:           headers,
-		httpClient:        httpClient,
-		httpTransportType: HTTPTransportSSE,
-	}
+	conn := newHTTPConnection(ctx, cancel, client, session, url, headers, httpClient, HTTPTransportSSE)
 
 	logger.LogInfo("backend", "SSE transport connected successfully")
 	logConn.Printf("Connected with SSE transport")
@@ -455,12 +500,7 @@ func (c *Connection) initializeHTTPSession() (string, error) {
 		},
 	}
 
-	request := map[string]interface{}{
-		"jsonrpc": "2.0",
-		"id":      requestID,
-		"method":  "initialize",
-		"params":  initParams,
-	}
+	request := createJSONRPCRequest(requestID, "initialize", initParams)
 
 	requestBody, err := json.Marshal(request)
 	if err != nil {
@@ -469,26 +509,17 @@ func (c *Connection) initializeHTTPSession() (string, error) {
 
 	logConn.Printf("Sending initialize request: %s", string(requestBody))
 
-	// Create HTTP request
-	httpReq, err := http.NewRequest("POST", c.httpURL, bytes.NewReader(requestBody))
+	// Create HTTP request with standard headers
+	httpReq, err := setupHTTPRequest(context.Background(), c.httpURL, requestBody, c.headers)
 	if err != nil {
-		return "", fmt.Errorf("failed to create HTTP request: %w", err)
+		return "", err
 	}
-
-	// Set headers
-	httpReq.Header.Set("Content-Type", "application/json")
-	httpReq.Header.Set("Accept", "application/json, text/event-stream")
 
 	// Generate a temporary session ID for the initialize request
 	// Some backends may require this header even during initialization
 	tempSessionID := fmt.Sprintf("awmg-init-%d", requestID)
 	httpReq.Header.Set("Mcp-Session-Id", tempSessionID)
 	logConn.Printf("Sending initialize with temporary session ID: %s", tempSessionID)
-
-	// Add configured headers (e.g., Authorization)
-	for key, value := range c.headers {
-		httpReq.Header.Set(key, value)
-	}
 
 	logConn.Printf("Sending initialize to %s", c.httpURL)
 
@@ -567,28 +598,24 @@ func (c *Connection) sendHTTPRequest(ctx context.Context, method string, params 
 	// Generate unique request ID using atomic counter
 	requestID := atomic.AddUint64(&requestIDCounter, 1)
 
-	// Create JSON-RPC request
-	request := map[string]interface{}{
-		"jsonrpc": "2.0",
-		"id":      requestID,
-		"method":  method,
-		"params":  params,
+	// For tools/call, ensure arguments field always exists (MCP protocol requirement)
+	if method == "tools/call" {
+		params = ensureToolCallArguments(params)
 	}
+
+	// Create JSON-RPC request
+	request := createJSONRPCRequest(requestID, method, params)
 
 	requestBody, err := json.Marshal(request)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal request: %w", err)
 	}
 
-	// Create HTTP request
-	httpReq, err := http.NewRequestWithContext(ctx, "POST", c.httpURL, bytes.NewReader(requestBody))
+	// Create HTTP request with standard headers
+	httpReq, err := setupHTTPRequest(ctx, c.httpURL, requestBody, c.headers)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create HTTP request: %w", err)
+		return nil, err
 	}
-
-	// Set headers
-	httpReq.Header.Set("Content-Type", "application/json")
-	httpReq.Header.Set("Accept", "application/json, text/event-stream")
 
 	// Add Mcp-Session-Id header with priority:
 	// 1) Context session ID (if explicitly provided for this request)
@@ -606,11 +633,6 @@ func (c *Connection) sendHTTPRequest(ctx context.Context, method string, params 
 		httpReq.Header.Set("Mcp-Session-Id", sessionID)
 	} else {
 		logConn.Printf("No session ID available (backend may not require session management)")
-	}
-
-	// Add configured headers
-	for key, value := range c.headers {
-		httpReq.Header.Set(key, value)
 	}
 
 	logConn.Printf("Sending HTTP request to %s: method=%s, id=%d", c.httpURL, method, requestID)
@@ -731,10 +753,23 @@ func (c *Connection) callTool(params interface{}) (*Response, error) {
 		return nil, fmt.Errorf("SDK session not available for plain JSON-RPC transport")
 	}
 	var callParams CallToolParams
-	paramsJSON, _ := json.Marshal(params)
+	paramsJSON, err := json.Marshal(params)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal params: %w", err)
+	}
+	logConn.Printf("callTool: marshaled params=%s", string(paramsJSON))
+
 	if err := json.Unmarshal(paramsJSON, &callParams); err != nil {
 		return nil, fmt.Errorf("invalid params: %w", err)
 	}
+
+	// Ensure arguments is never nil - default to empty map
+	// This is required by the MCP protocol which expects arguments to always be present
+	if callParams.Arguments == nil {
+		callParams.Arguments = make(map[string]interface{})
+	}
+
+	logConn.Printf("callTool: parsed name=%s, arguments=%+v", callParams.Name, callParams.Arguments)
 
 	result, err := c.session.CallTool(c.ctx, &sdk.CallToolParams{
 		Name:      callParams.Name,

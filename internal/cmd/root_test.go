@@ -1,9 +1,16 @@
 package cmd
 
 import (
+	"bytes"
+	"encoding/json"
 	"os"
-	"strings"
+	"path/filepath"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
+	"github.com/githubnext/gh-aw-mcpg/internal/config"
 )
 
 func TestGetDefaultLogDir(t *testing.T) {
@@ -33,13 +40,13 @@ func TestGetDefaultLogDir(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			// Save original value and restore after test
 			originalValue := os.Getenv("MCP_GATEWAY_LOG_DIR")
-			defer func() {
+			t.Cleanup(func() {
 				if originalValue != "" {
 					os.Setenv("MCP_GATEWAY_LOG_DIR", originalValue)
 				} else {
 					os.Unsetenv("MCP_GATEWAY_LOG_DIR")
 				}
-			}()
+			})
 
 			// Set test environment variable
 			if tt.envValue != "" {
@@ -50,55 +57,336 @@ func TestGetDefaultLogDir(t *testing.T) {
 
 			// Test getDefaultLogDir
 			got := getDefaultLogDir()
-			if got != tt.want {
-				t.Errorf("getDefaultLogDir() = %v, want %v", got, tt.want)
-			}
+			assert.Equal(t, tt.want, got, "getDefaultLogDir() should return expected value")
 		})
 	}
 }
 
 func TestDefaultConfigFile(t *testing.T) {
 	// Verify that the default config file is empty (no default config loading)
-	if defaultConfigFile != "" {
-		t.Errorf("defaultConfigFile should be empty string, got %q", defaultConfigFile)
-	}
+	assert.Empty(t, defaultConfigFile, "defaultConfigFile should be empty string")
 }
 
 func TestRunRequiresConfigSource(t *testing.T) {
 	// Save original values
 	origConfigFile := configFile
 	origConfigStdin := configStdin
-	defer func() {
+	t.Cleanup(func() {
 		configFile = origConfigFile
 		configStdin = origConfigStdin
-	}()
+	})
 
-	// Test case 1: No config source provided
-	configFile = ""
-	configStdin = false
-	err := run(nil, nil)
-	if err == nil {
-		t.Error("Expected error when neither --config nor --config-stdin is provided")
-	}
-	if !strings.Contains(err.Error(), "configuration source required") {
-		t.Errorf("Expected 'configuration source required' error, got: %v", err)
-	}
+	t.Run("no config source provided", func(t *testing.T) {
+		configFile = ""
+		configStdin = false
+		err := run(nil, nil)
+		require.Error(t, err, "Expected error when neither --config nor --config-stdin is provided")
+		assert.Contains(t, err.Error(), "configuration source required", "Error should mention configuration source required")
+	})
 
-	// Test case 2: Config file provided (would fail later due to missing file, but should pass validation)
-	configFile = "test.toml"
-	configStdin = false
-	err = run(nil, nil)
-	// Should not be the "configuration source required" error
-	if err != nil && strings.Contains(err.Error(), "configuration source required") {
-		t.Errorf("Should not require config source when --config is provided, got: %v", err)
-	}
+	t.Run("config file provided", func(t *testing.T) {
+		configFile = "test.toml"
+		configStdin = false
+		err := run(nil, nil)
+		// Should not be the "configuration source required" error
+		// (will fail later due to missing file, but should pass validation)
+		if err != nil {
+			assert.NotContains(t, err.Error(), "configuration source required",
+				"Should not require config source when --config is provided")
+		}
+	})
 
-	// Test case 3: Config stdin provided (would fail later due to stdin not being readable, but should pass validation)
-	configFile = ""
-	configStdin = true
-	err = run(nil, nil)
-	// Should not be the "configuration source required" error
-	if err != nil && strings.Contains(err.Error(), "configuration source required") {
-		t.Errorf("Should not require config source when --config-stdin is provided, got: %v", err)
-	}
+	t.Run("config stdin provided", func(t *testing.T) {
+		configFile = ""
+		configStdin = true
+		err := run(nil, nil)
+		// Should not be the "configuration source required" error
+		// (will fail later due to stdin not being readable, but should pass validation)
+		if err != nil {
+			assert.NotContains(t, err.Error(), "configuration source required",
+				"Should not require config source when --config-stdin is provided")
+		}
+	})
+
+	t.Run("both config file and stdin provided", func(t *testing.T) {
+		configFile = "test.toml"
+		configStdin = true
+		err := run(nil, nil)
+		// When both are provided, stdin takes precedence per flag description
+		// Should not be the "configuration source required" error
+		if err != nil {
+			assert.NotContains(t, err.Error(), "configuration source required",
+				"Should not require config source when both are provided")
+		}
+	})
+}
+
+func TestLoadEnvFile(t *testing.T) {
+	t.Run("load valid env file", func(t *testing.T) {
+		// Create temporary env file
+		tmpDir := t.TempDir()
+		envFile := filepath.Join(tmpDir, ".env")
+		content := `# Comment line
+TEST_VAR1=value1
+TEST_VAR2=value2
+EMPTY_LINE=
+
+# Another comment
+TEST_VAR3=value with spaces
+`
+		err := os.WriteFile(envFile, []byte(content), 0644)
+		require.NoError(t, err)
+
+		// Save and restore environment variables
+		origTestVar1, testVar1WasSet := os.LookupEnv("TEST_VAR1")
+		origTestVar2, testVar2WasSet := os.LookupEnv("TEST_VAR2")
+		origTestVar3, testVar3WasSet := os.LookupEnv("TEST_VAR3")
+		origEmptyLine, emptyLineWasSet := os.LookupEnv("EMPTY_LINE")
+		t.Cleanup(func() {
+			if testVar1WasSet {
+				require.NoError(t, os.Setenv("TEST_VAR1", origTestVar1))
+			} else {
+				require.NoError(t, os.Unsetenv("TEST_VAR1"))
+			}
+			if testVar2WasSet {
+				require.NoError(t, os.Setenv("TEST_VAR2", origTestVar2))
+			} else {
+				require.NoError(t, os.Unsetenv("TEST_VAR2"))
+			}
+			if testVar3WasSet {
+				require.NoError(t, os.Setenv("TEST_VAR3", origTestVar3))
+			} else {
+				require.NoError(t, os.Unsetenv("TEST_VAR3"))
+			}
+			if emptyLineWasSet {
+				require.NoError(t, os.Setenv("EMPTY_LINE", origEmptyLine))
+			} else {
+				require.NoError(t, os.Unsetenv("EMPTY_LINE"))
+			}
+		})
+
+		// Load env file
+		err = loadEnvFile(envFile)
+		require.NoError(t, err)
+
+		// Verify variables are set
+		assert.Equal(t, "value1", os.Getenv("TEST_VAR1"))
+		assert.Equal(t, "value2", os.Getenv("TEST_VAR2"))
+		assert.Equal(t, "value with spaces", os.Getenv("TEST_VAR3"))
+		assert.Equal(t, "", os.Getenv("EMPTY_LINE"))
+	})
+
+	t.Run("nonexistent file", func(t *testing.T) {
+		err := loadEnvFile("/nonexistent/path/.env")
+		require.Error(t, err, "Should error on nonexistent file")
+	})
+
+	t.Run("env file with variable expansion", func(t *testing.T) {
+		// Save original values and set up cleanup before modifying environment
+		origBasePath, basePathWasSet := os.LookupEnv("BASE_PATH")
+		origExpandedVar, expandedVarWasSet := os.LookupEnv("EXPANDED_VAR")
+		t.Cleanup(func() {
+			if basePathWasSet {
+				_ = os.Setenv("BASE_PATH", origBasePath)
+			} else {
+				_ = os.Unsetenv("BASE_PATH")
+			}
+			if expandedVarWasSet {
+				_ = os.Setenv("EXPANDED_VAR", origExpandedVar)
+			} else {
+				_ = os.Unsetenv("EXPANDED_VAR")
+			}
+		})
+
+		// Set up a base variable for expansion
+		os.Setenv("BASE_PATH", "/home/user")
+		tmpDir := t.TempDir()
+		envFile := filepath.Join(tmpDir, ".env")
+		content := `EXPANDED_VAR=$BASE_PATH/subdir`
+		err := os.WriteFile(envFile, []byte(content), 0644)
+		require.NoError(t, err)
+
+		err = loadEnvFile(envFile)
+		require.NoError(t, err)
+
+		assert.Equal(t, "/home/user/subdir", os.Getenv("EXPANDED_VAR"))
+	})
+
+	t.Run("empty file", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		envFile := filepath.Join(tmpDir, ".env")
+		err := os.WriteFile(envFile, []byte(""), 0644)
+		require.NoError(t, err)
+
+		err = loadEnvFile(envFile)
+		require.NoError(t, err, "Empty file should not cause error")
+	})
+}
+
+func TestWriteGatewayConfig(t *testing.T) {
+	t.Run("unified mode with API key", func(t *testing.T) {
+		cfg := &config.Config{
+			Servers: map[string]*config.ServerConfig{
+				"test-server": {
+					Type: "stdio",
+				},
+			},
+			Gateway: &config.GatewayConfig{
+				APIKey: "test-api-key",
+			},
+		}
+
+		var buf bytes.Buffer
+		err := writeGatewayConfig(cfg, "127.0.0.1:3000", "unified", &buf)
+		require.NoError(t, err)
+
+		// Parse JSON output
+		var result map[string]interface{}
+		err = json.Unmarshal(buf.Bytes(), &result)
+		require.NoError(t, err, "Output should be valid JSON")
+
+		// Verify mcpServers structure
+		mcpServers, ok := result["mcpServers"].(map[string]interface{})
+		require.True(t, ok, "Output should have mcpServers field")
+
+		// Verify test-server exists
+		serverConfig, ok := mcpServers["test-server"].(map[string]interface{})
+		require.True(t, ok, "test-server should exist in mcpServers")
+
+		// Verify server type is http
+		assert.Equal(t, "http", serverConfig["type"], "Server type should be http")
+
+		// Verify URL is correct for unified mode
+		assert.Equal(t, "http://127.0.0.1:3000/mcp", serverConfig["url"], "URL should be correct for unified mode")
+
+		// Verify Authorization header exists
+		headers, ok := serverConfig["headers"].(map[string]interface{})
+		require.True(t, ok, "Server should have headers field")
+		assert.Equal(t, "test-api-key", headers["Authorization"], "Authorization header should match API key")
+	})
+
+	t.Run("routed mode without API key", func(t *testing.T) {
+		cfg := &config.Config{
+			Servers: map[string]*config.ServerConfig{
+				"server1": {Type: "stdio"},
+				"server2": {Type: "stdio"},
+			},
+		}
+
+		var buf bytes.Buffer
+		err := writeGatewayConfig(cfg, "localhost:8080", "routed", &buf)
+		require.NoError(t, err)
+
+		// Parse JSON output
+		var result map[string]interface{}
+		err = json.Unmarshal(buf.Bytes(), &result)
+		require.NoError(t, err, "Output should be valid JSON")
+
+		// Verify mcpServers structure
+		mcpServers, ok := result["mcpServers"].(map[string]interface{})
+		require.True(t, ok, "Output should have mcpServers field")
+
+		// Verify both servers exist
+		server1Config, ok := mcpServers["server1"].(map[string]interface{})
+		require.True(t, ok, "server1 should exist in mcpServers")
+
+		server2Config, ok := mcpServers["server2"].(map[string]interface{})
+		require.True(t, ok, "server2 should exist in mcpServers")
+
+		// Verify URLs are correct for routed mode
+		assert.Equal(t, "http://localhost:8080/mcp/server1", server1Config["url"], "server1 URL should include server name")
+		assert.Equal(t, "http://localhost:8080/mcp/server2", server2Config["url"], "server2 URL should include server name")
+
+		// Verify no Authorization headers when no API key
+		_, hasHeaders1 := server1Config["headers"]
+		assert.False(t, hasHeaders1, "server1 should not have headers when no API key")
+
+		_, hasHeaders2 := server2Config["headers"]
+		assert.False(t, hasHeaders2, "server2 should not have headers when no API key")
+	})
+
+	t.Run("with tools field", func(t *testing.T) {
+		cfg := &config.Config{
+			Servers: map[string]*config.ServerConfig{
+				"test-server": {
+					Type:  "stdio",
+					Tools: []string{"tool1", "tool2"},
+				},
+			},
+		}
+
+		var buf bytes.Buffer
+		err := writeGatewayConfig(cfg, "127.0.0.1:3000", "unified", &buf)
+		require.NoError(t, err)
+
+		// Parse JSON output
+		var result map[string]interface{}
+		err = json.Unmarshal(buf.Bytes(), &result)
+		require.NoError(t, err, "Output should be valid JSON")
+
+		// Verify mcpServers structure
+		mcpServers, ok := result["mcpServers"].(map[string]interface{})
+		require.True(t, ok, "Output should have mcpServers field")
+
+		// Verify test-server exists
+		serverConfig, ok := mcpServers["test-server"].(map[string]interface{})
+		require.True(t, ok, "test-server should exist in mcpServers")
+
+		// Verify tools field exists and has correct values
+		tools, ok := serverConfig["tools"].([]interface{})
+		require.True(t, ok, "Server should have tools field")
+		require.Len(t, tools, 2, "Should have 2 tools")
+
+		// Convert to string slice for easier comparison
+		toolsStr := make([]string, len(tools))
+		for i, tool := range tools {
+			toolsStr[i] = tool.(string)
+		}
+		assert.ElementsMatch(t, []string{"tool1", "tool2"}, toolsStr, "Tools should match")
+	})
+
+	t.Run("IPv6 address", func(t *testing.T) {
+		cfg := &config.Config{
+			Servers: map[string]*config.ServerConfig{
+				"test-server": {Type: "stdio"},
+			},
+		}
+
+		var buf bytes.Buffer
+		err := writeGatewayConfig(cfg, "[::1]:3000", "unified", &buf)
+		require.NoError(t, err)
+
+		// Parse JSON output
+		var result map[string]interface{}
+		err = json.Unmarshal(buf.Bytes(), &result)
+		require.NoError(t, err, "Output should be valid JSON")
+
+		// Verify mcpServers structure
+		mcpServers, ok := result["mcpServers"].(map[string]interface{})
+		require.True(t, ok, "Output should have mcpServers field")
+
+		// Verify test-server exists
+		serverConfig, ok := mcpServers["test-server"].(map[string]interface{})
+		require.True(t, ok, "test-server should exist in mcpServers")
+
+		// Verify URL is correct for IPv6 address
+		assert.Equal(t, "http://::1:3000/mcp", serverConfig["url"], "URL should be correct for IPv6 address")
+	})
+
+	t.Run("invalid listen address uses defaults", func(t *testing.T) {
+		cfg := &config.Config{
+			Servers: map[string]*config.ServerConfig{
+				"test-server": {Type: "stdio"},
+			},
+		}
+
+		var buf bytes.Buffer
+		err := writeGatewayConfig(cfg, "invalid-address", "unified", &buf)
+		require.NoError(t, err)
+
+		output := buf.String()
+		// Should fall back to default host and port
+		assert.Contains(t, output, DefaultListenIPv4)
+		assert.Contains(t, output, DefaultListenPort)
+	})
 }
