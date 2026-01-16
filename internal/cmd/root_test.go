@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"bytes"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"testing"
@@ -225,12 +226,29 @@ func TestWriteGatewayConfig(t *testing.T) {
 		err := writeGatewayConfig(cfg, "127.0.0.1:3000", "unified", &buf)
 		require.NoError(t, err)
 
-		output := buf.String()
-		assert.Contains(t, output, `"mcpServers"`)
-		assert.Contains(t, output, `"test-server"`)
-		assert.Contains(t, output, `"type": "http"`)
-		assert.Contains(t, output, `"url": "http://127.0.0.1:3000/mcp"`)
-		assert.Contains(t, output, `"Authorization": "test-api-key"`)
+		// Parse JSON output
+		var result map[string]interface{}
+		err = json.Unmarshal(buf.Bytes(), &result)
+		require.NoError(t, err, "Output should be valid JSON")
+
+		// Verify mcpServers structure
+		mcpServers, ok := result["mcpServers"].(map[string]interface{})
+		require.True(t, ok, "Output should have mcpServers field")
+
+		// Verify test-server exists
+		serverConfig, ok := mcpServers["test-server"].(map[string]interface{})
+		require.True(t, ok, "test-server should exist in mcpServers")
+
+		// Verify server type is http
+		assert.Equal(t, "http", serverConfig["type"], "Server type should be http")
+
+		// Verify URL is correct for unified mode
+		assert.Equal(t, "http://127.0.0.1:3000/mcp", serverConfig["url"], "URL should be correct for unified mode")
+
+		// Verify Authorization header exists
+		headers, ok := serverConfig["headers"].(map[string]interface{})
+		require.True(t, ok, "Server should have headers field")
+		assert.Equal(t, "test-api-key", headers["Authorization"], "Authorization header should match API key")
 	})
 
 	t.Run("routed mode without API key", func(t *testing.T) {
@@ -245,12 +263,32 @@ func TestWriteGatewayConfig(t *testing.T) {
 		err := writeGatewayConfig(cfg, "localhost:8080", "routed", &buf)
 		require.NoError(t, err)
 
-		output := buf.String()
-		assert.Contains(t, output, `"server1"`)
-		assert.Contains(t, output, `"server2"`)
-		assert.Contains(t, output, `"http://localhost:8080/mcp/server1"`)
-		assert.Contains(t, output, `"http://localhost:8080/mcp/server2"`)
-		assert.NotContains(t, output, `"Authorization"`)
+		// Parse JSON output
+		var result map[string]interface{}
+		err = json.Unmarshal(buf.Bytes(), &result)
+		require.NoError(t, err, "Output should be valid JSON")
+
+		// Verify mcpServers structure
+		mcpServers, ok := result["mcpServers"].(map[string]interface{})
+		require.True(t, ok, "Output should have mcpServers field")
+
+		// Verify both servers exist
+		server1Config, ok := mcpServers["server1"].(map[string]interface{})
+		require.True(t, ok, "server1 should exist in mcpServers")
+
+		server2Config, ok := mcpServers["server2"].(map[string]interface{})
+		require.True(t, ok, "server2 should exist in mcpServers")
+
+		// Verify URLs are correct for routed mode
+		assert.Equal(t, "http://localhost:8080/mcp/server1", server1Config["url"], "server1 URL should include server name")
+		assert.Equal(t, "http://localhost:8080/mcp/server2", server2Config["url"], "server2 URL should include server name")
+
+		// Verify no Authorization headers when no API key
+		_, hasHeaders1 := server1Config["headers"]
+		assert.False(t, hasHeaders1, "server1 should not have headers when no API key")
+
+		_, hasHeaders2 := server2Config["headers"]
+		assert.False(t, hasHeaders2, "server2 should not have headers when no API key")
 	})
 
 	t.Run("with tools field", func(t *testing.T) {
@@ -267,10 +305,30 @@ func TestWriteGatewayConfig(t *testing.T) {
 		err := writeGatewayConfig(cfg, "127.0.0.1:3000", "unified", &buf)
 		require.NoError(t, err)
 
-		output := buf.String()
-		assert.Contains(t, output, `"tools"`)
-		assert.Contains(t, output, `"tool1"`)
-		assert.Contains(t, output, `"tool2"`)
+		// Parse JSON output
+		var result map[string]interface{}
+		err = json.Unmarshal(buf.Bytes(), &result)
+		require.NoError(t, err, "Output should be valid JSON")
+
+		// Verify mcpServers structure
+		mcpServers, ok := result["mcpServers"].(map[string]interface{})
+		require.True(t, ok, "Output should have mcpServers field")
+
+		// Verify test-server exists
+		serverConfig, ok := mcpServers["test-server"].(map[string]interface{})
+		require.True(t, ok, "test-server should exist in mcpServers")
+
+		// Verify tools field exists and has correct values
+		tools, ok := serverConfig["tools"].([]interface{})
+		require.True(t, ok, "Server should have tools field")
+		require.Len(t, tools, 2, "Should have 2 tools")
+
+		// Convert to string slice for easier comparison
+		toolsStr := make([]string, len(tools))
+		for i, tool := range tools {
+			toolsStr[i] = tool.(string)
+		}
+		assert.ElementsMatch(t, []string{"tool1", "tool2"}, toolsStr, "Tools should match")
 	})
 
 	t.Run("IPv6 address", func(t *testing.T) {
@@ -284,8 +342,21 @@ func TestWriteGatewayConfig(t *testing.T) {
 		err := writeGatewayConfig(cfg, "[::1]:3000", "unified", &buf)
 		require.NoError(t, err)
 
-		output := buf.String()
-		assert.Contains(t, output, `"url": "http://::1:3000/mcp"`)
+		// Parse JSON output
+		var result map[string]interface{}
+		err = json.Unmarshal(buf.Bytes(), &result)
+		require.NoError(t, err, "Output should be valid JSON")
+
+		// Verify mcpServers structure
+		mcpServers, ok := result["mcpServers"].(map[string]interface{})
+		require.True(t, ok, "Output should have mcpServers field")
+
+		// Verify test-server exists
+		serverConfig, ok := mcpServers["test-server"].(map[string]interface{})
+		require.True(t, ok, "test-server should exist in mcpServers")
+
+		// Verify URL is correct for IPv6 address
+		assert.Equal(t, "http://::1:3000/mcp", serverConfig["url"], "URL should be correct for IPv6 address")
 	})
 
 	t.Run("invalid listen address uses defaults", func(t *testing.T) {
