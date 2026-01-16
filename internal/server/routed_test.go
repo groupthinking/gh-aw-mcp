@@ -374,7 +374,8 @@ func TestRoutedMode_SysRouteNotExposed_DIFCDisabled(t *testing.T) {
 		Servers: map[string]*config.ServerConfig{
 			"github": {Command: "docker", Args: []string{}},
 		},
-		EnableDIFC: false, // Explicitly disable DIFC (this is the default)
+		// EnableDIFC defaults to false, but explicitly set here for test clarity
+		EnableDIFC: false,
 	}
 
 	ctx := context.Background()

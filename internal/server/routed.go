@@ -38,9 +38,9 @@ func CreateHTTPServerForRoutedMode(addr string, unifiedServer *UnifiedServer, ap
 	allBackends := unifiedServer.GetServerIDs()
 	if unifiedServer.IsDIFCEnabled() {
 		allBackends = append([]string{"sys"}, allBackends...)
-		logRouted.Printf("DIFC enabled: registering sys route")
+		logRouted.Printf("DIFC enabled: including sys in route registration")
 	} else {
-		logRouted.Printf("DIFC disabled: skipping sys route")
+		logRouted.Printf("DIFC disabled: excluding sys from route registration")
 	}
 	logRouted.Printf("Registering routes for %d backends: %v", len(allBackends), allBackends)
 
