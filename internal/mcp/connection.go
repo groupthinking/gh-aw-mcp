@@ -104,6 +104,28 @@ func createJSONRPCRequest(requestID uint64, method string, params interface{}) m
 	}
 }
 
+// ensureToolCallArguments ensures that the arguments field exists in tools/call params
+// The MCP protocol requires the arguments field to always be present, even if empty
+func ensureToolCallArguments(params interface{}) interface{} {
+	// Convert params to map if it isn't already
+	paramsMap, ok := params.(map[string]interface{})
+	if !ok {
+		// If params isn't a map, return as-is (this shouldn't happen for tools/call)
+		return params
+	}
+
+	// Check if arguments field exists
+	if _, hasArgs := paramsMap["arguments"]; !hasArgs {
+		// Add empty arguments map if missing
+		paramsMap["arguments"] = make(map[string]interface{})
+	} else if paramsMap["arguments"] == nil {
+		// Replace nil with empty map
+		paramsMap["arguments"] = make(map[string]interface{})
+	}
+
+	return paramsMap
+}
+
 // setupHTTPRequest creates and configures an HTTP request with standard headers
 func setupHTTPRequest(ctx context.Context, url string, requestBody []byte, headers map[string]string) (*http.Request, error) {
 	httpReq, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewReader(requestBody))
@@ -576,6 +598,11 @@ func (c *Connection) sendHTTPRequest(ctx context.Context, method string, params 
 	// Generate unique request ID using atomic counter
 	requestID := atomic.AddUint64(&requestIDCounter, 1)
 
+	// For tools/call, ensure arguments field always exists (MCP protocol requirement)
+	if method == "tools/call" {
+		params = ensureToolCallArguments(params)
+	}
+
 	// Create JSON-RPC request
 	request := createJSONRPCRequest(requestID, method, params)
 
@@ -726,10 +753,23 @@ func (c *Connection) callTool(params interface{}) (*Response, error) {
 		return nil, fmt.Errorf("SDK session not available for plain JSON-RPC transport")
 	}
 	var callParams CallToolParams
-	paramsJSON, _ := json.Marshal(params)
+	paramsJSON, err := json.Marshal(params)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal params: %w", err)
+	}
+	logConn.Printf("callTool: marshaled params=%s", string(paramsJSON))
+
 	if err := json.Unmarshal(paramsJSON, &callParams); err != nil {
 		return nil, fmt.Errorf("invalid params: %w", err)
 	}
+
+	// Ensure arguments is never nil - default to empty map
+	// This is required by the MCP protocol which expects arguments to always be present
+	if callParams.Arguments == nil {
+		callParams.Arguments = make(map[string]interface{})
+	}
+
+	logConn.Printf("callTool: parsed name=%s, arguments=%+v", callParams.Name, callParams.Arguments)
 
 	result, err := c.session.CallTool(c.ctx, &sdk.CallToolParams{
 		Name:      callParams.Name,
