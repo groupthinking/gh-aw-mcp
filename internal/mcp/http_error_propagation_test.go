@@ -81,11 +81,11 @@ func TestHTTPErrorPropagation_Non200Status(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			requestCount := 0
-			
+
 			// Create test server that succeeds on initialize but fails on subsequent requests
 			testServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				requestCount++
-				
+
 				var reqBody map[string]interface{}
 				json.NewDecoder(r.Body).Decode(&reqBody)
 				method, _ := reqBody["method"].(string)
@@ -131,9 +131,9 @@ func TestHTTPErrorPropagation_Non200Status(t *testing.T) {
 			// Verify the response contains an error field
 			require.NotNil(t, resp.Error, "Response should contain error field")
 			assert.Equal(t, -32603, resp.Error.Code, "Error code should be -32603 (Internal error)")
-			assert.Contains(t, resp.Error.Message, tt.expectErrorMsg, 
+			assert.Contains(t, resp.Error.Message, tt.expectErrorMsg,
 				"Error message should contain HTTP status code")
-			
+
 			// Verify error data contains original response body
 			if resp.Error.Data != nil {
 				var errorData interface{}
@@ -148,10 +148,10 @@ func TestHTTPErrorPropagation_Non200Status(t *testing.T) {
 // JSON-RPC error field are properly returned
 func TestHTTPErrorPropagation_JSONRPCError(t *testing.T) {
 	requestCount := 0
-	
+
 	testServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		requestCount++
-		
+
 		var reqBody map[string]interface{}
 		json.NewDecoder(r.Body).Decode(&reqBody)
 		method, _ := reqBody["method"].(string)
@@ -197,7 +197,7 @@ func TestHTTPErrorPropagation_JSONRPCError(t *testing.T) {
 	defer conn.Close()
 
 	// Send request
-	resp, err := conn.SendRequestWithServerID(context.Background(), "tools/call", 
+	resp, err := conn.SendRequestWithServerID(context.Background(), "tools/call",
 		map[string]interface{}{"name": "unknown"}, "test-server")
 	require.NoError(t, err, "SendRequestWithServerID should not return Go error")
 	require.NotNil(t, resp, "Response should not be nil")
@@ -239,10 +239,10 @@ func TestHTTPErrorPropagation_MixedContent(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			requestCount := 0
-			
+
 			testServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				requestCount++
-				
+
 				var reqBody map[string]interface{}
 				json.NewDecoder(r.Body).Decode(&reqBody)
 				method, _ := reqBody["method"].(string)
@@ -287,7 +287,7 @@ func TestHTTPErrorPropagation_MixedContent(t *testing.T) {
 			// Verify the response contains an error field
 			require.NotNil(t, resp.Error, "Response should contain error field")
 			assert.Equal(t, -32603, resp.Error.Code, "Error code should be -32603")
-			
+
 			// Verify error data contains original response body
 			if resp.Error.Data != nil {
 				data := string(resp.Error.Data)
@@ -308,10 +308,10 @@ func TestHTTPErrorPropagation_PreservesDetails(t *testing.T) {
 			"expiresAt":    "2026-01-01T00:00:00Z",
 		},
 	}
-	
+
 	testServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		requestCount++
-		
+
 		var reqBody map[string]interface{}
 		json.NewDecoder(r.Body).Decode(&reqBody)
 		method, _ := reqBody["method"].(string)
@@ -359,15 +359,15 @@ func TestHTTPErrorPropagation_PreservesDetails(t *testing.T) {
 
 	// Verify error data contains original error details
 	require.NotNil(t, resp.Error.Data, "Error data should not be nil")
-	
+
 	var errorData map[string]interface{}
 	err = json.Unmarshal(resp.Error.Data, &errorData)
 	require.NoError(t, err, "Error data should be valid JSON")
-	
+
 	// Verify original error details are preserved
 	assert.Equal(t, originalError["type"], errorData["type"], "Error type should be preserved")
 	assert.Equal(t, originalError["message"], errorData["message"], "Error message should be preserved")
-	
+
 	details, ok := errorData["details"].(map[string]interface{})
 	require.True(t, ok, "Error details should be preserved")
 	assert.NotNil(t, details["apiKeyPrefix"], "API key prefix should be preserved")

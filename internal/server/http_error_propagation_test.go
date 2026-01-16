@@ -135,7 +135,7 @@ func TestUnifiedServer_HTTPErrorPropagation(t *testing.T) {
 			require.NoError(t, err, "Failed to get connection")
 
 			// Make request that triggers error
-			resp, err := conn.SendRequestWithServerID(ctx, "tools/call", 
+			resp, err := conn.SendRequestWithServerID(ctx, "tools/call",
 				map[string]interface{}{
 					"name":      "test_tool",
 					"arguments": map[string]interface{}{},
