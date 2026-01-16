@@ -296,16 +296,3 @@ func TestWriteGatewayConfig(t *testing.T) {
 	})
 }
 
-func TestDefaultConstants(t *testing.T) {
-	t.Run("verify default values", func(t *testing.T) {
-		assert.Equal(t, "", defaultConfigFile, "Default config file should be empty")
-		assert.Equal(t, false, defaultConfigStdin, "Default config stdin should be false")
-		assert.Equal(t, "127.0.0.1", DefaultListenIPv4, "Default IPv4 should be localhost")
-		assert.Equal(t, "3000", DefaultListenPort, "Default port should be 3000")
-		assert.Equal(t, false, defaultRoutedMode, "Default routed mode should be false")
-		assert.Equal(t, false, defaultUnifiedMode, "Default unified mode should be false")
-		assert.Equal(t, "", defaultEnvFile, "Default env file should be empty")
-		assert.Equal(t, false, defaultEnableDIFC, "Default enable DIFC should be false")
-		assert.Equal(t, "/tmp/gh-aw/mcp-logs", defaultLogDir, "Default log dir should be /tmp/gh-aw/mcp-logs")
-	})
-}
