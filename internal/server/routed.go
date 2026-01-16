@@ -34,8 +34,14 @@ func CreateHTTPServerForRoutedMode(addr string, unifiedServer *UnifiedServer, ap
 	})
 	mux.Handle("/mcp/.well-known/oauth-authorization-server", withResponseLogging(oauthHandler))
 
-	// Create routes for all backends plus sys
-	allBackends := append([]string{"sys"}, unifiedServer.GetServerIDs()...)
+	// Create routes for all backends, plus sys only if DIFC is enabled
+	allBackends := unifiedServer.GetServerIDs()
+	if unifiedServer.IsDIFCEnabled() {
+		allBackends = append([]string{"sys"}, allBackends...)
+		logRouted.Printf("DIFC enabled: registering sys route")
+	} else {
+		logRouted.Printf("DIFC disabled: skipping sys route")
+	}
 	logRouted.Printf("Registering routes for %d backends: %v", len(allBackends), allBackends)
 
 	// Create a proxy for each backend server (including sys)

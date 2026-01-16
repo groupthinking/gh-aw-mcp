@@ -367,3 +367,63 @@ func TestRoutedMode_SysToolsBackend_DIFCEnabled(t *testing.T) {
 		}
 	}
 }
+
+func TestRoutedMode_SysRouteNotExposed_DIFCDisabled(t *testing.T) {
+	// When DIFC is disabled (default), /mcp/sys route should NOT be registered
+	cfg := &config.Config{
+		Servers: map[string]*config.ServerConfig{
+			"github": {Command: "docker", Args: []string{}},
+		},
+		EnableDIFC: false, // Explicitly disable DIFC (this is the default)
+	}
+
+	ctx := context.Background()
+	us, err := NewUnified(ctx, cfg)
+	require.NoError(t, err, "NewUnified() failed")
+	defer us.Close()
+
+	// Create routed mode server
+	httpServer := CreateHTTPServerForRoutedMode("127.0.0.1:0", us, "")
+
+	// Try to access /mcp/sys route - should get 404
+	req := httptest.NewRequest(http.MethodGet, "/mcp/sys", nil)
+	req.Header.Set("Authorization", "test-session")
+	w := httptest.NewRecorder()
+
+	httpServer.Handler.ServeHTTP(w, req)
+
+	// Should return 404 because the route is not registered
+	if w.Code != http.StatusNotFound {
+		t.Errorf("Expected status 404 for /mcp/sys when DIFC is disabled, got %d", w.Code)
+	}
+}
+
+func TestRoutedMode_SysRouteExposed_DIFCEnabled(t *testing.T) {
+	// When DIFC is enabled, /mcp/sys route SHOULD be registered
+	cfg := &config.Config{
+		Servers: map[string]*config.ServerConfig{
+			"github": {Command: "docker", Args: []string{}},
+		},
+		EnableDIFC: true, // Enable DIFC
+	}
+
+	ctx := context.Background()
+	us, err := NewUnified(ctx, cfg)
+	require.NoError(t, err, "NewUnified() failed")
+	defer us.Close()
+
+	// Create routed mode server
+	httpServer := CreateHTTPServerForRoutedMode("127.0.0.1:0", us, "")
+
+	// Try to access /mcp/sys route - should NOT get 404
+	req := httptest.NewRequest(http.MethodGet, "/mcp/sys", nil)
+	req.Header.Set("Authorization", "test-session")
+	w := httptest.NewRecorder()
+
+	httpServer.Handler.ServeHTTP(w, req)
+
+	// Should NOT return 404 because the route should be registered
+	if w.Code == http.StatusNotFound {
+		t.Errorf("Expected /mcp/sys route to be registered when DIFC is enabled, but got 404")
+	}
+}

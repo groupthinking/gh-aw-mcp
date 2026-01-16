@@ -766,3 +766,8 @@ func (us *UnifiedServer) SetTestMode(enabled bool) {
 func (us *UnifiedServer) ShouldExit() bool {
 	return !us.testMode
 }
+
+// IsDIFCEnabled returns whether DIFC is enabled
+func (us *UnifiedServer) IsDIFCEnabled() bool {
+	return us.enableDIFC
+}
