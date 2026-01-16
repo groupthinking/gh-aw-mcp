@@ -26,14 +26,6 @@ var (
 
 // InitMarkdownLogger initializes the global markdown logger
 func InitMarkdownLogger(logDir, fileName string) error {
-	globalMarkdownMu.Lock()
-	defer globalMarkdownMu.Unlock()
-
-	if globalMarkdownLogger != nil {
-		// Close existing logger
-		globalMarkdownLogger.Close()
-	}
-
 	ml := &MarkdownLogger{
 		logDir:   logDir,
 		fileName: fileName,
@@ -44,14 +36,14 @@ func InitMarkdownLogger(logDir, fileName string) error {
 	if err != nil {
 		// File initialization failed - set fallback mode
 		ml.useFallback = true
-		globalMarkdownLogger = ml
+		initGlobalMarkdownLogger(ml)
 		return nil
 	}
 
 	ml.logFile = file
 	ml.initialized = false // Will be initialized on first write
 
-	globalMarkdownLogger = ml
+	initGlobalMarkdownLogger(ml)
 	return nil
 }
 
@@ -90,13 +82,6 @@ func (ml *MarkdownLogger) Close() error {
 	return nil
 }
 
-// sanitizeSecrets replaces potential secrets with [REDACTED]
-// This function is deprecated and will be removed in a future version.
-// Use sanitize.SanitizeString() directly instead.
-func sanitizeSecrets(message string) string {
-	return sanitize.SanitizeString(message)
-}
-
 // getEmojiForLevel returns the appropriate emoji for the log level
 func getEmojiForLevel(level LogLevel) string {
 	switch level {
@@ -130,7 +115,7 @@ func (ml *MarkdownLogger) Log(level LogLevel, category, format string, args ...i
 	message := fmt.Sprintf(format, args...)
 
 	// Sanitize potential secrets
-	message = sanitizeSecrets(message)
+	message = sanitize.SanitizeString(message)
 
 	emoji := getEmojiForLevel(level)
 
@@ -222,13 +207,5 @@ func LogDebugMd(category, format string, args ...interface{}) {
 
 // CloseMarkdownLogger closes the global markdown logger
 func CloseMarkdownLogger() error {
-	globalMarkdownMu.Lock()
-	defer globalMarkdownMu.Unlock()
-
-	if globalMarkdownLogger != nil {
-		err := globalMarkdownLogger.Close()
-		globalMarkdownLogger = nil
-		return err
-	}
-	return nil
+	return closeGlobalMarkdownLogger()
 }

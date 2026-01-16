@@ -12,6 +12,10 @@ This gateway is used with [GitHub Agentic Workflows](https://github.com/githubne
   - **Spec-Compliant Validation**: Fail-fast validation with detailed error messages
   - **Variable Expansion**: Environment variable substitution with `${VAR_NAME}` syntax
   - **Type Normalization**: Automatic conversion of legacy `"local"` type to `"stdio"`
+- **Schema Normalization**: Automatic fixing of malformed JSON schemas from backend MCP servers
+  - Adds missing `properties` field to object schemas
+  - Prevents downstream validation errors
+  - Transparent to both backends and clients
 - **Routing Modes**: 
   - **Routed**: Each backend server accessible at `/mcp/{serverID}`
   - **Unified**: Single endpoint `/mcp` that routes to configured servers

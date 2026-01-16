@@ -37,14 +37,6 @@ type JSONLRPCMessage struct {
 
 // InitJSONLLogger initializes the global JSONL logger
 func InitJSONLLogger(logDir, fileName string) error {
-	globalJSONLMu.Lock()
-	defer globalJSONLMu.Unlock()
-
-	if globalJSONLLogger != nil {
-		// Close existing logger
-		globalJSONLLogger.Close()
-	}
-
 	jl := &JSONLLogger{
 		logDir:   logDir,
 		fileName: fileName,
@@ -59,7 +51,7 @@ func InitJSONLLogger(logDir, fileName string) error {
 	jl.logFile = file
 	jl.encoder = json.NewEncoder(file)
 
-	globalJSONLLogger = jl
+	initGlobalJSONLLogger(jl)
 	return nil
 }
 
@@ -69,14 +61,6 @@ func (jl *JSONLLogger) Close() error {
 	defer jl.mu.Unlock()
 
 	return closeLogFile(jl.logFile, &jl.mu, "JSONL")
-}
-
-// sanitizePayload sanitizes a payload by applying regex patterns to the entire string
-// It takes raw bytes, applies regex sanitization in one pass, and returns sanitized bytes
-// This function is deprecated and will be removed in a future version.
-// Use sanitize.SanitizeJSON() directly instead.
-func sanitizePayload(payloadBytes []byte) json.RawMessage {
-	return sanitize.SanitizeJSON(payloadBytes)
 }
 
 // LogMessage logs an RPC message to the JSONL file
@@ -103,15 +87,7 @@ func (jl *JSONLLogger) LogMessage(entry *JSONLRPCMessage) error {
 
 // CloseJSONLLogger closes the global JSONL logger
 func CloseJSONLLogger() error {
-	globalJSONLMu.Lock()
-	defer globalJSONLMu.Unlock()
-
-	if globalJSONLLogger != nil {
-		err := globalJSONLLogger.Close()
-		globalJSONLLogger = nil
-		return err
-	}
-	return nil
+	return closeGlobalJSONLLogger()
 }
 
 // LogRPCMessageJSONL logs an RPC message to the global JSONL logger
@@ -129,7 +105,7 @@ func LogRPCMessageJSONL(direction RPCMessageDirection, messageType RPCMessageTyp
 		Type:      string(messageType),
 		ServerID:  serverID,
 		Method:    method,
-		Payload:   sanitizePayload(payloadBytes),
+		Payload:   sanitize.SanitizeJSON(payloadBytes),
 	}
 
 	if err != nil {
