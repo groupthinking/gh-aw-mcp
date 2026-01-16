@@ -816,7 +816,7 @@ func createGitHubMockServer(t *testing.T) *httptest.Server {
 			// Mock tool call response
 			params, _ := reqBody["params"].(map[string]interface{})
 			toolName, _ := params["name"].(string)
-			
+
 			response = map[string]interface{}{
 				"jsonrpc": "2.0",
 				"id":      id,
