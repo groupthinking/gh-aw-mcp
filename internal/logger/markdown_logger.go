@@ -82,13 +82,6 @@ func (ml *MarkdownLogger) Close() error {
 	return nil
 }
 
-// sanitizeSecrets replaces potential secrets with [REDACTED]
-// This function is deprecated and will be removed in a future version.
-// Use sanitize.SanitizeString() directly instead.
-func sanitizeSecrets(message string) string {
-	return sanitize.SanitizeString(message)
-}
-
 // getEmojiForLevel returns the appropriate emoji for the log level
 func getEmojiForLevel(level LogLevel) string {
 	switch level {
@@ -122,7 +115,7 @@ func (ml *MarkdownLogger) Log(level LogLevel, category, format string, args ...i
 	message := fmt.Sprintf(format, args...)
 
 	// Sanitize potential secrets
-	message = sanitizeSecrets(message)
+	message = sanitize.SanitizeString(message)
 
 	emoji := getEmojiForLevel(level)
 

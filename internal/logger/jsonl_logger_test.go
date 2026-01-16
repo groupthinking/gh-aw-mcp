@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/githubnext/gh-aw-mcpg/internal/logger/sanitize"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -170,9 +171,9 @@ func TestSanitizePayload(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := sanitizePayload([]byte(tt.input))
+			result := sanitize.SanitizeJSON([]byte(tt.input))
 
-			require.NotNil(t, result, "sanitizePayload returned nil")
+			require.NotNil(t, result, "sanitize.SanitizeJSON returned nil")
 
 			// The result is already a sanitized string
 			sanitizedStr := string(result)
@@ -219,7 +220,7 @@ func TestSanitizePayloadWithNestedStructures(t *testing.T) {
 		}
 	}`
 
-	result := sanitizePayload([]byte(input))
+	result := sanitize.SanitizeJSON([]byte(input))
 
 	// The result is already a sanitized string
 	sanitizedStr := string(result)
@@ -398,7 +399,7 @@ func TestSanitizePayloadCompactsJSON(t *testing.T) {
 		}
 	}`
 
-	result := sanitizePayload([]byte(multilineJSON))
+	result := sanitize.SanitizeJSON([]byte(multilineJSON))
 
 	// The result should not contain newlines
 	resultStr := string(result)
