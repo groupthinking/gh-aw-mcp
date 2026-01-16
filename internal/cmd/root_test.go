@@ -168,13 +168,24 @@ TEST_VAR3=value with spaces
 	})
 
 	t.Run("env file with variable expansion", func(t *testing.T) {
-		// Set up a base variable for expansion
-		os.Setenv("BASE_PATH", "/home/user")
+		// Save original values and set up cleanup before modifying environment
+		origBasePath, basePathWasSet := os.LookupEnv("BASE_PATH")
+		origExpandedVar, expandedVarWasSet := os.LookupEnv("EXPANDED_VAR")
 		t.Cleanup(func() {
-			os.Unsetenv("BASE_PATH")
-			os.Unsetenv("EXPANDED_VAR")
+			if basePathWasSet {
+				_ = os.Setenv("BASE_PATH", origBasePath)
+			} else {
+				_ = os.Unsetenv("BASE_PATH")
+			}
+			if expandedVarWasSet {
+				_ = os.Setenv("EXPANDED_VAR", origExpandedVar)
+			} else {
+				_ = os.Unsetenv("EXPANDED_VAR")
+			}
 		})
 
+		// Set up a base variable for expansion
+		os.Setenv("BASE_PATH", "/home/user")
 		tmpDir := t.TempDir()
 		envFile := filepath.Join(tmpDir, ".env")
 		content := `EXPANDED_VAR=$BASE_PATH/subdir`
