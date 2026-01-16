@@ -9,9 +9,12 @@ import (
 	"strings"
 
 	"github.com/githubnext/gh-aw-mcpg/internal/launcher"
+	"github.com/githubnext/gh-aw-mcpg/internal/logger"
 	"github.com/githubnext/gh-aw-mcpg/internal/mcp"
 	"github.com/githubnext/gh-aw-mcpg/internal/sys"
 )
+
+var logServer = logger.New("server:server")
 
 // Server represents the MCPG HTTP server
 type Server struct {
@@ -23,6 +26,8 @@ type Server struct {
 
 // New creates a new Server
 func New(ctx context.Context, l *launcher.Launcher, mode string) *Server {
+	logServer.Printf("Creating new server: mode=%s, servers=%d", mode, len(l.ServerIDs()))
+	
 	s := &Server{
 		launcher:  l,
 		sysServer: sys.NewSysServer(l.ServerIDs()),
@@ -35,16 +40,21 @@ func New(ctx context.Context, l *launcher.Launcher, mode string) *Server {
 }
 
 func (s *Server) setupRoutes() {
+	logServer.Printf("Setting up routes for mode: %s", s.mode)
+	
 	if s.mode == "routed" {
 		// Routed mode: /mcp/{server}/{method}
 		s.mux.HandleFunc("/mcp/", s.handleRoutedMCP)
+		logServer.Print("Registered routed MCP handler at /mcp/")
 	} else {
 		// Unified mode: /mcp (single endpoint for all servers)
 		s.mux.HandleFunc("/mcp", s.handleUnifiedMCP)
+		logServer.Print("Registered unified MCP handler at /mcp")
 	}
 
 	// Health check
 	s.mux.HandleFunc("/health", s.handleHealth)
+	logServer.Print("Registered health check handler at /health")
 }
 
 func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
@@ -60,6 +70,8 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleUnifiedMCP(w http.ResponseWriter, r *http.Request) {
 	log.Printf("[%s] %s %s", r.RemoteAddr, r.Method, r.URL.Path)
+	logServer.Printf("Handling unified MCP request: method=%s, remote=%s", r.Method, r.RemoteAddr)
+	
 	if r.Method != http.MethodPost {
 		log.Printf("Method not allowed: %s", r.Method)
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -74,17 +86,20 @@ func (s *Server) handleUnifiedMCP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	log.Printf("Unified MCP request - method: %s", req.Method)
+	logServer.Printf("Decoded MCP request: method=%s", req.Method)
 
 	// In unified mode, we need to determine which server to route to
 	// For now, default to the first configured server
 	// TODO: Implement proper routing logic based on tool name or other criteria
 	serverIDs := s.launcher.ServerIDs()
 	if len(serverIDs) == 0 {
+		logServer.Print("No MCP servers configured, returning error")
 		s.sendError(w, -32603, "No MCP servers configured", nil)
 		return
 	}
 
 	serverID := serverIDs[0] // Simple: use first server
+	logServer.Printf("Routing to first server: serverID=%s", serverID)
 	s.proxyToServer(w, r, serverID, &req)
 }
 
@@ -161,8 +176,11 @@ func (s *Server) handleInitialize(w http.ResponseWriter, req *mcp.Request, serve
 }
 
 func (s *Server) proxyToServer(w http.ResponseWriter, r *http.Request, serverID string, req *mcp.Request) {
+	logServer.Printf("Proxying request to server: serverID=%s, method=%s", serverID, req.Method)
+	
 	// Handle built-in sys server
 	if serverID == "sys" {
+		logServer.Print("Routing to built-in sys server")
 		s.handleSysRequest(w, req)
 		return
 	}
@@ -171,6 +189,7 @@ func (s *Server) proxyToServer(w http.ResponseWriter, r *http.Request, serverID 
 	conn, err := launcher.GetOrLaunch(s.launcher, serverID)
 	if err != nil {
 		log.Printf("Failed to get connection to '%s': %v", serverID, err)
+		logServer.Printf("Connection failed for server: serverID=%s, error=%v", serverID, err)
 		s.sendError(w, -32603, fmt.Sprintf("Failed to connect to server '%s'", serverID), nil)
 		return
 	}
@@ -263,5 +282,6 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 // ListenAndServe starts the HTTP server
 func (s *Server) ListenAndServe(addr string) error {
 	log.Printf("Starting MCPG HTTP server on %s (mode: %s)", addr, s.mode)
+	logServer.Printf("Starting HTTP server: addr=%s, mode=%s", addr, s.mode)
 	return http.ListenAndServe(addr, s)
 }
