@@ -8,12 +8,21 @@ import (
 // that can cause downstream validation errors.
 //
 // Known issues fixed:
-//  1. Object schemas without properties: When a schema declares "type": "object"
+//  1. Missing schema: When a backend returns no inputSchema (nil), we provide
+//     a default empty object schema that accepts any properties. This is required
+//     by the MCP SDK's Server.AddTool method.
+//  2. Object schemas without properties: When a schema declares "type": "object"
 //     but is missing the required "properties" field, we add an empty properties
 //     object to make it valid per JSON Schema standards.
 func NormalizeInputSchema(schema map[string]interface{}, toolName string) map[string]interface{} {
+	// If backend didn't provide a schema, use a default empty object schema
+	// This allows the tool to be registered and clients will see it accepts any parameters
 	if schema == nil {
-		return schema
+		logger.LogWarn("backend", "Tool schema normalized: %s - backend provided no inputSchema, using default empty object schema", toolName)
+		return map[string]interface{}{
+			"type":       "object",
+			"properties": map[string]interface{}{},
+		}
 	}
 
 	// Check if this is an object type schema

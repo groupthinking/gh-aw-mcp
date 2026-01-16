@@ -9,7 +9,14 @@ import (
 
 func TestNormalizeInputSchema_NilSchema(t *testing.T) {
 	result := NormalizeInputSchema(nil, "test-tool")
-	assert.Nil(t, result, "Nil schema should return nil")
+	// When backend provides no schema, we return a default empty object schema
+	// This is required by the SDK's Server.AddTool method and allows clients
+	// to see that the tool accepts parameters (though any are allowed)
+	require.NotNil(t, result, "Nil schema should return default empty object schema")
+	assert.Equal(t, "object", result["type"], "Default schema should have type 'object'")
+	assert.Contains(t, result, "properties", "Default schema should have properties field")
+	properties := result["properties"].(map[string]interface{})
+	assert.Empty(t, properties, "Default schema properties should be empty")
 }
 
 func TestNormalizeInputSchema_EmptySchema(t *testing.T) {
