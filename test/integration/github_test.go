@@ -203,13 +203,28 @@ func TestGitHubMCPMockBackend(t *testing.T) {
 					assert.Contains(t, firstTool, "inputSchema", "Tool should have inputSchema")
 					t.Logf("✓ Tool structure validated (example: %s)", firstTool["name"])
 				}
+			} else {
+				t.Logf("⚠ No tools array found in result, keys: %v", keys(resultData))
 			}
+		} else if errData, ok := result["error"]; ok {
+			t.Logf("⚠ Error in tools/list response: %v", errData)
+		} else {
+			t.Logf("⚠ Unexpected response structure, keys: %v", keys(result))
 		}
 
 		t.Log("✓ Successfully listed tools from GitHub backend")
 	})
 
 	t.Log("✓ GitHub MCP mock backend integration test passed")
+}
+
+// helper function to get keys from a map
+func keys(m map[string]interface{}) []string {
+	result := make([]string, 0, len(m))
+	for k := range m {
+		result = append(result, k)
+	}
+	return result
 }
 
 // TestGitHubMCPRealBackend tests connection to the actual GitHub MCP server
