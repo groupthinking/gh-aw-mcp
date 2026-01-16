@@ -207,59 +207,64 @@ func validateContainerID(containerID string) error {
 	return nil
 }
 
-// checkPortMapping uses docker inspect to verify that the specified port is mapped
-func checkPortMapping(containerID, port string) (bool, error) {
+// runDockerInspect is a helper function that executes docker inspect with a given format template.
+// It validates the container ID before running the command and returns the output as a string.
+//
+// Parameters:
+//   - containerID: The Docker container ID to inspect (validated before use)
+//   - formatTemplate: The Go template format string for docker inspect (e.g., "{{.Config.OpenStdin}}")
+//
+// Returns:
+//   - output: The trimmed output from docker inspect
+//   - error: Any validation or command execution error
+func runDockerInspect(containerID, formatTemplate string) (string, error) {
 	if err := validateContainerID(containerID); err != nil {
-		return false, err
+		return "", err
 	}
 
-	// Use docker inspect to get port bindings
-	cmd := exec.Command("docker", "inspect", "--format", "{{json .NetworkSettings.Ports}}", containerID)
+	cmd := exec.Command("docker", "inspect", "--format", formatTemplate, containerID)
 	output, err := cmd.Output()
 	if err != nil {
-		return false, fmt.Errorf("docker inspect failed: %w", err)
+		return "", fmt.Errorf("docker inspect failed: %w", err)
+	}
+
+	return strings.TrimSpace(string(output)), nil
+}
+
+// checkPortMapping uses docker inspect to verify that the specified port is mapped
+func checkPortMapping(containerID, port string) (bool, error) {
+	output, err := runDockerInspect(containerID, "{{json .NetworkSettings.Ports}}")
+	if err != nil {
+		return false, err
 	}
 
 	// Parse the port from the output
 	portKey := fmt.Sprintf("%s/tcp", port)
-	outputStr := string(output)
 
 	// Check if the port is in the output with a host binding
 	// The format is like: {"8000/tcp":[{"HostIp":"0.0.0.0","HostPort":"8000"}]}
-	return strings.Contains(outputStr, portKey) && strings.Contains(outputStr, "HostPort"), nil
+	return strings.Contains(output, portKey) && strings.Contains(output, "HostPort"), nil
 }
 
 // checkStdinInteractive uses docker inspect to verify the container was started with -i flag
 func checkStdinInteractive(containerID string) bool {
-	if err := validateContainerID(containerID); err != nil {
-		return false
-	}
-
-	// Use docker inspect to check stdin_open
-	cmd := exec.Command("docker", "inspect", "--format", "{{.Config.OpenStdin}}", containerID)
-	output, err := cmd.Output()
+	output, err := runDockerInspect(containerID, "{{.Config.OpenStdin}}")
 	if err != nil {
 		return false
 	}
 
-	return strings.TrimSpace(string(output)) == "true"
+	return output == "true"
 }
 
 // checkLogDirMounted uses docker inspect to verify the log directory is mounted
 func checkLogDirMounted(containerID, logDir string) bool {
-	if err := validateContainerID(containerID); err != nil {
-		return false
-	}
-
-	// Use docker inspect to get mounts
-	cmd := exec.Command("docker", "inspect", "--format", "{{json .Mounts}}", containerID)
-	output, err := cmd.Output()
+	output, err := runDockerInspect(containerID, "{{json .Mounts}}")
 	if err != nil {
 		return false
 	}
 
 	// Check if the log directory is in the mounts
-	return strings.Contains(string(output), logDir)
+	return strings.Contains(output, logDir)
 }
 
 // GetGatewayPortFromEnv returns the MCP_GATEWAY_PORT value, parsed as int

@@ -492,3 +492,50 @@ func TestValidateExecutionEnvironment(t *testing.T) {
 		}
 	})
 }
+
+func TestRunDockerInspect(t *testing.T) {
+	tests := []struct {
+		name           string
+		containerID    string
+		formatTemplate string
+		shouldError    bool
+	}{
+		{
+			name:           "empty container ID",
+			containerID:    "",
+			formatTemplate: "{{.Config.OpenStdin}}",
+			shouldError:    true,
+		},
+		{
+			name:           "invalid container ID - too short",
+			containerID:    "abc123",
+			formatTemplate: "{{.Config.OpenStdin}}",
+			shouldError:    true,
+		},
+		{
+			name:           "invalid container ID - special chars",
+			containerID:    "abc;def123456",
+			formatTemplate: "{{.Config.OpenStdin}}",
+			shouldError:    true,
+		},
+		{
+			name:           "valid container ID format - command will fail without docker",
+			containerID:    "abcdef123456",
+			formatTemplate: "{{.Config.OpenStdin}}",
+			shouldError:    true, // Will fail because container doesn't exist
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			output, err := runDockerInspect(tt.containerID, tt.formatTemplate)
+
+			if tt.shouldError {
+				assert.Error(t, err, "Expected error but got none")
+				assert.Empty(t, output, "Expected empty output on error")
+			} else {
+				assert.NoError(t, err, "Unexpected error")
+			}
+		})
+	}
+}
