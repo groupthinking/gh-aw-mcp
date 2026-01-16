@@ -726,10 +726,17 @@ func (c *Connection) callTool(params interface{}) (*Response, error) {
 		return nil, fmt.Errorf("SDK session not available for plain JSON-RPC transport")
 	}
 	var callParams CallToolParams
-	paramsJSON, _ := json.Marshal(params)
+	paramsJSON, err := json.Marshal(params)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal params: %w", err)
+	}
+	logConn.Printf("callTool: marshaled params=%s", string(paramsJSON))
+	
 	if err := json.Unmarshal(paramsJSON, &callParams); err != nil {
 		return nil, fmt.Errorf("invalid params: %w", err)
 	}
+	
+	logConn.Printf("callTool: parsed name=%s, arguments=%+v", callParams.Name, callParams.Arguments)
 
 	result, err := c.session.CallTool(c.ctx, &sdk.CallToolParams{
 		Name:      callParams.Name,
