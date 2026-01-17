@@ -29,9 +29,16 @@ func TestCallBackendTool_ReturnsNonNilCallToolResult(t *testing.T) {
 	backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var req map[string]interface{}
 		err := json.NewDecoder(r.Body).Decode(&req)
-		require.NoError(err)
+		if err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
 
-		method := req["method"].(string)
+		method, ok := req["method"].(string)
+		if !ok {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
 
 		switch method {
 		case "initialize":
@@ -147,8 +154,17 @@ func TestCallBackendTool_ErrorStillReturnsCallToolResult(t *testing.T) {
 	// Create a mock HTTP backend that returns an error
 	backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var req map[string]interface{}
-		json.NewDecoder(r.Body).Decode(&req)
-		method := req["method"].(string)
+		err := json.NewDecoder(r.Body).Decode(&req)
+		if err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+
+		method, ok := req["method"].(string)
+		if !ok {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
 
 		switch method {
 		case "initialize":
