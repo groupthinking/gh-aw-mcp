@@ -8,8 +8,3 @@ require (
 	github.com/spf13/cobra v1.10.2
 	golang.org/x/term v0.38.0
 )
-
-require (
-	github.com/santhosh-tekuri/jsonschema/v5 v5.3.1
-	github.com/stretchr/testify v1.11.1
-)

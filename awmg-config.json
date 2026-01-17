@@ -1,0 +1,12 @@
+{
+    "mcpServers": {
+        "safe-outputs": {
+            "type": "stdio",
+            "container": "node:18-alpine",
+            "env": {
+                "GH_AW_SAFE_OUTPUTS_CONFIG_PATH": "/tmp/gh-aw/safeoutputs/config.json",
+                "GH_AW_SAFE_OUTPUTS_TOOLS_PATH": "/tmp/gh-aw/safeoutputs/tools.json"
+            }
+        }
+    }
+}
