@@ -105,6 +105,25 @@ func ShouldApplyMiddleware(toolName string) bool {
 }
 ```
 
+### Future Enhancements
+
+**Selective Middleware Mounting**: A configuration system could be added to:
+- Enable/disable middleware per backend server
+- Configure which tools get middleware applied
+- Set custom truncation limits
+- Configure storage locations
+- Add multiple middleware types with ordering
+
+Example future config structure:
+```toml
+[middleware.jqschema]
+enabled = true
+truncate_at = 500
+storage_path = "/tmp/gh-awmg/tools-calls"
+exclude_tools = ["sys___*"]
+include_backends = ["github", "tavily"]
+```
+
 ## Testing
 
 The middleware includes comprehensive tests:
