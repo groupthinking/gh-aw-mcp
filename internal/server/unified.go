@@ -14,6 +14,7 @@ import (
 	"github.com/githubnext/gh-aw-mcpg/internal/launcher"
 	"github.com/githubnext/gh-aw-mcpg/internal/logger"
 	"github.com/githubnext/gh-aw-mcpg/internal/mcp"
+	"github.com/githubnext/gh-aw-mcpg/internal/middleware"
 	"github.com/githubnext/gh-aw-mcpg/internal/sys"
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 )
@@ -269,9 +270,15 @@ func (us *UnifiedServer) registerToolsFromBackend(serverID string) error {
 			return result, data, err
 		}
 
+		// Wrap handler with jqschema middleware if applicable
+		finalHandler := handler
+		if middleware.ShouldApplyMiddleware(prefixedName) {
+			finalHandler = middleware.WrapToolHandler(handler, prefixedName)
+		}
+
 		// Store handler for routed mode to reuse
 		us.toolsMu.Lock()
-		us.tools[prefixedName].Handler = handler
+		us.tools[prefixedName].Handler = finalHandler
 		us.toolsMu.Unlock()
 
 		// Register the tool with the SDK using the Server.AddTool method (not sdk.AddTool function)
@@ -283,10 +290,10 @@ func (us *UnifiedServer) registerToolsFromBackend(serverID string) error {
 		// The typed handler signature: func(context.Context, *CallToolRequest, interface{}) (*CallToolResult, interface{}, error)
 		// The simple handler signature: func(context.Context, *CallToolRequest) (*CallToolResult, error)
 		wrappedHandler := func(ctx context.Context, req *sdk.CallToolRequest) (*sdk.CallToolResult, error) {
-			// Call the original typed handler
+			// Call the final handler (which may include middleware wrapping)
 			// The third parameter would be the pre-unmarshaled/validated input if using sdk.AddTool,
 			// but we handle unmarshaling ourselves in the handler, so we pass nil
-			result, _, err := handler(ctx, req, nil)
+			result, _, err := finalHandler(ctx, req, nil)
 			return result, err
 		}
 

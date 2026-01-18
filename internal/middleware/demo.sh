@@ -1,0 +1,77 @@
+#!/bin/bash
+# Demo script to show jqschema middleware in action
+
+set -e
+
+echo "=== jqschema Middleware Demo ==="
+echo ""
+echo "This demo shows how the jqschema middleware transforms tool call responses."
+echo ""
+
+# Create a test directory
+TEST_DIR="/tmp/gh-awmg-demo"
+rm -rf "$TEST_DIR"
+mkdir -p "$TEST_DIR"
+
+echo "1. The middleware intercepts tool call responses"
+echo "2. Generates a unique random ID for each call"
+echo "3. Saves the complete payload to /tmp/gh-awmg/tools-calls/{ID}/payload.json"
+echo "4. Infers the JSON schema using jq logic"
+echo "5. Returns a transformed response with:"
+echo "   - First 500 chars of payload (preview)"
+echo "   - Inferred schema (types and structure)"
+echo "   - Query ID, file path, and metadata"
+echo ""
+
+echo "=== Example Transformation ==="
+echo ""
+echo "Original Response:"
+echo "{"
+echo "  \"total_count\": 1000,"
+echo "  \"items\": ["
+echo "    {\"login\": \"user1\", \"id\": 123, \"verified\": true},"
+echo "    {\"login\": \"user2\", \"id\": 456, \"verified\": false}"
+echo "  ]"
+echo "}"
+echo ""
+
+echo "Transformed Response:"
+echo "{"
+echo "  \"queryID\": \"a1b2c3d4e5f6...\" (32 hex chars),"
+echo "  \"payloadPath\": \"/tmp/gh-awmg/tools-calls/a1b2c3d4.../payload.json\","
+echo "  \"preview\": \"{\\\"total_count\\\":1000,\\\"items\\\":[{\\\"login\\\":\\\"user1\\\"...\" (500 chars),"
+echo "  \"schema\": {"
+echo "    \"total_count\": \"number\","
+echo "    \"items\": [{"
+echo "      \"login\": \"string\","
+echo "      \"id\": \"number\","
+echo "      \"verified\": \"boolean\""
+echo "    }]"
+echo "  },"
+echo "  \"originalSize\": 234,"
+echo "  \"truncated\": false"
+echo "}"
+echo ""
+
+echo "=== Benefits ==="
+echo "✓ Reduced token usage (schema is smaller than full data)"
+echo "✓ Better understanding (see structure without verbose data)"
+echo "✓ Audit trail (complete payloads saved to disk)"
+echo "✓ Easy debugging (query IDs for tracking)"
+echo "✓ Pure Go implementation (no external jq process)"
+echo ""
+
+echo "=== Configuration ==="
+echo "- Middleware is automatically applied to all backend tools"
+echo "- System tools (sys___*) are excluded"
+echo "- Payloads stored in: /tmp/gh-awmg/tools-calls/"
+echo "- Preview truncated at 500 characters"
+echo ""
+
+echo "=== Testing ==="
+echo "Run the middleware tests:"
+echo "  make test-unit"
+echo "  go test ./internal/middleware/... -v"
+echo ""
+
+echo "Demo complete!"
