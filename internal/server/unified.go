@@ -234,9 +234,21 @@ func (us *UnifiedServer) registerToolsFromBackend(serverID string) error {
 
 		// Create the handler function
 		handler := func(ctx context.Context, req *sdk.CallToolRequest, args interface{}) (*sdk.CallToolResult, interface{}, error) {
+			// Extract arguments from the request params (not the args parameter which is SDK internal state)
+			var toolArgs map[string]interface{}
+			if req.Params.Arguments != nil {
+				if err := json.Unmarshal(req.Params.Arguments, &toolArgs); err != nil {
+					logger.LogError("client", "Failed to unmarshal tool arguments, tool=%s, error=%v", toolNameCopy, err)
+					return &sdk.CallToolResult{IsError: true}, nil, fmt.Errorf("failed to parse arguments: %w", err)
+				}
+			} else {
+				// No arguments provided, use empty map
+				toolArgs = make(map[string]interface{})
+			}
+
 			// Log the MCP tool call request
 			sessionID := us.getSessionID(ctx)
-			argsJSON, _ := json.Marshal(args)
+			argsJSON, _ := json.Marshal(toolArgs)
 			logger.LogInfo("client", "MCP tool call request, session=%s, tool=%s, args=%s", sessionID, toolNameCopy, string(argsJSON))
 
 			// Check session is initialized
@@ -245,7 +257,7 @@ func (us *UnifiedServer) registerToolsFromBackend(serverID string) error {
 				return &sdk.CallToolResult{IsError: true}, nil, err
 			}
 
-			result, data, err := us.callBackendTool(ctx, serverIDCopy, toolNameCopy, args)
+			result, data, err := us.callBackendTool(ctx, serverIDCopy, toolNameCopy, toolArgs)
 
 			// Log the MCP tool call response
 			if err != nil {
@@ -269,14 +281,27 @@ func (us *UnifiedServer) registerToolsFromBackend(serverID string) error {
 		us.tools[prefixedName].Handler = finalHandler
 		us.toolsMu.Unlock()
 
-		// Register the tool with the SDK
-		// Note: InputSchema is intentionally omitted to avoid validation errors
-		// when backend MCP servers use different JSON Schema versions (e.g., draft-07)
-		// than what the SDK supports (draft-2020-12)
-		sdk.AddTool(us.server, &sdk.Tool{
+		// Register the tool with the SDK using the Server.AddTool method (not sdk.AddTool function)
+		// The method version does NOT perform schema validation, allowing us to include
+		// InputSchema from backends that use different JSON Schema versions (e.g., draft-07)
+		// without validation errors. This is critical for clients to understand tool parameters.
+		//
+		// We need to wrap our typed handler to match the simpler ToolHandler signature.
+		// The typed handler signature: func(context.Context, *CallToolRequest, interface{}) (*CallToolResult, interface{}, error)
+		// The simple handler signature: func(context.Context, *CallToolRequest) (*CallToolResult, error)
+		wrappedHandler := func(ctx context.Context, req *sdk.CallToolRequest) (*sdk.CallToolResult, error) {
+			// Call the original typed handler
+			// The third parameter would be the pre-unmarshaled/validated input if using sdk.AddTool,
+			// but we handle unmarshaling ourselves in the handler, so we pass nil
+			result, _, err := handler(ctx, req, nil)
+			return result, err
+		}
+
+		us.server.AddTool(&sdk.Tool{
 			Name:        prefixedName,
 			Description: toolDesc,
-		}, finalHandler)
+			InputSchema: normalizedSchema, // Include the schema for clients to understand parameters
+		}, wrappedHandler)
 
 		log.Printf("Registered tool: %s", prefixedName)
 	}
@@ -289,12 +314,21 @@ func (us *UnifiedServer) registerToolsFromBackend(serverID string) error {
 func (us *UnifiedServer) registerSysTools() error {
 	// Create sys_init handler
 	sysInitHandler := func(ctx context.Context, req *sdk.CallToolRequest, args interface{}) (*sdk.CallToolResult, interface{}, error) {
+		// Extract arguments from the request params
+		var toolArgs map[string]interface{}
+		if req.Params.Arguments != nil {
+			if err := json.Unmarshal(req.Params.Arguments, &toolArgs); err != nil {
+				logger.LogError("client", "Failed to unmarshal sys_init arguments, error=%v", err)
+				return &sdk.CallToolResult{IsError: true}, nil, fmt.Errorf("failed to parse arguments: %w", err)
+			}
+		} else {
+			toolArgs = make(map[string]interface{})
+		}
+
 		// Extract token from args
 		token := ""
-		if argsMap, ok := args.(map[string]interface{}); ok {
-			if t, ok := argsMap["token"].(string); ok {
-				token = t
-			}
+		if t, ok := toolArgs["token"].(string); ok {
+			token = t
 		}
 
 		// Get session ID from context
@@ -467,6 +501,51 @@ func (g *guardBackendCaller) CallTool(ctx context.Context, toolName string, args
 	return result, nil
 }
 
+// convertToCallToolResult converts backend result data to SDK CallToolResult format
+// The backend returns a JSON object with a "content" field containing an array of content items
+func convertToCallToolResult(data interface{}) (*sdk.CallToolResult, error) {
+	// Try to marshal and unmarshal to get the structure
+	dataBytes, err := json.Marshal(data)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal backend result: %w", err)
+	}
+
+	// Parse the backend result structure
+	var backendResult struct {
+		Content []struct {
+			Type string `json:"type"`
+			Text string `json:"text,omitempty"`
+		} `json:"content"`
+		IsError bool `json:"isError,omitempty"`
+	}
+
+	if err := json.Unmarshal(dataBytes, &backendResult); err != nil {
+		return nil, fmt.Errorf("failed to parse backend result structure: %w", err)
+	}
+
+	// Convert content items to SDK Content format
+	content := make([]sdk.Content, 0, len(backendResult.Content))
+	for _, item := range backendResult.Content {
+		switch item.Type {
+		case "text":
+			content = append(content, &sdk.TextContent{
+				Text: item.Text,
+			})
+		default:
+			// For unknown types, try to preserve as text
+			log.Printf("Warning: Unknown content type '%s', treating as text", item.Type)
+			content = append(content, &sdk.TextContent{
+				Text: item.Text,
+			})
+		}
+	}
+
+	return &sdk.CallToolResult{
+		Content: content,
+		IsError: backendResult.IsError,
+	}, nil
+}
+
 // callBackendTool calls a tool on a backend server with DIFC enforcement
 func (us *UnifiedServer) callBackendTool(ctx context.Context, serverID, toolName string, args interface{}) (*sdk.CallToolResult, interface{}, error) {
 	// Note: Session validation happens at the tool registration level via closures
@@ -598,7 +677,13 @@ func (us *UnifiedServer) callBackendTool(ctx context.Context, serverID, toolName
 		}
 	}
 
-	return nil, finalResult, nil
+	// Convert finalResult to SDK CallToolResult format
+	callResult, err := convertToCallToolResult(finalResult)
+	if err != nil {
+		return &sdk.CallToolResult{IsError: true}, nil, fmt.Errorf("failed to convert result: %w", err)
+	}
+
+	return callResult, finalResult, nil
 }
 
 // Run starts the unified MCP server on the specified transport
