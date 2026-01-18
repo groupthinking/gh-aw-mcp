@@ -21,7 +21,7 @@ type HealthResponse struct {
 // BuildHealthResponse constructs a HealthResponse from the unified server's status
 func BuildHealthResponse(unifiedServer *UnifiedServer) HealthResponse {
 	logHealth.Print("Building health response")
-	
+
 	// Get server status
 	serverStatus := unifiedServer.GetServerStatus()
 	logHealth.Printf("Retrieved status for %d servers", len(serverStatus))
@@ -50,7 +50,7 @@ func BuildHealthResponse(unifiedServer *UnifiedServer) HealthResponse {
 func HandleHealth(unifiedServer *UnifiedServer) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		logHealth.Printf("Health check request: method=%s, remote=%s", r.Method, r.RemoteAddr)
-		
+
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 
