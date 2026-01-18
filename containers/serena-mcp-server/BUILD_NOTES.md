@@ -1,4 +1,4 @@
-# Serena MCP Server Container - Build Issues
+# Serena MCP Server Container - Build Notes
 
 ## Current Status
 
@@ -7,6 +7,15 @@ The Serena MCP server container Dockerfile has been created with support for:
 - Java (OpenJDK 21 via default-jdk)
 - JavaScript/TypeScript (Node.js + npm)
 - Go (golang-go package)
+
+## Recent Fixes
+
+### PATH Configuration Fix (2026-01-18)
+Fixed an issue where the `go` command was not found in the container's PATH during runtime:
+- **Problem**: Line 40 of the Dockerfile explicitly set `/usr/bin` in the PATH, which was redundant and potentially caused PATH resolution issues
+- **Solution**: Changed `ENV PATH="${GOPATH}/bin:/usr/bin:${PATH}"` to `ENV PATH="${GOPATH}/bin:${PATH}"`
+- **Impact**: Simplifies PATH configuration by relying on the base image's default PATH, which already includes `/usr/bin`
+- **Testing**: Smoke tests should now successfully execute `go version` within the container
 
 ## Build Issues Encountered
 
