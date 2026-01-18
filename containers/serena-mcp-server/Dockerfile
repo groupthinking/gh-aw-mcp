@@ -37,7 +37,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 ENV JAVA_HOME=/usr/lib/jvm/default-java
 ENV PATH="${JAVA_HOME}/bin:${PATH}"
 ENV GOPATH=/go
-ENV PATH="${GOPATH}/bin:/usr/bin:${PATH}"
+ENV PATH="${GOPATH}/bin:${PATH}"
 
 # Install Serena MCP server from GitHub using pip
 # Serena is a Python package, so we can install it directly
