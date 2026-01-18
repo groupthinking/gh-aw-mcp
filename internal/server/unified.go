@@ -235,15 +235,10 @@ func (us *UnifiedServer) registerToolsFromBackend(serverID string) error {
 		// Create the handler function
 		handler := func(ctx context.Context, req *sdk.CallToolRequest, args interface{}) (*sdk.CallToolResult, interface{}, error) {
 			// Extract arguments from the request params (not the args parameter which is SDK internal state)
-			var toolArgs map[string]interface{}
-			if req.Params.Arguments != nil {
-				if err := json.Unmarshal(req.Params.Arguments, &toolArgs); err != nil {
-					logger.LogError("client", "Failed to unmarshal tool arguments, tool=%s, error=%v", toolNameCopy, err)
-					return &sdk.CallToolResult{IsError: true}, nil, fmt.Errorf("failed to parse arguments: %w", err)
-				}
-			} else {
-				// No arguments provided, use empty map
-				toolArgs = make(map[string]interface{})
+			toolArgs, err := parseToolArguments(req)
+			if err != nil {
+				logger.LogError("client", "Failed to unmarshal tool arguments, tool=%s, error=%v", toolNameCopy, err)
+				return &sdk.CallToolResult{IsError: true}, nil, err
 			}
 
 			// Log the MCP tool call request
@@ -315,14 +310,10 @@ func (us *UnifiedServer) registerSysTools() error {
 	// Create sys_init handler
 	sysInitHandler := func(ctx context.Context, req *sdk.CallToolRequest, args interface{}) (*sdk.CallToolResult, interface{}, error) {
 		// Extract arguments from the request params
-		var toolArgs map[string]interface{}
-		if req.Params.Arguments != nil {
-			if err := json.Unmarshal(req.Params.Arguments, &toolArgs); err != nil {
-				logger.LogError("client", "Failed to unmarshal sys_init arguments, error=%v", err)
-				return &sdk.CallToolResult{IsError: true}, nil, fmt.Errorf("failed to parse arguments: %w", err)
-			}
-		} else {
-			toolArgs = make(map[string]interface{})
+		toolArgs, err := parseToolArguments(req)
+		if err != nil {
+			logger.LogError("client", "Failed to unmarshal sys_init arguments, error=%v", err)
+			return &sdk.CallToolResult{IsError: true}, nil, err
 		}
 
 		// Extract token from args
@@ -690,6 +681,21 @@ func (us *UnifiedServer) callBackendTool(ctx context.Context, serverID, toolName
 func (us *UnifiedServer) Run(transport sdk.Transport) error {
 	log.Println("Starting unified MCP server...")
 	return us.server.Run(us.ctx, transport)
+}
+
+// parseToolArguments extracts and unmarshals tool arguments from a CallToolRequest
+// Returns the parsed arguments as a map, or an error if parsing fails
+func parseToolArguments(req *sdk.CallToolRequest) (map[string]interface{}, error) {
+	var toolArgs map[string]interface{}
+	if req.Params.Arguments != nil {
+		if err := json.Unmarshal(req.Params.Arguments, &toolArgs); err != nil {
+			return nil, fmt.Errorf("failed to parse arguments: %w", err)
+		}
+	} else {
+		// No arguments provided, use empty map
+		toolArgs = make(map[string]interface{})
+	}
+	return toolArgs, nil
 }
 
 // getSessionID extracts the MCP session ID from the context
