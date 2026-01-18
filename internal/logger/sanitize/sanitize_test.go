@@ -340,3 +340,158 @@ func TestSecretPatternsCount(t *testing.T) {
 
 	assert.Equal(t, expectedPatternCount, actualCount, "%d secret patterns, got %d")
 }
+
+func TestTruncateSecret(t *testing.T) {
+	tests := []struct {
+		name  string
+		input string
+		want  string
+	}{
+		{
+			name:  "Empty string",
+			input: "",
+			want:  "",
+		},
+		{
+			name:  "Single character",
+			input: "a",
+			want:  "...",
+		},
+		{
+			name:  "Four characters",
+			input: "abcd",
+			want:  "...",
+		},
+		{
+			name:  "Five characters",
+			input: "abcde",
+			want:  "abcd...",
+		},
+		{
+			name:  "Long string",
+			input: "my-secret-api-key-12345",
+			want:  "my-s...",
+		},
+		{
+			name:  "API key with Bearer prefix",
+			input: "Bearer my-token-123",
+			want:  "Bear...",
+		},
+		{
+			name:  "Unicode characters",
+			input: "key-with-émojis-🔑",
+			want:  "key-...",
+		},
+		{
+			name:  "Very long API key",
+			input: "my-super-long-api-key-with-many-characters-12345678901234567890",
+			want:  "my-s...",
+		},
+		{
+			name:  "Special characters",
+			input: "key!@#$%^&*()",
+			want:  "key!...",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := TruncateSecret(tt.input)
+			assert.Equal(t, tt.want, got)
+		})
+	}
+}
+
+func TestTruncateSecretMap(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    map[string]string
+		expected map[string]string
+	}{
+		{
+			name:     "nil env map",
+			input:    nil,
+			expected: nil,
+		},
+		{
+			name:     "empty env map",
+			input:    map[string]string{},
+			expected: map[string]string{},
+		},
+		{
+			name: "single env var with long value",
+			input: map[string]string{
+				"GITHUB_PERSONAL_ACCESS_TOKEN": "ghs_1234567890abcdefghijklmnop",
+			},
+			expected: map[string]string{
+				"GITHUB_PERSONAL_ACCESS_TOKEN": "ghs_...",
+			},
+		},
+		{
+			name: "multiple env vars with various lengths",
+			input: map[string]string{
+				"GITHUB_PERSONAL_ACCESS_TOKEN": "ghs_1234567890abcdefghijklmnop",
+				"API_KEY":                      "key_abc123xyz",
+				"SHORT":                        "abc",
+			},
+			expected: map[string]string{
+				"GITHUB_PERSONAL_ACCESS_TOKEN": "ghs_...",
+				"API_KEY":                      "key_...",
+				"SHORT":                        "...",
+			},
+		},
+		{
+			name: "env var with exactly 4 characters",
+			input: map[string]string{
+				"TEST": "1234",
+			},
+			expected: map[string]string{
+				"TEST": "...",
+			},
+		},
+		{
+			name: "env var with 5 characters",
+			input: map[string]string{
+				"TEST": "12345",
+			},
+			expected: map[string]string{
+				"TEST": "1234...",
+			},
+		},
+		{
+			name: "env var with empty value",
+			input: map[string]string{
+				"EMPTY": "",
+			},
+			expected: map[string]string{
+				"EMPTY": "",
+			},
+		},
+		{
+			name: "multiple env vars with mixed lengths",
+			input: map[string]string{
+				"VAR1": "a",
+				"VAR2": "ab",
+				"VAR3": "abc",
+				"VAR4": "abcd",
+				"VAR5": "abcde",
+				"VAR6": "abcdef",
+			},
+			expected: map[string]string{
+				"VAR1": "...",
+				"VAR2": "...",
+				"VAR3": "...",
+				"VAR4": "...",
+				"VAR5": "abcd...",
+				"VAR6": "abcd...",
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := TruncateSecretMap(tt.input)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}

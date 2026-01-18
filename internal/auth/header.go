@@ -5,12 +5,33 @@
 // which requires Authorization headers to contain the API key directly
 // without any scheme prefix (e.g., NOT "Bearer <key>").
 //
-// Example usage:
+// The package provides both full parsing with error handling (ParseAuthHeader)
+// and convenience methods for specific use cases (ExtractAgentID, ValidateAPIKey).
 //
+// Usage Guidelines:
+//
+//   - Use ParseAuthHeader() for complete authentication with error handling:
+//     Returns both API key and agent ID, with errors for missing/invalid headers.
+//
+//   - Use ExtractAgentID() when you only need the agent ID and want automatic
+//     fallback to "default" instead of error handling.
+//
+//   - Use ValidateAPIKey() to check if a provided key matches the expected value.
+//     Automatically handles the case where authentication is disabled (no expected key).
+//
+// Example:
+//
+//	// Full authentication
 //	apiKey, agentID, err := auth.ParseAuthHeader(r.Header.Get("Authorization"))
 //	if err != nil {
-//		// Handle error
+//		return err
 //	}
+//	if !auth.ValidateAPIKey(apiKey, expectedKey) {
+//		return errors.New("invalid API key")
+//	}
+//
+//	// Extract agent ID only (for context, not authentication)
+//	agentID := auth.ExtractAgentID(r.Header.Get("Authorization"))
 package auth
 
 import (
@@ -18,6 +39,7 @@ import (
 	"strings"
 
 	"github.com/githubnext/gh-aw-mcpg/internal/logger"
+	"github.com/githubnext/gh-aw-mcpg/internal/logger/sanitize"
 )
 
 var log = logger.New("auth:header")
@@ -28,18 +50,6 @@ var (
 	// ErrInvalidAuthHeader is returned when the Authorization header format is invalid
 	ErrInvalidAuthHeader = errors.New("invalid Authorization header format")
 )
-
-// sanitizeForLogging returns a sanitized version of the input string for safe logging.
-// It shows only the first 4 characters followed by "..." to prevent exposing sensitive data.
-// For strings with 4 or fewer characters, it returns only "...".
-func sanitizeForLogging(input string) string {
-	if len(input) > 4 {
-		return input[:4] + "..."
-	} else if len(input) > 0 {
-		return "..."
-	}
-	return ""
-}
 
 // ParseAuthHeader parses the Authorization header and extracts the API key and agent ID.
 // Per MCP spec 7.1, the Authorization header should contain the API key directly
@@ -54,7 +64,7 @@ func sanitizeForLogging(input string) string {
 //   - agentID: The extracted agent/session identifier
 //   - error: ErrMissingAuthHeader if header is empty, nil otherwise
 func ParseAuthHeader(authHeader string) (apiKey string, agentID string, error error) {
-	log.Printf("Parsing auth header: sanitized=%s, length=%d", sanitizeForLogging(authHeader), len(authHeader))
+	log.Printf("Parsing auth header: sanitized=%s, length=%d", sanitize.TruncateSecret(authHeader), len(authHeader))
 
 	if authHeader == "" {
 		log.Print("Auth header missing, returning error")
@@ -95,4 +105,24 @@ func ValidateAPIKey(provided, expected string) bool {
 	matches := provided == expected
 	log.Printf("API key validation result: matches=%t", matches)
 	return matches
+}
+
+// ExtractAgentID extracts the agent ID from an Authorization header.
+// This is a convenience wrapper around ParseAuthHeader that only returns the agent ID.
+// Returns "default" if the header is empty or cannot be parsed.
+//
+// This function is intended for use cases where you only need the agent ID
+// and don't need full error handling. For complete authentication handling,
+// use ParseAuthHeader instead.
+func ExtractAgentID(authHeader string) string {
+	if authHeader == "" {
+		return "default"
+	}
+
+	_, agentID, err := ParseAuthHeader(authHeader)
+	if err != nil {
+		return "default"
+	}
+
+	return agentID
 }

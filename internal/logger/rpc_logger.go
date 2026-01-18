@@ -1,12 +1,25 @@
+// Package logger provides structured logging for the MCP Gateway.
+//
+// This file contains RPC message logging coordination, managing the flow of messages
+// across multiple output formats (text, markdown, JSONL).
+//
+// File Organization:
+//
+// - rpc_logger.go (this file): Coordination of RPC logging across formats
+// - rpc_formatter.go: Text and markdown formatting functions
+// - rpc_helpers.go: Utility functions for payload processing
+//
+// The package supports logging RPC messages in three formats:
+//
+// 1. Text logs: Compact single-line format for grep-friendly searching
+// 2. Markdown logs: Human-readable format with syntax highlighting
+// 3. JSONL logs: Machine-readable format for structured analysis
+//
+// Example:
+//
+//	logger.LogRPCRequest(logger.RPCDirectionOutbound, "github", "tools/list", payload)
+//	logger.LogRPCResponse(logger.RPCDirectionInbound, "github", responsePayload, nil)
 package logger
-
-import (
-	"encoding/json"
-	"fmt"
-	"strings"
-
-	"github.com/githubnext/gh-aw-mcpg/internal/logger/sanitize"
-)
 
 // RPCMessageType represents the direction of an RPC message
 type RPCMessageType string
@@ -44,203 +57,6 @@ type RPCMessageInfo struct {
 	PayloadSize int                 // Size of the payload in bytes
 	Payload     string              // First N characters of payload (sanitized)
 	Error       string              // Error message if any (for responses)
-}
-
-// truncateAndSanitize truncates the payload to max length and sanitizes secrets
-func truncateAndSanitize(payload string, maxLength int) string {
-	// First sanitize secrets
-	sanitized := sanitize.SanitizeString(payload)
-
-	// Then truncate if needed
-	if len(sanitized) > maxLength {
-		return sanitized[:maxLength] + "..."
-	}
-	return sanitized
-}
-
-// extractEssentialFields extracts key fields from the payload for logging
-func extractEssentialFields(payload []byte) map[string]interface{} {
-	var data map[string]interface{}
-	if err := json.Unmarshal(payload, &data); err != nil {
-		return nil
-	}
-
-	// Extract only essential fields
-	essential := make(map[string]interface{})
-
-	// Common JSON-RPC fields
-	if method, ok := data["method"].(string); ok {
-		essential["method"] = method
-	}
-	if id, ok := data["id"]; ok {
-		essential["id"] = id
-	}
-	if jsonrpc, ok := data["jsonrpc"].(string); ok {
-		essential["jsonrpc"] = jsonrpc
-	}
-
-	// For responses, include error info
-	if errData, ok := data["error"]; ok {
-		essential["error"] = errData
-	}
-
-	// For requests, include params summary (but not full params)
-	if params, ok := data["params"]; ok {
-		if paramsMap, ok := params.(map[string]interface{}); ok {
-			// Include param count and keys, but not values
-			essential["params_keys"] = getMapKeys(paramsMap)
-		}
-	}
-
-	return essential
-}
-
-// getMapKeys returns the keys of a map
-func getMapKeys(m map[string]interface{}) []string {
-	keys := make([]string, 0, len(m))
-	for k := range m {
-		keys = append(keys, k)
-	}
-	return keys
-}
-
-// formatRPCMessage formats an RPC message for logging
-func formatRPCMessage(info *RPCMessageInfo) string {
-	// Short format: server→method (or server←resp) size payload
-	var dir string
-	if info.Direction == RPCDirectionOutbound {
-		dir = "→"
-	} else {
-		dir = "←"
-	}
-
-	var parts []string
-
-	// Server and direction
-	if info.ServerID != "" {
-		if info.Method != "" {
-			parts = append(parts, fmt.Sprintf("%s%s%s", info.ServerID, dir, info.Method))
-		} else {
-			parts = append(parts, fmt.Sprintf("%s%sresp", info.ServerID, dir))
-		}
-	}
-
-	// Size
-	parts = append(parts, fmt.Sprintf("%db", info.PayloadSize))
-
-	// Error (if present)
-	if info.Error != "" {
-		parts = append(parts, fmt.Sprintf("err:%s", info.Error))
-	}
-
-	// Payload preview (if present)
-	if info.Payload != "" {
-		parts = append(parts, info.Payload)
-	}
-
-	return strings.Join(parts, " ")
-}
-
-// formatJSONWithoutFields formats JSON by removing specified fields and compacting to single line
-// Returns the formatted string, a boolean indicating if the JSON was valid, and a boolean indicating if empty
-func formatJSONWithoutFields(jsonStr string, fieldsToRemove []string) (string, bool, bool) {
-	var data map[string]interface{}
-	if err := json.Unmarshal([]byte(jsonStr), &data); err != nil {
-		// If not valid JSON, return as-is with false
-		return jsonStr, false, false
-	}
-
-	// Remove specified fields
-	for _, field := range fieldsToRemove {
-		delete(data, field)
-	}
-
-	// Check if only "params": null remains (or equivalent empty state)
-	isEmpty := isEffectivelyEmpty(data)
-
-	// Re-marshal as compact single line
-	formatted, err := json.Marshal(data)
-	if err != nil {
-		return jsonStr, false, false
-	}
-
-	return string(formatted), true, isEmpty
-}
-
-// isEffectivelyEmpty checks if the data is effectively empty (only contains params: null)
-func isEffectivelyEmpty(data map[string]interface{}) bool {
-	// If empty, it's empty
-	if len(data) == 0 {
-		return true
-	}
-
-	// If only one field and it's "params" with null value, it's empty
-	if len(data) == 1 {
-		if params, ok := data["params"]; ok && params == nil {
-			return true
-		}
-	}
-
-	return false
-}
-
-// formatRPCMessageMarkdown formats an RPC message for markdown logging
-func formatRPCMessageMarkdown(info *RPCMessageInfo) string {
-	// Concise format: **server**→method \n```json \n{formatted json} \n```
-	var dir string
-	if info.Direction == RPCDirectionOutbound {
-		dir = "→"
-	} else {
-		dir = "←"
-	}
-
-	var message string
-
-	// Server, direction, and method/type
-	if info.ServerID != "" {
-		if info.Method != "" {
-			message = fmt.Sprintf("**%s**%s`%s`", info.ServerID, dir, info.Method)
-
-			// For tools/call, extract and display the tool name
-			if info.Method == "tools/call" && info.Payload != "" {
-				var data map[string]interface{}
-				if err := json.Unmarshal([]byte(info.Payload), &data); err == nil {
-					if params, ok := data["params"].(map[string]interface{}); ok {
-						if toolName, ok := params["name"].(string); ok && toolName != "" {
-							message += fmt.Sprintf(" `%s`", toolName)
-						}
-					}
-				}
-			}
-		} else {
-			message = fmt.Sprintf("**%s**%s`resp`", info.ServerID, dir)
-		}
-	}
-
-	// Add formatted payload in code block
-	if info.Payload != "" {
-		// Remove jsonrpc and method fields, then format
-		formatted, isValidJSON, isEmpty := formatJSONWithoutFields(info.Payload, []string{"jsonrpc", "method"})
-		if isValidJSON {
-			// Don't show JSON block if it's effectively empty (only params: null)
-			if !isEmpty {
-				// Valid JSON: use json code block for syntax highlighting (compact single line)
-				// Empty line before code block per markdown convention
-				// Code fences on their own lines with compact JSON content
-				message += fmt.Sprintf("\n\n```json\n%s\n```", formatted)
-			}
-		} else {
-			// Invalid JSON: use inline backticks to avoid malformed markdown
-			message += fmt.Sprintf(" `%s`", formatted)
-		}
-	}
-
-	// Error (if present)
-	if info.Error != "" {
-		message += fmt.Sprintf(" ⚠️`%s`", info.Error)
-	}
-
-	return message
 }
 
 // logRPCMessageToAll is a helper that logs RPC messages to text, markdown, and JSONL logs

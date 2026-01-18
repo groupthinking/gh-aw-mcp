@@ -1,3 +1,17 @@
+// Package logger provides structured logging for the MCP Gateway.
+//
+// This file contains helper functions for managing global logger state with proper
+// mutex handling. These helpers encapsulate common patterns for initializing and
+// closing global loggers (FileLogger, JSONLLogger, MarkdownLogger) to reduce code
+// duplication while maintaining thread safety.
+//
+// Functions in this file follow a consistent pattern:
+//
+// - init*: Initialize a global logger with proper locking and cleanup of any existing logger
+// - close*: Close and clear a global logger with proper locking
+//
+// These helpers are used internally by the logger package and should not be called
+// directly by external code. Use the public Init* and Close* functions instead.
 package logger
 
 // This file contains helper functions that encapsulate the common patterns

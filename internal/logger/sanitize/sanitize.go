@@ -1,3 +1,31 @@
+// Package sanitize provides utilities for redacting sensitive information from logs.
+//
+// This package offers two complementary approaches to secret sanitization:
+//
+//  1. Pattern-based detection: SanitizeString() and SanitizeJSON() use regex patterns
+//     to identify and redact secrets like API keys, tokens, and passwords.
+//
+//  2. Prefix truncation: TruncateSecret() and TruncateSecretMap() show only the first
+//     4 characters of values, making them safe for logging without exposing full secrets.
+//
+// Usage Guidelines:
+//
+//   - Use TruncateSecret()/TruncateSecretMap() for auth headers and environment variables
+//     where you want to preserve a hint of the value for debugging.
+//
+//   - Use SanitizeString()/SanitizeJSON() for full payload sanitization where secrets
+//     may appear in various formats throughout the data.
+//
+// Example:
+//
+//	// For auth headers
+//	log.Printf("Auth: %s", sanitize.TruncateSecret(authHeader)) // "ghp_..." instead of full token
+//
+//	// For environment variables
+//	log.Printf("Env: %v", sanitize.TruncateSecretMap(envVars))
+//
+//	// For JSON payloads
+//	sanitized := sanitize.SanitizeJSON(payload) // Replaces detected secrets with [REDACTED]
 package sanitize
 
 import (
@@ -38,6 +66,33 @@ func SanitizeString(message string) string {
 		})
 	}
 	return result
+}
+
+// TruncateSecret returns a sanitized version of the input string for safe logging.
+// It shows only the first 4 characters followed by "..." to prevent exposing sensitive data.
+// For strings with 4 or fewer characters, it returns only "...".
+// For empty strings, it returns an empty string.
+func TruncateSecret(input string) string {
+	if len(input) > 4 {
+		return input[:4] + "..."
+	} else if len(input) > 0 {
+		return "..."
+	}
+	return ""
+}
+
+// TruncateSecretMap returns a sanitized version of environment variables
+// where each value is truncated to first 4 characters followed by "..."
+// This prevents sensitive information like API keys from being logged in full.
+func TruncateSecretMap(env map[string]string) map[string]string {
+	if env == nil {
+		return nil
+	}
+	sanitized := make(map[string]string, len(env))
+	for key, value := range env {
+		sanitized[key] = TruncateSecret(value)
+	}
+	return sanitized
 }
 
 // SanitizeJSON sanitizes a JSON payload by applying regex patterns to the entire string
