@@ -5,12 +5,33 @@
 // which requires Authorization headers to contain the API key directly
 // without any scheme prefix (e.g., NOT "Bearer <key>").
 //
-// Example usage:
+// The package provides both full parsing with error handling (ParseAuthHeader)
+// and convenience methods for specific use cases (ExtractAgentID, ValidateAPIKey).
 //
+// Usage Guidelines:
+//
+// - Use ParseAuthHeader() for complete authentication with error handling:
+//   Returns both API key and agent ID, with errors for missing/invalid headers.
+//
+// - Use ExtractAgentID() when you only need the agent ID and want automatic
+//   fallback to "default" instead of error handling.
+//
+// - Use ValidateAPIKey() to check if a provided key matches the expected value.
+//   Automatically handles the case where authentication is disabled (no expected key).
+//
+// Example:
+//
+//	// Full authentication
 //	apiKey, agentID, err := auth.ParseAuthHeader(r.Header.Get("Authorization"))
 //	if err != nil {
-//		// Handle error
+//		return err
 //	}
+//	if !auth.ValidateAPIKey(apiKey, expectedKey) {
+//		return errors.New("invalid API key")
+//	}
+//
+//	// Extract agent ID only (for context, not authentication)
+//	agentID := auth.ExtractAgentID(r.Header.Get("Authorization"))
 package auth
 
 import (

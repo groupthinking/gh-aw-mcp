@@ -1,3 +1,24 @@
+// Package logger provides structured logging for the MCP Gateway.
+//
+// This file contains RPC message logging coordination, managing the flow of messages
+// across multiple output formats (text, markdown, JSONL).
+//
+// File Organization:
+//
+// - rpc_logger.go (this file): Coordination of RPC logging across formats
+// - rpc_formatter.go: Text and markdown formatting functions
+// - rpc_helpers.go: Utility functions for payload processing
+//
+// The package supports logging RPC messages in three formats:
+//
+// 1. Text logs: Compact single-line format for grep-friendly searching
+// 2. Markdown logs: Human-readable format with syntax highlighting
+// 3. JSONL logs: Machine-readable format for structured analysis
+//
+// Example:
+//
+//	logger.LogRPCRequest(logger.RPCDirectionOutbound, "github", "tools/list", payload)
+//	logger.LogRPCResponse(logger.RPCDirectionInbound, "github", responsePayload, nil)
 package logger
 
 // RPCMessageType represents the direction of an RPC message

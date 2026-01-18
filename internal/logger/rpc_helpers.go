@@ -1,3 +1,16 @@
+// Package logger provides structured logging for the MCP Gateway.
+//
+// This file contains helper functions for processing RPC message payloads.
+//
+// Functions in this file:
+//
+// - truncateAndSanitize: Combines secret sanitization with length truncation
+// - extractEssentialFields: Extracts key JSON-RPC fields for compact logging
+// - getMapKeys: Utility for extracting map keys without values
+// - isEffectivelyEmpty: Checks if data is effectively empty (e.g., only params: null)
+//
+// These helpers are used by the RPC logging system to safely and efficiently
+// process message payloads before logging them.
 package logger
 
 import (

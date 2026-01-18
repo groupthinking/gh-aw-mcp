@@ -1,3 +1,17 @@
+// Package logger provides structured logging for the MCP Gateway.
+//
+// This file contains formatting functions for RPC messages in text and markdown formats.
+//
+// Text Format: Compact, single-line format optimized for grep and command-line tools
+//
+//	Example: "github→tools/list 1234b {...}"
+//
+// Markdown Format: Human-readable with syntax highlighting, suitable for documentation
+//
+//	Example: "**github**→`tools/list`\n\n```json\n{...}\n```"
+//
+// Both formats use directional arrows (→ for outbound, ← for inbound) and support
+// special handling for tools/call methods by extracting and displaying tool names.
 package logger
 
 import (

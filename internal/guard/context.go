@@ -1,3 +1,25 @@
+// Package guard provides security context management and guard registry for the MCP Gateway.
+//
+// This package is responsible for managing security labels (DIFC - Decentralized Information
+// Flow Control) and extracting agent identifiers from request contexts.
+//
+// Relationship with internal/auth:
+//
+// - internal/auth: Primary authentication logic (header parsing, validation)
+// - internal/guard: Security context management (agent ID tracking, guard registry)
+//
+// For new code, prefer using internal/auth for authentication-related operations.
+// The guard package's ExtractAgentIDFromAuthHeader() is deprecated and delegates
+// to auth.ExtractAgentID() for centralized authentication logic.
+//
+// Example:
+//
+//	// Store agent ID in context (use auth.ExtractAgentID for parsing)
+//	agentID := auth.ExtractAgentID(authHeader)
+//	ctx = guard.SetAgentIDInContext(ctx, agentID)
+//
+//	// Retrieve agent ID from context
+//	agentID := guard.GetAgentIDFromContext(ctx) // Returns "default" if not found
 package guard
 
 import (
