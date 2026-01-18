@@ -2,19 +2,19 @@
 //
 // This package offers two complementary approaches to secret sanitization:
 //
-// 1. Pattern-based detection: SanitizeString() and SanitizeJSON() use regex patterns
-//    to identify and redact secrets like API keys, tokens, and passwords.
+//  1. Pattern-based detection: SanitizeString() and SanitizeJSON() use regex patterns
+//     to identify and redact secrets like API keys, tokens, and passwords.
 //
-// 2. Prefix truncation: TruncateSecret() and TruncateSecretMap() show only the first
-//    4 characters of values, making them safe for logging without exposing full secrets.
+//  2. Prefix truncation: TruncateSecret() and TruncateSecretMap() show only the first
+//     4 characters of values, making them safe for logging without exposing full secrets.
 //
 // Usage Guidelines:
 //
-// - Use TruncateSecret()/TruncateSecretMap() for auth headers and environment variables
-//   where you want to preserve a hint of the value for debugging.
+//   - Use TruncateSecret()/TruncateSecretMap() for auth headers and environment variables
+//     where you want to preserve a hint of the value for debugging.
 //
-// - Use SanitizeString()/SanitizeJSON() for full payload sanitization where secrets
-//   may appear in various formats throughout the data.
+//   - Use SanitizeString()/SanitizeJSON() for full payload sanitization where secrets
+//     may appear in various formats throughout the data.
 //
 // Example:
 //

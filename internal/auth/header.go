@@ -10,14 +10,14 @@
 //
 // Usage Guidelines:
 //
-// - Use ParseAuthHeader() for complete authentication with error handling:
-//   Returns both API key and agent ID, with errors for missing/invalid headers.
+//   - Use ParseAuthHeader() for complete authentication with error handling:
+//     Returns both API key and agent ID, with errors for missing/invalid headers.
 //
-// - Use ExtractAgentID() when you only need the agent ID and want automatic
-//   fallback to "default" instead of error handling.
+//   - Use ExtractAgentID() when you only need the agent ID and want automatic
+//     fallback to "default" instead of error handling.
 //
-// - Use ValidateAPIKey() to check if a provided key matches the expected value.
-//   Automatically handles the case where authentication is disabled (no expected key).
+//   - Use ValidateAPIKey() to check if a provided key matches the expected value.
+//     Automatically handles the case where authentication is disabled (no expected key).
 //
 // Example:
 //
