@@ -977,7 +977,7 @@ jobs:
             actions
           persist-credentials: false
       - name: Setup Scripts
-        uses: ./actions/setup
+        uses: githubnext/gh-aw/actions/setup@v0.36.0
         with:
           destination: /opt/gh-aw/actions
       - name: Debug job inputs
