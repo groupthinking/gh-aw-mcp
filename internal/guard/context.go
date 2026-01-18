@@ -2,7 +2,8 @@ package guard
 
 import (
 	"context"
-	"strings"
+
+	"github.com/githubnext/gh-aw-mcpg/internal/auth"
 )
 
 // ContextKey is used for storing values in context
@@ -30,35 +31,14 @@ func SetAgentIDInContext(ctx context.Context, agentID string) context.Context {
 	return context.WithValue(ctx, AgentIDContextKey, agentID)
 }
 
-// ExtractAgentIDFromAuthHeader extracts agent ID from Authorization header
+// ExtractAgentIDFromAuthHeader extracts agent ID from Authorization header.
 //
-// Note: For MCP spec 7.1 compliant parsing, see internal/auth.ParseAuthHeader()
-// which provides centralized authentication header parsing.
+// Deprecated: Use auth.ExtractAgentID() instead for centralized authentication parsing.
+// This function is maintained for backward compatibility but delegates to the auth package.
 //
-// This function supports formats:
-//   - "Bearer <token>" - uses token as agent ID
-//   - "Agent <agent-id>" - uses agent-id directly
-//   - Any other format - uses the entire value as agent ID
+// For MCP spec 7.1 compliant parsing with full error handling, use auth.ParseAuthHeader().
 func ExtractAgentIDFromAuthHeader(authHeader string) string {
-	if authHeader == "" {
-		return "default"
-	}
-
-	// Handle "Bearer <token>" format
-	if strings.HasPrefix(authHeader, "Bearer ") {
-		token := strings.TrimPrefix(authHeader, "Bearer ")
-		// Use the token as the agent ID
-		// In production, you might want to validate/decode the token
-		return token
-	}
-
-	// Handle "Agent <agent-id>" format
-	if strings.HasPrefix(authHeader, "Agent ") {
-		return strings.TrimPrefix(authHeader, "Agent ")
-	}
-
-	// Use the entire header value as agent ID
-	return authHeader
+	return auth.ExtractAgentID(authHeader)
 }
 
 // GetRequestStateFromContext retrieves guard request state from context

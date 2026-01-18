@@ -85,3 +85,23 @@ func ValidateAPIKey(provided, expected string) bool {
 	log.Printf("API key validation result: matches=%t", matches)
 	return matches
 }
+
+// ExtractAgentID extracts the agent ID from an Authorization header.
+// This is a convenience wrapper around ParseAuthHeader that only returns the agent ID.
+// Returns "default" if the header is empty or cannot be parsed.
+//
+// This function is intended for use cases where you only need the agent ID
+// and don't need full error handling. For complete authentication handling,
+// use ParseAuthHeader instead.
+func ExtractAgentID(authHeader string) string {
+	if authHeader == "" {
+		return "default"
+	}
+
+	_, agentID, err := ParseAuthHeader(authHeader)
+	if err != nil {
+		return "default"
+	}
+
+	return agentID
+}

@@ -237,3 +237,49 @@ func TestValidateAPIKey(t *testing.T) {
 		})
 	}
 }
+
+func TestExtractAgentID(t *testing.T) {
+	tests := []struct {
+		name       string
+		authHeader string
+		want       string
+	}{
+		{
+			name:       "Empty header returns default",
+			authHeader: "",
+			want:       "default",
+		},
+		{
+			name:       "Plain API key",
+			authHeader: "my-api-key",
+			want:       "my-api-key",
+		},
+		{
+			name:       "Bearer token",
+			authHeader: "Bearer my-token-123",
+			want:       "my-token-123",
+		},
+		{
+			name:       "Agent format",
+			authHeader: "Agent agent-abc",
+			want:       "agent-abc",
+		},
+		{
+			name:       "Long API key",
+			authHeader: "my-super-long-api-key-with-many-characters",
+			want:       "my-super-long-api-key-with-many-characters",
+		},
+		{
+			name:       "API key with special characters",
+			authHeader: "key!@#$%^&*()",
+			want:       "key!@#$%^&*()",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := ExtractAgentID(tt.authHeader)
+			assert.Equal(t, tt.want, got)
+		})
+	}
+}
