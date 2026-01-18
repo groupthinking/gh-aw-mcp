@@ -243,50 +243,14 @@ func formatRPCMessageMarkdown(info *RPCMessageInfo) string {
 	return message
 }
 
-// LogRPCRequest logs an RPC request message to text, markdown, and JSONL logs
-func LogRPCRequest(direction RPCMessageDirection, serverID, method string, payload []byte) {
+// logRPCMessageToAll is a helper that logs RPC messages to text, markdown, and JSONL logs
+func logRPCMessageToAll(direction RPCMessageDirection, messageType RPCMessageType, serverID, method string, payload []byte, err error) {
 	// Create info for text log (with larger payload preview)
 	infoText := &RPCMessageInfo{
 		Direction:   direction,
-		MessageType: RPCMessageRequest,
+		MessageType: messageType,
 		ServerID:    serverID,
 		Method:      method,
-		PayloadSize: len(payload),
-		Payload:     truncateAndSanitize(string(payload), MaxPayloadPreviewLengthText),
-	}
-
-	// Log to text file
-	LogDebug("rpc", "%s", formatRPCMessage(infoText))
-
-	// Create info for markdown log (with shorter payload preview)
-	infoMarkdown := &RPCMessageInfo{
-		Direction:   direction,
-		MessageType: RPCMessageRequest,
-		ServerID:    serverID,
-		Method:      method,
-		PayloadSize: len(payload),
-		Payload:     truncateAndSanitize(string(payload), MaxPayloadPreviewLengthMarkdown),
-	}
-
-	// Log to markdown file
-	globalMarkdownMu.RLock()
-	defer globalMarkdownMu.RUnlock()
-
-	if globalMarkdownLogger != nil {
-		globalMarkdownLogger.Log(LogLevelDebug, "rpc", "%s", formatRPCMessageMarkdown(infoMarkdown))
-	}
-
-	// Log to JSONL file (full payload, sanitized)
-	LogRPCMessageJSONL(direction, RPCMessageRequest, serverID, method, payload, nil)
-}
-
-// LogRPCResponse logs an RPC response message to text, markdown, and JSONL logs
-func LogRPCResponse(direction RPCMessageDirection, serverID string, payload []byte, err error) {
-	// Create info for text log (with larger payload preview)
-	infoText := &RPCMessageInfo{
-		Direction:   direction,
-		MessageType: RPCMessageResponse,
-		ServerID:    serverID,
 		PayloadSize: len(payload),
 		Payload:     truncateAndSanitize(string(payload), MaxPayloadPreviewLengthText),
 	}
@@ -301,8 +265,9 @@ func LogRPCResponse(direction RPCMessageDirection, serverID string, payload []by
 	// Create info for markdown log (with shorter payload preview)
 	infoMarkdown := &RPCMessageInfo{
 		Direction:   direction,
-		MessageType: RPCMessageResponse,
+		MessageType: messageType,
 		ServerID:    serverID,
+		Method:      method,
 		PayloadSize: len(payload),
 		Payload:     truncateAndSanitize(string(payload), MaxPayloadPreviewLengthMarkdown),
 	}
@@ -320,7 +285,17 @@ func LogRPCResponse(direction RPCMessageDirection, serverID string, payload []by
 	}
 
 	// Log to JSONL file (full payload, sanitized)
-	LogRPCMessageJSONL(direction, RPCMessageResponse, serverID, "", payload, err)
+	LogRPCMessageJSONL(direction, messageType, serverID, method, payload, err)
+}
+
+// LogRPCRequest logs an RPC request message to text, markdown, and JSONL logs
+func LogRPCRequest(direction RPCMessageDirection, serverID, method string, payload []byte) {
+	logRPCMessageToAll(direction, RPCMessageRequest, serverID, method, payload, nil)
+}
+
+// LogRPCResponse logs an RPC response message to text, markdown, and JSONL logs
+func LogRPCResponse(direction RPCMessageDirection, serverID string, payload []byte, err error) {
+	logRPCMessageToAll(direction, RPCMessageResponse, serverID, "", payload, err)
 }
 
 // LogRPCMessage logs a generic RPC message with custom info

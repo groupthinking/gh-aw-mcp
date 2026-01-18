@@ -149,60 +149,38 @@ func (ml *MarkdownLogger) Log(level LogLevel, category, format string, args ...i
 
 // Global logging functions that also write to markdown logger
 
-// LogInfoMd logs to both regular and markdown loggers
-func LogInfoMd(category, format string, args ...interface{}) {
+// logWithMarkdown is a helper that logs to both regular and markdown loggers
+func logWithMarkdown(level LogLevel, regularLogFunc func(string, string, ...interface{}), category, format string, args ...interface{}) {
 	// Log to regular logger
-	LogInfo(category, format, args...)
+	regularLogFunc(category, format, args...)
 
 	// Log to markdown logger
 	globalMarkdownMu.RLock()
 	defer globalMarkdownMu.RUnlock()
 
 	if globalMarkdownLogger != nil {
-		globalMarkdownLogger.Log(LogLevelInfo, category, format, args...)
+		globalMarkdownLogger.Log(level, category, format, args...)
 	}
+}
+
+// LogInfoMd logs to both regular and markdown loggers
+func LogInfoMd(category, format string, args ...interface{}) {
+	logWithMarkdown(LogLevelInfo, LogInfo, category, format, args...)
 }
 
 // LogWarnMd logs to both regular and markdown loggers
 func LogWarnMd(category, format string, args ...interface{}) {
-	// Log to regular logger
-	LogWarn(category, format, args...)
-
-	// Log to markdown logger
-	globalMarkdownMu.RLock()
-	defer globalMarkdownMu.RUnlock()
-
-	if globalMarkdownLogger != nil {
-		globalMarkdownLogger.Log(LogLevelWarn, category, format, args...)
-	}
+	logWithMarkdown(LogLevelWarn, LogWarn, category, format, args...)
 }
 
 // LogErrorMd logs to both regular and markdown loggers
 func LogErrorMd(category, format string, args ...interface{}) {
-	// Log to regular logger
-	LogError(category, format, args...)
-
-	// Log to markdown logger
-	globalMarkdownMu.RLock()
-	defer globalMarkdownMu.RUnlock()
-
-	if globalMarkdownLogger != nil {
-		globalMarkdownLogger.Log(LogLevelError, category, format, args...)
-	}
+	logWithMarkdown(LogLevelError, LogError, category, format, args...)
 }
 
 // LogDebugMd logs to both regular and markdown loggers
 func LogDebugMd(category, format string, args ...interface{}) {
-	// Log to regular logger
-	LogDebug(category, format, args...)
-
-	// Log to markdown logger
-	globalMarkdownMu.RLock()
-	defer globalMarkdownMu.RUnlock()
-
-	if globalMarkdownLogger != nil {
-		globalMarkdownLogger.Log(LogLevelDebug, category, format, args...)
-	}
+	logWithMarkdown(LogLevelDebug, LogDebug, category, format, args...)
 }
 
 // CloseMarkdownLogger closes the global markdown logger
