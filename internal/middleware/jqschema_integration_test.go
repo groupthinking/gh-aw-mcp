@@ -146,7 +146,7 @@ func TestMiddlewareIntegration(t *testing.T) {
 	assert.False(t, dataMap["truncated"].(bool), "Should not be truncated for small payloads")
 
 	// Verify originalSize
-	originalSize := int(dataMap["originalSize"].(int))
+	originalSize := dataMap["originalSize"].(int)
 	assert.Greater(t, originalSize, 0, "Original size should be positive")
 }
 
