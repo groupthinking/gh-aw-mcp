@@ -40,6 +40,33 @@ func SanitizeString(message string) string {
 	return result
 }
 
+// TruncateSecret returns a sanitized version of the input string for safe logging.
+// It shows only the first 4 characters followed by "..." to prevent exposing sensitive data.
+// For strings with 4 or fewer characters, it returns only "...".
+// For empty strings, it returns an empty string.
+func TruncateSecret(input string) string {
+	if len(input) > 4 {
+		return input[:4] + "..."
+	} else if len(input) > 0 {
+		return "..."
+	}
+	return ""
+}
+
+// TruncateSecretMap returns a sanitized version of environment variables
+// where each value is truncated to first 4 characters followed by "..."
+// This prevents sensitive information like API keys from being logged in full.
+func TruncateSecretMap(env map[string]string) map[string]string {
+	if env == nil {
+		return nil
+	}
+	sanitized := make(map[string]string, len(env))
+	for key, value := range env {
+		sanitized[key] = TruncateSecret(value)
+	}
+	return sanitized
+}
+
 // SanitizeJSON sanitizes a JSON payload by applying regex patterns to the entire string
 // It takes raw bytes, applies regex sanitization in one pass, and returns sanitized bytes
 func SanitizeJSON(payloadBytes []byte) json.RawMessage {

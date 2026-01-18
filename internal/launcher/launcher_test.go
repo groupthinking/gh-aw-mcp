@@ -13,6 +13,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/githubnext/gh-aw-mcpg/internal/config"
+	"github.com/githubnext/gh-aw-mcpg/internal/logger/sanitize"
 )
 
 // loadConfigFromJSON is a test helper that creates a config from JSON via stdin
@@ -180,7 +181,7 @@ func TestMixedHTTPAndStdioServers(t *testing.T) {
 	assert.Equal(t, "stdio", stdioServer.Type)
 }
 
-func TestSanitizeEnvForLogging(t *testing.T) {
+func TestTruncateSecretMap(t *testing.T) {
 	tests := []struct {
 		name     string
 		input    map[string]string
@@ -242,14 +243,14 @@ func TestSanitizeEnvForLogging(t *testing.T) {
 				"EMPTY": "",
 			},
 			expected: map[string]string{
-				"EMPTY": "...",
+				"EMPTY": "",
 			},
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := sanitizeEnvForLogging(tt.input)
+			result := sanitize.TruncateSecretMap(tt.input)
 
 			if tt.expected == nil {
 				assert.Nil(t, result)

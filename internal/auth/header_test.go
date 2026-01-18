@@ -5,9 +5,11 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/githubnext/gh-aw-mcpg/internal/logger/sanitize"
 )
 
-func TestSanitizeForLogging(t *testing.T) {
+func TestTruncateSecret(t *testing.T) {
 	tests := []struct {
 		name  string
 		input string
@@ -62,7 +64,7 @@ func TestSanitizeForLogging(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := sanitizeForLogging(tt.input)
+			got := sanitize.TruncateSecret(tt.input)
 			assert.Equal(t, tt.want, got)
 		})
 	}

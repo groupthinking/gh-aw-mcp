@@ -18,6 +18,7 @@ import (
 	"strings"
 
 	"github.com/githubnext/gh-aw-mcpg/internal/logger"
+	"github.com/githubnext/gh-aw-mcpg/internal/logger/sanitize"
 )
 
 var log = logger.New("auth:header")
@@ -28,18 +29,6 @@ var (
 	// ErrInvalidAuthHeader is returned when the Authorization header format is invalid
 	ErrInvalidAuthHeader = errors.New("invalid Authorization header format")
 )
-
-// sanitizeForLogging returns a sanitized version of the input string for safe logging.
-// It shows only the first 4 characters followed by "..." to prevent exposing sensitive data.
-// For strings with 4 or fewer characters, it returns only "...".
-func sanitizeForLogging(input string) string {
-	if len(input) > 4 {
-		return input[:4] + "..."
-	} else if len(input) > 0 {
-		return "..."
-	}
-	return ""
-}
 
 // ParseAuthHeader parses the Authorization header and extracts the API key and agent ID.
 // Per MCP spec 7.1, the Authorization header should contain the API key directly
@@ -54,7 +43,7 @@ func sanitizeForLogging(input string) string {
 //   - agentID: The extracted agent/session identifier
 //   - error: ErrMissingAuthHeader if header is empty, nil otherwise
 func ParseAuthHeader(authHeader string) (apiKey string, agentID string, error error) {
-	log.Printf("Parsing auth header: sanitized=%s, length=%d", sanitizeForLogging(authHeader), len(authHeader))
+	log.Printf("Parsing auth header: sanitized=%s, length=%d", sanitize.TruncateSecret(authHeader), len(authHeader))
 
 	if authHeader == "" {
 		log.Print("Auth header missing, returning error")
