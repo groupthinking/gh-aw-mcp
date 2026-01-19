@@ -68,8 +68,21 @@ count_test() {
 # Cleanup function
 cleanup() {
     log_info "Cleaning up..."
+    
+    # Kill background gateway process if it exists
+    if [ -n "$GATEWAY_PID" ] && kill -0 "$GATEWAY_PID" 2>/dev/null; then
+        log_info "Stopping gateway process (PID: $GATEWAY_PID)..."
+        kill "$GATEWAY_PID" 2>/dev/null || true
+        sleep 2
+        # Force kill if still running
+        kill -9 "$GATEWAY_PID" 2>/dev/null || true
+    fi
+    
+    # Stop and remove container if it exists
     docker stop "$GATEWAY_CONTAINER_NAME" >/dev/null 2>&1 || true
     docker rm "$GATEWAY_CONTAINER_NAME" >/dev/null 2>&1 || true
+    
+    # Clean up temp files
     rm -rf "$TEMP_DIR"
 }
 
@@ -149,6 +162,11 @@ cat > "$TEMP_DIR/gateway-config.json" <<EOF
         "TERM": "dumb"
       }
     }
+  },
+  "gateway": {
+    "port": $GATEWAY_PORT,
+    "domain": "localhost",
+    "apiKey": "$GATEWAY_API_KEY"
   }
 }
 EOF
@@ -156,8 +174,10 @@ EOF
 log_info "Gateway config created at: $TEMP_DIR/gateway-config.json"
 log_info "Starting MCP Gateway..."
 
-# Start gateway container
-docker run -d \
+# Start gateway container with config via stdin
+# We need to run it in the background since docker run -i is blocking
+# Note: Environment variables are still required even with config-stdin
+cat "$TEMP_DIR/gateway-config.json" | docker run --rm -i \
     --name "$GATEWAY_CONTAINER_NAME" \
     -e MCP_GATEWAY_PORT="$GATEWAY_PORT" \
     -e MCP_GATEWAY_DOMAIN=localhost \
@@ -165,15 +185,28 @@ docker run -d \
     -v /var/run/docker.sock:/var/run/docker.sock \
     -v "$SAMPLES_DIR:$SAMPLES_DIR:ro" \
     -p "$GATEWAY_PORT:$GATEWAY_PORT" \
-    "$GATEWAY_IMAGE" < "$TEMP_DIR/gateway-config.json" >/dev/null 2>&1
+    "$GATEWAY_IMAGE" > "$TEMP_DIR/gateway.log" 2>&1 &
+
+GATEWAY_PID=$!
 
 # Wait for gateway to be ready
-log_info "Waiting for gateway to be ready..."
-sleep 5
+log_info "Waiting for gateway to be ready (PID: $GATEWAY_PID)..."
+sleep 10
 
-# Check if gateway is running
-if docker ps | grep -q "$GATEWAY_CONTAINER_NAME"; then
-    log_success "MCP Gateway started successfully"
+# Check if process is still running
+if ! kill -0 $GATEWAY_PID 2>/dev/null; then
+    log_error "Gateway process died unexpectedly"
+    log_info "Gateway logs:"
+    cat "$TEMP_DIR/gateway.log"
+    exit 1
+fi
+
+# Check if gateway is responding
+log_info "Testing gateway connection..."
+GATEWAY_TEST=$(curl -s -o /dev/null -w "%{http_code}" "http://localhost:$GATEWAY_PORT/mcp/serena" 2>/dev/null || echo "000")
+
+if [ "$GATEWAY_TEST" != "000" ]; then
+    log_success "MCP Gateway started successfully and is responding"
     log_info "Gateway endpoint: http://localhost:$GATEWAY_PORT/mcp/serena"
 else
     log_error "Failed to start MCP Gateway"
@@ -580,13 +613,21 @@ if [ $TESTS_FAILED -eq 0 ]; then
     log_info "Results saved to: $RESULTS_DIR"
     echo ""
     log_info "Gateway logs (last 30 lines):"
-    docker logs "$GATEWAY_CONTAINER_NAME" 2>&1 | tail -30
+    if [ -f "$TEMP_DIR/gateway.log" ]; then
+        tail -30 "$TEMP_DIR/gateway.log"
+    else
+        echo "No gateway logs available"
+    fi
     exit 0
 else
     log_error "Some tests failed. Please review the results."
     log_info "Results saved to: $RESULTS_DIR"
     echo ""
     log_info "Gateway logs (last 50 lines):"
-    docker logs "$GATEWAY_CONTAINER_NAME" 2>&1 | tail -50
+    if [ -f "$TEMP_DIR/gateway.log" ]; then
+        tail -50 "$TEMP_DIR/gateway.log"
+    else
+        echo "No gateway logs available"
+    fi
     exit 1
 fi
