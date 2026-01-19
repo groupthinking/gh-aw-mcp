@@ -412,10 +412,523 @@ else
     log_warning "Python project not found, skipping Python tests"
 fi
 
-# Test 11: Error Handling - Invalid Request
-log_section "Test 11: Error Handling Tests"
+# Helper function to test a tool for a specific language
+test_tool_for_language() {
+    local language=$1
+    local tool_name=$2
+    local args=$3
+    local project_path=$4
+    local test_id=$5
+    local result_file=$6
+    
+    count_test
+    log_info "Testing ${tool_name} for ${language}..."
+    
+    TOOL_REQUEST='{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"test","version":"1.0"}}}
+{"jsonrpc":"2.0","method":"notifications/initialized"}
+{"jsonrpc":"2.0","id":'${test_id}',"method":"tools/call","params":{"name":"'${tool_name}'"'${args}'}}'
+    
+    TOOL_RESPONSE=$(echo "$TOOL_REQUEST" | docker run --rm -i \
+        -v "$SAMPLES_DIR:/workspace:ro" \
+        -w /workspace \
+        "$CONTAINER_IMAGE" 2>/dev/null | tail -1 || echo '{"error": "failed"}')
+    
+    echo "$TOOL_RESPONSE" > "$RESULTS_DIR/${result_file}"
+    
+    if echo "$TOOL_RESPONSE" | grep -q '"result"'; then
+        log_success "${language} ${tool_name} completed successfully"
+        return 0
+    else
+        log_error "${language} ${tool_name} failed"
+        return 1
+    fi
+}
+
+# Test 11: Comprehensive Tool Testing for All Languages
+log_section "Test 11: Comprehensive Tool Testing"
+
+# Define the languages and their corresponding projects
+declare -A LANGUAGE_PROJECTS
+LANGUAGE_PROJECTS["Go"]="go_project"
+LANGUAGE_PROJECTS["Java"]="java_project"
+LANGUAGE_PROJECTS["JavaScript"]="js_project"
+LANGUAGE_PROJECTS["Python"]="python_project"
+
+declare -A LANGUAGE_FILES
+LANGUAGE_FILES["Go"]="go_project/main.go"
+LANGUAGE_FILES["Java"]="java_project/Calculator.java"
+LANGUAGE_FILES["JavaScript"]="js_project/calculator.js"
+LANGUAGE_FILES["Python"]="python_project/calculator.py"
+
+TEST_ID=1000
+
+# Test list_dir for all languages
+log_section "Test 11a: list_dir Tool"
+for lang in "Go" "Java" "JavaScript" "Python"; do
+    project="${LANGUAGE_PROJECTS[$lang]}"
+    if [ -d "$SAMPLES_DIR/$project" ]; then
+        ((TEST_ID++))
+        test_tool_for_language "$lang" "list_dir" ',"arguments":{"relative_path":"'$project'"}' "$project" $TEST_ID "${lang}_list_dir_response.json"
+    else
+        log_warning "$lang project not found, skipping list_dir test"
+    fi
+done
+
+# Test find_file for all languages
+log_section "Test 11b: find_file Tool"
+for lang in "Go" "Java" "JavaScript" "Python"; do
+    project="${LANGUAGE_PROJECTS[$lang]}"
+    if [ -d "$SAMPLES_DIR/$project" ]; then
+        ((TEST_ID++))
+        case $lang in
+            "Go")
+                test_tool_for_language "$lang" "find_file" ',"arguments":{"query":"*.go","relative_path":"'$project'"}' "$project" $TEST_ID "${lang}_find_file_response.json"
+                ;;
+            "Java")
+                test_tool_for_language "$lang" "find_file" ',"arguments":{"query":"*.java","relative_path":"'$project'"}' "$project" $TEST_ID "${lang}_find_file_response.json"
+                ;;
+            "JavaScript")
+                test_tool_for_language "$lang" "find_file" ',"arguments":{"query":"*.js","relative_path":"'$project'"}' "$project" $TEST_ID "${lang}_find_file_response.json"
+                ;;
+            "Python")
+                test_tool_for_language "$lang" "find_file" ',"arguments":{"query":"*.py","relative_path":"'$project'"}' "$project" $TEST_ID "${lang}_find_file_response.json"
+                ;;
+        esac
+    else
+        log_warning "$lang project not found, skipping find_file test"
+    fi
+done
+
+# Test search_for_pattern for all languages
+log_section "Test 11c: search_for_pattern Tool"
+for lang in "Go" "Java" "JavaScript" "Python"; do
+    project="${LANGUAGE_PROJECTS[$lang]}"
+    if [ -d "$SAMPLES_DIR/$project" ]; then
+        ((TEST_ID++))
+        test_tool_for_language "$lang" "search_for_pattern" ',"arguments":{"pattern":"Calculator","relative_path":"'$project'"}' "$project" $TEST_ID "${lang}_search_pattern_response.json"
+    else
+        log_warning "$lang project not found, skipping search_for_pattern test"
+    fi
+done
+
+# Test find_referencing_symbols for all languages
+log_section "Test 11d: find_referencing_symbols Tool"
+for lang in "Go" "Java" "JavaScript" "Python"; do
+    project="${LANGUAGE_PROJECTS[$lang]}"
+    file="${LANGUAGE_FILES[$lang]}"
+    if [ -f "$SAMPLES_DIR/$file" ]; then
+        ((TEST_ID++))
+        test_tool_for_language "$lang" "find_referencing_symbols" ',"arguments":{"symbol_name":"Calculator","relative_path":"'$file'"}' "$project" $TEST_ID "${lang}_find_refs_response.json"
+    else
+        log_warning "$lang file not found, skipping find_referencing_symbols test"
+    fi
+done
+
+# Test replace_symbol_body for all languages
+log_section "Test 11e: replace_symbol_body Tool"
+for lang in "Go" "Java" "JavaScript" "Python"; do
+    project="${LANGUAGE_PROJECTS[$lang]}"
+    file="${LANGUAGE_FILES[$lang]}"
+    if [ -f "$SAMPLES_DIR/$file" ]; then
+        ((TEST_ID++))
+        # Using a simple replacement that should work for all languages
+        case $lang in
+            "Go")
+                test_tool_for_language "$lang" "replace_symbol_body" ',"arguments":{"symbol_name":"Add","new_body":"return a + b + 0","relative_path":"'$file'"}' "$project" $TEST_ID "${lang}_replace_body_response.json"
+                ;;
+            "Java")
+                test_tool_for_language "$lang" "replace_symbol_body" ',"arguments":{"symbol_name":"add","new_body":"return a + b + 0;","relative_path":"'$file'"}' "$project" $TEST_ID "${lang}_replace_body_response.json"
+                ;;
+            "JavaScript")
+                test_tool_for_language "$lang" "replace_symbol_body" ',"arguments":{"symbol_name":"add","new_body":"return a + b + 0;","relative_path":"'$file'"}' "$project" $TEST_ID "${lang}_replace_body_response.json"
+                ;;
+            "Python")
+                test_tool_for_language "$lang" "replace_symbol_body" ',"arguments":{"symbol_name":"add","new_body":"return a + b + 0","relative_path":"'$file'"}' "$project" $TEST_ID "${lang}_replace_body_response.json"
+                ;;
+        esac
+    else
+        log_warning "$lang file not found, skipping replace_symbol_body test"
+    fi
+done
+
+# Test insert_after_symbol for all languages
+log_section "Test 11f: insert_after_symbol Tool"
+for lang in "Go" "Java" "JavaScript" "Python"; do
+    project="${LANGUAGE_PROJECTS[$lang]}"
+    file="${LANGUAGE_FILES[$lang]}"
+    if [ -f "$SAMPLES_DIR/$file" ]; then
+        ((TEST_ID++))
+        case $lang in
+            "Go")
+                test_tool_for_language "$lang" "insert_after_symbol" ',"arguments":{"symbol_name":"Add","code":"// Test comment","relative_path":"'$file'"}' "$project" $TEST_ID "${lang}_insert_after_response.json"
+                ;;
+            "Java")
+                test_tool_for_language "$lang" "insert_after_symbol" ',"arguments":{"symbol_name":"add","code":"// Test comment","relative_path":"'$file'"}' "$project" $TEST_ID "${lang}_insert_after_response.json"
+                ;;
+            "JavaScript")
+                test_tool_for_language "$lang" "insert_after_symbol" ',"arguments":{"symbol_name":"add","code":"// Test comment","relative_path":"'$file'"}' "$project" $TEST_ID "${lang}_insert_after_response.json"
+                ;;
+            "Python")
+                test_tool_for_language "$lang" "insert_after_symbol" ',"arguments":{"symbol_name":"add","code":"# Test comment","relative_path":"'$file'"}' "$project" $TEST_ID "${lang}_insert_after_response.json"
+                ;;
+        esac
+    else
+        log_warning "$lang file not found, skipping insert_after_symbol test"
+    fi
+done
+
+# Test insert_before_symbol for all languages
+log_section "Test 11g: insert_before_symbol Tool"
+for lang in "Go" "Java" "JavaScript" "Python"; do
+    project="${LANGUAGE_PROJECTS[$lang]}"
+    file="${LANGUAGE_FILES[$lang]}"
+    if [ -f "$SAMPLES_DIR/$file" ]; then
+        ((TEST_ID++))
+        case $lang in
+            "Go")
+                test_tool_for_language "$lang" "insert_before_symbol" ',"arguments":{"symbol_name":"Multiply","code":"// Before multiply","relative_path":"'$file'"}' "$project" $TEST_ID "${lang}_insert_before_response.json"
+                ;;
+            "Java")
+                test_tool_for_language "$lang" "insert_before_symbol" ',"arguments":{"symbol_name":"multiply","code":"// Before multiply","relative_path":"'$file'"}' "$project" $TEST_ID "${lang}_insert_before_response.json"
+                ;;
+            "JavaScript")
+                test_tool_for_language "$lang" "insert_before_symbol" ',"arguments":{"symbol_name":"multiply","code":"// Before multiply","relative_path":"'$file'"}' "$project" $TEST_ID "${lang}_insert_before_response.json"
+                ;;
+            "Python")
+                test_tool_for_language "$lang" "insert_before_symbol" ',"arguments":{"symbol_name":"multiply","code":"# Before multiply","relative_path":"'$file'"}' "$project" $TEST_ID "${lang}_insert_before_response.json"
+                ;;
+        esac
+    else
+        log_warning "$lang file not found, skipping insert_before_symbol test"
+    fi
+done
+
+# Test rename_symbol for all languages
+log_section "Test 11h: rename_symbol Tool"
+for lang in "Go" "Java" "JavaScript" "Python"; do
+    project="${LANGUAGE_PROJECTS[$lang]}"
+    file="${LANGUAGE_FILES[$lang]}"
+    if [ -f "$SAMPLES_DIR/$file" ]; then
+        ((TEST_ID++))
+        case $lang in
+            "Go")
+                test_tool_for_language "$lang" "rename_symbol" ',"arguments":{"old_name":"Add","new_name":"AddNumbers","relative_path":"'$file'"}' "$project" $TEST_ID "${lang}_rename_symbol_response.json"
+                ;;
+            "Java")
+                test_tool_for_language "$lang" "rename_symbol" ',"arguments":{"old_name":"add","new_name":"addNumbers","relative_path":"'$file'"}' "$project" $TEST_ID "${lang}_rename_symbol_response.json"
+                ;;
+            "JavaScript")
+                test_tool_for_language "$lang" "rename_symbol" ',"arguments":{"old_name":"add","new_name":"addNumbers","relative_path":"'$file'"}' "$project" $TEST_ID "${lang}_rename_symbol_response.json"
+                ;;
+            "Python")
+                test_tool_for_language "$lang" "rename_symbol" ',"arguments":{"old_name":"add","new_name":"add_numbers","relative_path":"'$file'"}' "$project" $TEST_ID "${lang}_rename_symbol_response.json"
+                ;;
+        esac
+    else
+        log_warning "$lang file not found, skipping rename_symbol test"
+    fi
+done
+
+# Test 12: Memory Operations (language-independent)
+log_section "Test 12: Memory Operations"
+
+# Test write_memory
 count_test
-log_info "Test 11a: Testing invalid MCP request..."
+log_info "Test 12a: write_memory..."
+((TEST_ID++))
+WRITE_MEM_REQUEST='{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"test","version":"1.0"}}}
+{"jsonrpc":"2.0","method":"notifications/initialized"}
+{"jsonrpc":"2.0","id":'$TEST_ID',"method":"tools/call","params":{"name":"write_memory","arguments":{"key":"test_key","value":"test_value","tags":["test"]}}}'
+
+WRITE_MEM_RESPONSE=$(echo "$WRITE_MEM_REQUEST" | docker run --rm -i \
+    -v "$SAMPLES_DIR:/workspace:ro" \
+    -w /workspace \
+    "$CONTAINER_IMAGE" 2>/dev/null | tail -1 || echo '{"error": "failed"}')
+
+echo "$WRITE_MEM_RESPONSE" > "$RESULTS_DIR/write_memory_response.json"
+
+if echo "$WRITE_MEM_RESPONSE" | grep -q '"result"'; then
+    log_success "write_memory completed successfully"
+else
+    log_error "write_memory failed"
+fi
+
+# Test read_memory
+count_test
+log_info "Test 12b: read_memory..."
+((TEST_ID++))
+READ_MEM_REQUEST='{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"test","version":"1.0"}}}
+{"jsonrpc":"2.0","method":"notifications/initialized"}
+{"jsonrpc":"2.0","id":'$TEST_ID',"method":"tools/call","params":{"name":"read_memory","arguments":{"key":"test_key"}}}'
+
+READ_MEM_RESPONSE=$(echo "$READ_MEM_REQUEST" | docker run --rm -i \
+    -v "$SAMPLES_DIR:/workspace:ro" \
+    -w /workspace \
+    "$CONTAINER_IMAGE" 2>/dev/null | tail -1 || echo '{"error": "failed"}')
+
+echo "$READ_MEM_RESPONSE" > "$RESULTS_DIR/read_memory_response.json"
+
+if echo "$READ_MEM_RESPONSE" | grep -q '"result"'; then
+    log_success "read_memory completed successfully"
+else
+    log_error "read_memory failed"
+fi
+
+# Test list_memories
+count_test
+log_info "Test 12c: list_memories..."
+((TEST_ID++))
+LIST_MEM_REQUEST='{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"test","version":"1.0"}}}
+{"jsonrpc":"2.0","method":"notifications/initialized"}
+{"jsonrpc":"2.0","id":'$TEST_ID',"method":"tools/call","params":{"name":"list_memories","arguments":{}}}'
+
+LIST_MEM_RESPONSE=$(echo "$LIST_MEM_REQUEST" | docker run --rm -i \
+    -v "$SAMPLES_DIR:/workspace:ro" \
+    -w /workspace \
+    "$CONTAINER_IMAGE" 2>/dev/null | tail -1 || echo '{"error": "failed"}')
+
+echo "$LIST_MEM_RESPONSE" > "$RESULTS_DIR/list_memories_response.json"
+
+if echo "$LIST_MEM_RESPONSE" | grep -q '"result"'; then
+    log_success "list_memories completed successfully"
+else
+    log_error "list_memories failed"
+fi
+
+# Test edit_memory
+count_test
+log_info "Test 12d: edit_memory..."
+((TEST_ID++))
+EDIT_MEM_REQUEST='{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"test","version":"1.0"}}}
+{"jsonrpc":"2.0","method":"notifications/initialized"}
+{"jsonrpc":"2.0","id":'$TEST_ID',"method":"tools/call","params":{"name":"edit_memory","arguments":{"key":"test_key","value":"updated_value"}}}'
+
+EDIT_MEM_RESPONSE=$(echo "$EDIT_MEM_REQUEST" | docker run --rm -i \
+    -v "$SAMPLES_DIR:/workspace:ro" \
+    -w /workspace \
+    "$CONTAINER_IMAGE" 2>/dev/null | tail -1 || echo '{"error": "failed"}')
+
+echo "$EDIT_MEM_RESPONSE" > "$RESULTS_DIR/edit_memory_response.json"
+
+if echo "$EDIT_MEM_RESPONSE" | grep -q '"result"'; then
+    log_success "edit_memory completed successfully"
+else
+    log_error "edit_memory failed"
+fi
+
+# Test delete_memory
+count_test
+log_info "Test 12e: delete_memory..."
+((TEST_ID++))
+DELETE_MEM_REQUEST='{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"test","version":"1.0"}}}
+{"jsonrpc":"2.0","method":"notifications/initialized"}
+{"jsonrpc":"2.0","id":'$TEST_ID',"method":"tools/call","params":{"name":"delete_memory","arguments":{"key":"test_key"}}}'
+
+DELETE_MEM_RESPONSE=$(echo "$DELETE_MEM_REQUEST" | docker run --rm -i \
+    -v "$SAMPLES_DIR:/workspace:ro" \
+    -w /workspace \
+    "$CONTAINER_IMAGE" 2>/dev/null | tail -1 || echo '{"error": "failed"}')
+
+echo "$DELETE_MEM_RESPONSE" > "$RESULTS_DIR/delete_memory_response.json"
+
+if echo "$DELETE_MEM_RESPONSE" | grep -q '"result"'; then
+    log_success "delete_memory completed successfully"
+else
+    log_error "delete_memory failed"
+fi
+
+# Test 13: Configuration and Project Management
+log_section "Test 13: Configuration and Project Management"
+
+# Test activate_project for each language
+log_section "Test 13a: activate_project Tool"
+for lang in "Go" "Java" "JavaScript" "Python"; do
+    project="${LANGUAGE_PROJECTS[$lang]}"
+    if [ -d "$SAMPLES_DIR/$project" ]; then
+        count_test
+        log_info "Testing activate_project for ${lang}..."
+        ((TEST_ID++))
+        
+        ACTIVATE_REQUEST='{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"test","version":"1.0"}}}
+{"jsonrpc":"2.0","method":"notifications/initialized"}
+{"jsonrpc":"2.0","id":'$TEST_ID',"method":"tools/call","params":{"name":"activate_project","arguments":{"relative_path":"'$project'"}}}'
+        
+        ACTIVATE_RESPONSE=$(echo "$ACTIVATE_REQUEST" | docker run --rm -i \
+            -v "$SAMPLES_DIR:/workspace:ro" \
+            -w /workspace \
+            "$CONTAINER_IMAGE" 2>/dev/null | tail -1 || echo '{"error": "failed"}')
+        
+        echo "$ACTIVATE_RESPONSE" > "$RESULTS_DIR/${lang}_activate_project_response.json"
+        
+        if echo "$ACTIVATE_RESPONSE" | grep -q '"result"'; then
+            log_success "${lang} activate_project completed successfully"
+        else
+            log_error "${lang} activate_project failed"
+        fi
+    else
+        log_warning "$lang project not found, skipping activate_project test"
+    fi
+done
+
+# Test get_current_config
+count_test
+log_info "Test 13b: get_current_config..."
+((TEST_ID++))
+CONFIG_REQUEST='{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"test","version":"1.0"}}}
+{"jsonrpc":"2.0","method":"notifications/initialized"}
+{"jsonrpc":"2.0","id":'$TEST_ID',"method":"tools/call","params":{"name":"get_current_config","arguments":{}}}'
+
+CONFIG_RESPONSE=$(echo "$CONFIG_REQUEST" | docker run --rm -i \
+    -v "$SAMPLES_DIR:/workspace:ro" \
+    -w /workspace \
+    "$CONTAINER_IMAGE" 2>/dev/null | tail -1 || echo '{"error": "failed"}')
+
+echo "$CONFIG_RESPONSE" > "$RESULTS_DIR/get_current_config_response.json"
+
+if echo "$CONFIG_RESPONSE" | grep -q '"result"'; then
+    log_success "get_current_config completed successfully"
+else
+    log_error "get_current_config failed"
+fi
+
+# Test 14: Onboarding Operations
+log_section "Test 14: Onboarding Operations"
+
+# Test check_onboarding_performed
+count_test
+log_info "Test 14a: check_onboarding_performed..."
+((TEST_ID++))
+CHECK_ONBOARD_REQUEST='{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"test","version":"1.0"}}}
+{"jsonrpc":"2.0","method":"notifications/initialized"}
+{"jsonrpc":"2.0","id":'$TEST_ID',"method":"tools/call","params":{"name":"check_onboarding_performed","arguments":{}}}'
+
+CHECK_ONBOARD_RESPONSE=$(echo "$CHECK_ONBOARD_REQUEST" | docker run --rm -i \
+    -v "$SAMPLES_DIR:/workspace:ro" \
+    -w /workspace \
+    "$CONTAINER_IMAGE" 2>/dev/null | tail -1 || echo '{"error": "failed"}')
+
+echo "$CHECK_ONBOARD_RESPONSE" > "$RESULTS_DIR/check_onboarding_response.json"
+
+if echo "$CHECK_ONBOARD_RESPONSE" | grep -q '"result"'; then
+    log_success "check_onboarding_performed completed successfully"
+else
+    log_error "check_onboarding_performed failed"
+fi
+
+# Test onboarding
+count_test
+log_info "Test 14b: onboarding..."
+((TEST_ID++))
+ONBOARD_REQUEST='{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"test","version":"1.0"}}}
+{"jsonrpc":"2.0","method":"notifications/initialized"}
+{"jsonrpc":"2.0","id":'$TEST_ID',"method":"tools/call","params":{"name":"onboarding","arguments":{}}}'
+
+ONBOARD_RESPONSE=$(echo "$ONBOARD_REQUEST" | docker run --rm -i \
+    -v "$SAMPLES_DIR:/workspace:ro" \
+    -w /workspace \
+    "$CONTAINER_IMAGE" 2>/dev/null | tail -1 || echo '{"error": "failed"}')
+
+echo "$ONBOARD_RESPONSE" > "$RESULTS_DIR/onboarding_response.json"
+
+if echo "$ONBOARD_RESPONSE" | grep -q '"result"'; then
+    log_success "onboarding completed successfully"
+else
+    log_error "onboarding failed"
+fi
+
+# Test 15: Thinking Operations
+log_section "Test 15: Thinking Operations"
+
+# Test think_about_collected_information
+count_test
+log_info "Test 15a: think_about_collected_information..."
+((TEST_ID++))
+THINK_INFO_REQUEST='{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"test","version":"1.0"}}}
+{"jsonrpc":"2.0","method":"notifications/initialized"}
+{"jsonrpc":"2.0","id":'$TEST_ID',"method":"tools/call","params":{"name":"think_about_collected_information","arguments":{"information":"Test information"}}}'
+
+THINK_INFO_RESPONSE=$(echo "$THINK_INFO_REQUEST" | docker run --rm -i \
+    -v "$SAMPLES_DIR:/workspace:ro" \
+    -w /workspace \
+    "$CONTAINER_IMAGE" 2>/dev/null | tail -1 || echo '{"error": "failed"}')
+
+echo "$THINK_INFO_RESPONSE" > "$RESULTS_DIR/think_info_response.json"
+
+if echo "$THINK_INFO_RESPONSE" | grep -q '"result"'; then
+    log_success "think_about_collected_information completed successfully"
+else
+    log_error "think_about_collected_information failed"
+fi
+
+# Test think_about_task_adherence
+count_test
+log_info "Test 15b: think_about_task_adherence..."
+((TEST_ID++))
+THINK_TASK_REQUEST='{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"test","version":"1.0"}}}
+{"jsonrpc":"2.0","method":"notifications/initialized"}
+{"jsonrpc":"2.0","id":'$TEST_ID',"method":"tools/call","params":{"name":"think_about_task_adherence","arguments":{"task":"Test task"}}}'
+
+THINK_TASK_RESPONSE=$(echo "$THINK_TASK_REQUEST" | docker run --rm -i \
+    -v "$SAMPLES_DIR:/workspace:ro" \
+    -w /workspace \
+    "$CONTAINER_IMAGE" 2>/dev/null | tail -1 || echo '{"error": "failed"}')
+
+echo "$THINK_TASK_RESPONSE" > "$RESULTS_DIR/think_task_response.json"
+
+if echo "$THINK_TASK_RESPONSE" | grep -q '"result"'; then
+    log_success "think_about_task_adherence completed successfully"
+else
+    log_error "think_about_task_adherence failed"
+fi
+
+# Test think_about_whether_you_are_done
+count_test
+log_info "Test 15c: think_about_whether_you_are_done..."
+((TEST_ID++))
+THINK_DONE_REQUEST='{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"test","version":"1.0"}}}
+{"jsonrpc":"2.0","method":"notifications/initialized"}
+{"jsonrpc":"2.0","id":'$TEST_ID',"method":"tools/call","params":{"name":"think_about_whether_you_are_done","arguments":{}}}'
+
+THINK_DONE_RESPONSE=$(echo "$THINK_DONE_REQUEST" | docker run --rm -i \
+    -v "$SAMPLES_DIR:/workspace:ro" \
+    -w /workspace \
+    "$CONTAINER_IMAGE" 2>/dev/null | tail -1 || echo '{"error": "failed"}')
+
+echo "$THINK_DONE_RESPONSE" > "$RESULTS_DIR/think_done_response.json"
+
+if echo "$THINK_DONE_RESPONSE" | grep -q '"result"'; then
+    log_success "think_about_whether_you_are_done completed successfully"
+else
+    log_error "think_about_whether_you_are_done failed"
+fi
+
+# Test 16: Initial Instructions
+log_section "Test 16: Initial Instructions"
+
+count_test
+log_info "Test 16a: initial_instructions..."
+((TEST_ID++))
+INITIAL_INSTR_REQUEST='{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"test","version":"1.0"}}}
+{"jsonrpc":"2.0","method":"notifications/initialized"}
+{"jsonrpc":"2.0","id":'$TEST_ID',"method":"tools/call","params":{"name":"initial_instructions","arguments":{}}}'
+
+INITIAL_INSTR_RESPONSE=$(echo "$INITIAL_INSTR_REQUEST" | docker run --rm -i \
+    -v "$SAMPLES_DIR:/workspace:ro" \
+    -w /workspace \
+    "$CONTAINER_IMAGE" 2>/dev/null | tail -1 || echo '{"error": "failed"}')
+
+echo "$INITIAL_INSTR_RESPONSE" > "$RESULTS_DIR/initial_instructions_response.json"
+
+if echo "$INITIAL_INSTR_RESPONSE" | grep -q '"result"'; then
+    log_success "initial_instructions completed successfully"
+else
+    log_error "initial_instructions failed"
+fi
+
+# Test 17: Error Handling - Invalid Request
+log_section "Test 17: Error Handling Tests"
+count_test
+log_info "Test 17a: Testing invalid MCP request..."
 
 INVALID_REQUEST='{"jsonrpc":"2.0","id":99,"method":"invalid_method","params":{}}'
 
@@ -431,9 +944,9 @@ else
     log_warning "Invalid request handling unclear"
 fi
 
-# Test 12: Malformed JSON
+# Test 17b: Malformed JSON
 count_test
-log_info "Test 11b: Testing malformed JSON..."
+log_info "Test 17b: Testing malformed JSON..."
 
 MALFORMED_REQUEST='{"jsonrpc":"2.0","id":100,"method":"initialize"'
 
@@ -449,8 +962,8 @@ else
     log_warning "Malformed JSON handling unclear"
 fi
 
-# Test 13: Container Size Check
-log_section "Test 13: Container Metrics"
+# Test 18: Container Size Check
+log_section "Test 18: Container Metrics"
 count_test
 log_info "Checking container size..."
 

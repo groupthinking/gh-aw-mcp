@@ -1,6 +1,6 @@
 # Serena MCP Server Test Suite
 
-Comprehensive shell script tests for the Serena MCP Server (`ghcr.io/githubnext/serena-mcp-server:latest`).
+Comprehensive shell script tests for the Serena MCP Server (`ghcr.io/githubnext/serena-mcp-server:latest`), covering all 23 MCP tools across 4 programming languages.
 
 ## Quick Start
 
@@ -27,13 +27,16 @@ cd test/serena-mcp-tests
 
 ## Overview
 
-This test suite validates that the Serena MCP Server correctly supports multiple programming languages (Go, Java, JavaScript, and Python) through the Model Context Protocol (MCP). The tests include sample codebases with known structures and verify that the server provides correct responses for various code analysis operations.
+This test suite validates that the Serena MCP Server correctly supports multiple programming languages (Go, Java, JavaScript, and Python) through the Model Context Protocol (MCP). The tests comprehensively cover all 23 available tools including file operations, symbol analysis, memory management, configuration, onboarding, thinking operations, and instructions.
 
 ## Features
 
 - **Multi-language Testing**: Tests Go, Java, JavaScript, and Python support
+- **Comprehensive Tool Coverage**: Tests all 23 MCP tools provided by Serena
 - **MCP Protocol Validation**: Tests initialization, tool listing, and tool invocation
-- **Code Analysis Tests**: Validates symbol finding, diagnostics, and semantic analysis
+- **Code Analysis Tests**: Validates symbol finding, references, refactoring, and semantic analysis
+- **Memory & Configuration**: Tests memory operations, project configuration, and onboarding
+- **Thinking Operations**: Tests AI-powered reasoning and decision-making tools
 - **Error Handling**: Tests invalid requests and malformed JSON handling
 - **Detailed Reporting**: Color-coded output with pass/fail status and JSON response logs
 - **Sample Codebases**: Includes realistic code samples for each language
@@ -111,29 +114,46 @@ SERENA_IMAGE="serena-mcp-server:local" ./test_serena.sh
 - List available tools
 - Tool invocation
 
-### 4. Language-Specific Analysis
+### 4. Language-Specific Analysis (All 4 Languages: Go, Java, JavaScript, Python)
 
-#### Go Tests
-- Symbol finding (functions, types, methods)
-- Code diagnostics
-- Language server integration
+#### File Operations
+- `list_dir` - List directory contents
+- `find_file` - Find files by pattern
+- `search_for_pattern` - Search for text patterns in code
 
-#### Java Tests
-- Symbol finding (classes, methods)
-- Code diagnostics
-- Language server integration
+#### Symbol Operations
+- `get_symbols_overview` - Get overview of symbols in a file
+- `find_symbol` - Find specific symbol definitions
+- `find_referencing_symbols` - Find references to a symbol
+- `replace_symbol_body` - Replace symbol implementation
+- `insert_after_symbol` - Insert code after a symbol
+- `insert_before_symbol` - Insert code before a symbol
+- `rename_symbol` - Rename symbols with refactoring
 
-#### JavaScript Tests
-- Symbol finding (classes, functions)
-- Code diagnostics
-- Language server integration
+#### Configuration & Project Management
+- `activate_project` - Activate a project for analysis
+- `get_current_config` - Get current configuration
 
-#### Python Tests
-- Symbol finding (classes, functions)
-- Type checking
-- Code diagnostics
+### 5. Memory Operations (Language-Independent)
+- `write_memory` - Store information in memory
+- `read_memory` - Retrieve stored information
+- `list_memories` - List all stored memories
+- `edit_memory` - Update stored information
+- `delete_memory` - Remove stored information
 
-### 5. Error Handling
+### 6. Onboarding Operations (Language-Independent)
+- `check_onboarding_performed` - Check if onboarding is complete
+- `onboarding` - Perform onboarding process
+
+### 7. Thinking Operations (Language-Independent)
+- `think_about_collected_information` - Process collected information
+- `think_about_task_adherence` - Evaluate task adherence
+- `think_about_whether_you_are_done` - Assess completion status
+
+### 8. Instructions (Language-Independent)
+- `initial_instructions` - Get initial instructions
+
+### 9. Error Handling
 - Invalid MCP method requests
 - Malformed JSON handling
 - Proper error responses
@@ -174,29 +194,58 @@ Test 5: MCP Protocol Initialize
 Test Summary
 ========================================
 
-[INFO] Total Tests: 20
-[✓] Passed: 18
-[✗] Failed: 2
+[INFO] Total Tests: 35
+[✓] Passed: 32
+[✗] Failed: 3
 
-[INFO] Success Rate: 90%
+[INFO] Success Rate: 91%
 [INFO] Detailed results saved to: results/
 ```
 
 ## Response Files
 
-All MCP responses are saved to `results/` directory:
+All MCP responses are saved to `results/` directory with descriptive names:
+
+### Protocol & Infrastructure
 - `initialize_response.json` - MCP initialization response
 - `tools_list_response.json` - Available tools listing
-- `go_symbols_response.json` - Go symbol analysis results
-- `go_diagnostics_response.json` - Go diagnostics results
-- `java_symbols_response.json` - Java symbol analysis results
-- `java_diagnostics_response.json` - Java diagnostics results
-- `js_symbols_response.json` - JavaScript symbol analysis results
-- `js_diagnostics_response.json` - JavaScript diagnostics results
-- `python_symbols_response.json` - Python symbol analysis results
-- `python_diagnostics_response.json` - Python diagnostics results
 - `invalid_request_response.json` - Error handling test results
 - `malformed_json_response.txt` - Malformed JSON test results
+
+### Language-Specific Tool Results (for each language: Go, Java, JavaScript, Python)
+- `{language}_list_dir_response.json` - Directory listing results
+- `{language}_find_file_response.json` - File finding results
+- `{language}_search_pattern_response.json` - Pattern search results
+- `{language}_symbols_response.json` - Symbol overview results
+- `{language}_find_symbol_response.json` - Symbol finding results
+- `{language}_find_refs_response.json` - Symbol references results
+- `{language}_replace_body_response.json` - Symbol body replacement results
+- `{language}_insert_after_response.json` - Insert after symbol results
+- `{language}_insert_before_response.json` - Insert before symbol results
+- `{language}_rename_symbol_response.json` - Symbol renaming results
+- `{language}_activate_project_response.json` - Project activation results
+
+### Memory Operations
+- `write_memory_response.json` - Memory write results
+- `read_memory_response.json` - Memory read results
+- `list_memories_response.json` - Memory listing results
+- `edit_memory_response.json` - Memory edit results
+- `delete_memory_response.json` - Memory deletion results
+
+### Configuration & Management
+- `get_current_config_response.json` - Configuration retrieval results
+
+### Onboarding
+- `check_onboarding_response.json` - Onboarding status check results
+- `onboarding_response.json` - Onboarding process results
+
+### Thinking Operations
+- `think_info_response.json` - Information processing results
+- `think_task_response.json` - Task adherence evaluation results
+- `think_done_response.json` - Completion assessment results
+
+### Instructions
+- `initial_instructions_response.json` - Initial instructions results
 
 ## Interpreting Results
 
