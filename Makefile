@@ -1,4 +1,4 @@
-.PHONY: build lint test test-unit test-integration test-all test-serena coverage test-ci format clean install release help agent-finished
+.PHONY: build lint test test-unit test-integration test-all test-serena test-serena-gateway coverage test-ci format clean install release help agent-finished
 
 # Default target
 .DEFAULT_GOAL := help
@@ -90,13 +90,21 @@ coverage:
 	@echo "Coverage profile saved to coverage.out"
 	@echo "To view HTML coverage report, run: go tool cover -html=coverage.out"
 
-# Run Serena MCP Server tests
+# Run Serena MCP Server tests (direct connection)
 test-serena:
-	@echo "Running Serena MCP Server tests..."
+	@echo "Running Serena MCP Server tests (direct connection)..."
 	@cd test/serena-mcp-tests && ./test_serena.sh
 	@echo ""
 	@echo "Test results saved to test/serena-mcp-tests/results/"
 	@echo "For detailed analysis, see test/serena-mcp-tests/TEST_REPORT.md"
+
+# Run Serena MCP Server tests through MCP Gateway
+test-serena-gateway:
+	@echo "Running Serena MCP Server tests (via MCP Gateway)..."
+	@cd test/serena-mcp-tests && ./test_serena_via_gateway.sh
+	@echo ""
+	@echo "Test results saved to test/serena-mcp-tests/results-gateway/"
+	@echo "Compare with direct connection results in test/serena-mcp-tests/results/"
 
 # Run unit tests with coverage and JSON output for CI
 test-ci:
@@ -244,7 +252,8 @@ help:
 	@echo "  test-unit       - Run unit tests (no build required)"
 	@echo "  test-integration - Run binary integration tests (requires built binary)"
 	@echo "  test-all        - Run all tests (unit + integration)"
-	@echo "  test-serena     - Run Serena MCP Server integration tests"
+	@echo "  test-serena     - Run Serena MCP Server tests (direct connection)"
+	@echo "  test-serena-gateway - Run Serena MCP Server tests (via MCP Gateway)"
 	@echo "  coverage        - Run unit tests with coverage report"
 	@echo "  test-ci         - Run unit tests with coverage and JSON output for CI"
 	@echo "  format          - Format Go code using gofmt"

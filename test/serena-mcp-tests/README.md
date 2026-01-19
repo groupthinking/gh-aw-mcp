@@ -9,20 +9,66 @@ Comprehensive shell script tests for the Serena MCP Server (`ghcr.io/githubnext/
 The easiest way to run the tests:
 
 ```bash
+# Test Serena with direct connection
 make test-serena
+
+# Test Serena through MCP Gateway
+make test-serena-gateway
 ```
 
 ### Run Tests Directly
 
 From the repository root:
 ```bash
+# Direct connection tests
 ./test/serena-mcp-tests/test_serena.sh
+
+# Gateway tests
+./test/serena-mcp-tests/test_serena_via_gateway.sh
 ```
 
 Or from this directory:
 ```bash
 cd test/serena-mcp-tests
+
+# Direct connection tests
 ./test_serena.sh
+
+# Gateway tests
+./test_serena_via_gateway.sh
+```
+
+## Test Suites
+
+### 1. Direct Connection Tests (`test_serena.sh`)
+
+These tests connect directly to the Serena MCP Server container via stdio (standard input/output). This validates the core functionality of Serena without any intermediary components.
+
+- **Connection Method**: Direct stdio connection to Docker container
+- **Results Directory**: `results/`
+- **Use Case**: Testing Serena's core MCP implementation
+
+### 2. Gateway Connection Tests (`test_serena_via_gateway.sh`)
+
+These tests connect to Serena through the MCP Gateway container, which proxies requests to the backend Serena server. This validates that Serena works correctly when accessed through the gateway infrastructure.
+
+- **Connection Method**: HTTP requests to MCP Gateway → Gateway proxies to Serena via stdio
+- **Gateway Image**: `ghcr.io/githubnext/gh-aw-mcpg:latest`
+- **Results Directory**: `results-gateway/`
+- **Use Case**: Testing Serena through production gateway setup
+- **Purpose**: Identify any behavioral differences when using the gateway
+
+### Comparing Results
+
+Both test suites run the same test scenarios, allowing you to compare results and identify any differences in behavior:
+
+```bash
+# Run both test suites
+make test-serena
+make test-serena-gateway
+
+# Compare results
+diff -r test/serena-mcp-tests/results/ test/serena-mcp-tests/results-gateway/
 ```
 
 ## Overview
