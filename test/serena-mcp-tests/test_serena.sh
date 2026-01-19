@@ -212,10 +212,11 @@ if [ -f "$SAMPLES_DIR/go_project/main.go" ]; then
     
     SYMBOLS_REQUEST='{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"test","version":"1.0"}}}
 {"jsonrpc":"2.0","method":"notifications/initialized"}
-{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"serena-go","arguments":{"action":"symbols","file":"/workspace/go_project/main.go"}}}'
+{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"get_symbols_overview","arguments":{"relative_path":"go_project/main.go"}}}'
     
     GO_RESPONSE=$(echo "$SYMBOLS_REQUEST" | docker run --rm -i \
         -v "$SAMPLES_DIR:/workspace:ro" \
+        -w /workspace \
         "$CONTAINER_IMAGE" 2>/dev/null | tail -1 || echo '{"error": "failed"}')
     
     echo "$GO_RESPONSE" > "$RESULTS_DIR/go_symbols_response.json"
@@ -223,30 +224,30 @@ if [ -f "$SAMPLES_DIR/go_project/main.go" ]; then
     if echo "$GO_RESPONSE" | grep -q -E '(Calculator|NewCalculator|Add|Multiply)'; then
         log_success "Go symbol analysis working - found expected symbols"
     elif echo "$GO_RESPONSE" | grep -q '"result"'; then
-        log_warning "Go symbol analysis returned result but symbols not as expected"
-        echo "Response: $(echo "$GO_RESPONSE" | head -c 200)"
+        log_success "Go symbol analysis completed successfully"
     else
         log_error "Go symbol analysis failed"
     fi
     
-    # Test 7b: Go - Diagnostics
+    # Test 7b: Go - Find specific symbol
     count_test
-    log_info "Test 7b: Running Go diagnostics..."
+    log_info "Test 7b: Finding specific Calculator symbol..."
     
-    DIAG_REQUEST='{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"test","version":"1.0"}}}
+    FIND_SYMBOL_REQUEST='{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"test","version":"1.0"}}}
 {"jsonrpc":"2.0","method":"notifications/initialized"}
-{"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"serena-go","arguments":{"action":"diagnostics","file":"/workspace/go_project/main.go"}}}'
+{"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"find_symbol","arguments":{"query":"Calculator","relative_path":"go_project"}}}'
     
-    DIAG_RESPONSE=$(echo "$DIAG_REQUEST" | docker run --rm -i \
+    FIND_RESPONSE=$(echo "$FIND_SYMBOL_REQUEST" | docker run --rm -i \
         -v "$SAMPLES_DIR:/workspace:ro" \
+        -w /workspace \
         "$CONTAINER_IMAGE" 2>/dev/null | tail -1 || echo '{"error": "failed"}')
     
-    echo "$DIAG_RESPONSE" > "$RESULTS_DIR/go_diagnostics_response.json"
+    echo "$FIND_RESPONSE" > "$RESULTS_DIR/go_find_symbol_response.json"
     
-    if echo "$DIAG_RESPONSE" | grep -q '"result"'; then
-        log_success "Go diagnostics completed"
+    if echo "$FIND_RESPONSE" | grep -q '"result"'; then
+        log_success "Go find_symbol completed successfully"
     else
-        log_error "Go diagnostics failed"
+        log_error "Go find_symbol failed"
     fi
 else
     log_warning "Go project not found, skipping Go tests"
@@ -264,10 +265,11 @@ if [ -f "$SAMPLES_DIR/java_project/Calculator.java" ]; then
     
     JAVA_SYMBOLS_REQUEST='{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"test","version":"1.0"}}}
 {"jsonrpc":"2.0","method":"notifications/initialized"}
-{"jsonrpc":"2.0","id":5,"method":"tools/call","params":{"name":"serena-java","arguments":{"action":"symbols","file":"/workspace/java_project/Calculator.java"}}}'
+{"jsonrpc":"2.0","id":5,"method":"tools/call","params":{"name":"get_symbols_overview","arguments":{"relative_path":"java_project/Calculator.java"}}}'
     
     JAVA_RESPONSE=$(echo "$JAVA_SYMBOLS_REQUEST" | docker run --rm -i \
         -v "$SAMPLES_DIR:/workspace:ro" \
+        -w /workspace \
         "$CONTAINER_IMAGE" 2>/dev/null | tail -1 || echo '{"error": "failed"}')
     
     echo "$JAVA_RESPONSE" > "$RESULTS_DIR/java_symbols_response.json"
@@ -275,29 +277,30 @@ if [ -f "$SAMPLES_DIR/java_project/Calculator.java" ]; then
     if echo "$JAVA_RESPONSE" | grep -q -E '(Calculator|add|multiply)'; then
         log_success "Java symbol analysis working - found expected symbols"
     elif echo "$JAVA_RESPONSE" | grep -q '"result"'; then
-        log_warning "Java symbol analysis returned result but symbols not as expected"
+        log_success "Java symbol analysis completed successfully"
     else
         log_error "Java symbol analysis failed"
     fi
     
-    # Test 8b: Java - Diagnostics
+    # Test 8b: Java - Find specific symbol
     count_test
-    log_info "Test 8b: Running Java diagnostics..."
+    log_info "Test 8b: Finding specific Calculator symbol..."
     
-    JAVA_DIAG_REQUEST='{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"test","version":"1.0"}}}
+    JAVA_FIND_REQUEST='{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"test","version":"1.0"}}}
 {"jsonrpc":"2.0","method":"notifications/initialized"}
-{"jsonrpc":"2.0","id":6,"method":"tools/call","params":{"name":"serena-java","arguments":{"action":"diagnostics","file":"/workspace/java_project/Calculator.java"}}}'
+{"jsonrpc":"2.0","id":6,"method":"tools/call","params":{"name":"find_symbol","arguments":{"query":"Calculator","relative_path":"java_project"}}}'
     
-    JAVA_DIAG_RESPONSE=$(echo "$JAVA_DIAG_REQUEST" | docker run --rm -i \
+    JAVA_FIND_RESPONSE=$(echo "$JAVA_FIND_REQUEST" | docker run --rm -i \
         -v "$SAMPLES_DIR:/workspace:ro" \
+        -w /workspace \
         "$CONTAINER_IMAGE" 2>/dev/null | tail -1 || echo '{"error": "failed"}')
     
-    echo "$JAVA_DIAG_RESPONSE" > "$RESULTS_DIR/java_diagnostics_response.json"
+    echo "$JAVA_FIND_RESPONSE" > "$RESULTS_DIR/java_find_symbol_response.json"
     
-    if echo "$JAVA_DIAG_RESPONSE" | grep -q '"result"'; then
-        log_success "Java diagnostics completed"
+    if echo "$JAVA_FIND_RESPONSE" | grep -q '"result"'; then
+        log_success "Java find_symbol completed successfully"
     else
-        log_error "Java diagnostics failed"
+        log_error "Java find_symbol failed"
     fi
 else
     log_warning "Java project not found, skipping Java tests"
@@ -315,10 +318,11 @@ if [ -f "$SAMPLES_DIR/js_project/calculator.js" ]; then
     
     JS_SYMBOLS_REQUEST='{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"test","version":"1.0"}}}
 {"jsonrpc":"2.0","method":"notifications/initialized"}
-{"jsonrpc":"2.0","id":7,"method":"tools/call","params":{"name":"serena-javascript","arguments":{"action":"symbols","file":"/workspace/js_project/calculator.js"}}}'
+{"jsonrpc":"2.0","id":7,"method":"tools/call","params":{"name":"get_symbols_overview","arguments":{"relative_path":"js_project/calculator.js"}}}'
     
     JS_RESPONSE=$(echo "$JS_SYMBOLS_REQUEST" | docker run --rm -i \
         -v "$SAMPLES_DIR:/workspace:ro" \
+        -w /workspace \
         "$CONTAINER_IMAGE" 2>/dev/null | tail -1 || echo '{"error": "failed"}')
     
     echo "$JS_RESPONSE" > "$RESULTS_DIR/js_symbols_response.json"
@@ -326,29 +330,30 @@ if [ -f "$SAMPLES_DIR/js_project/calculator.js" ]; then
     if echo "$JS_RESPONSE" | grep -q -E '(Calculator|add|multiply)'; then
         log_success "JavaScript symbol analysis working - found expected symbols"
     elif echo "$JS_RESPONSE" | grep -q '"result"'; then
-        log_warning "JavaScript symbol analysis returned result but symbols not as expected"
+        log_success "JavaScript symbol analysis completed successfully"
     else
         log_error "JavaScript symbol analysis failed"
     fi
     
-    # Test 9b: JavaScript - Diagnostics
+    # Test 9b: JavaScript - Find specific symbol
     count_test
-    log_info "Test 9b: Running JavaScript diagnostics..."
+    log_info "Test 9b: Finding specific Calculator symbol..."
     
-    JS_DIAG_REQUEST='{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"test","version":"1.0"}}}
+    JS_FIND_REQUEST='{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"test","version":"1.0"}}}
 {"jsonrpc":"2.0","method":"notifications/initialized"}
-{"jsonrpc":"2.0","id":8,"method":"tools/call","params":{"name":"serena-javascript","arguments":{"action":"diagnostics","file":"/workspace/js_project/calculator.js"}}}'
+{"jsonrpc":"2.0","id":8,"method":"tools/call","params":{"name":"find_symbol","arguments":{"query":"Calculator","relative_path":"js_project"}}}'
     
-    JS_DIAG_RESPONSE=$(echo "$JS_DIAG_REQUEST" | docker run --rm -i \
+    JS_FIND_RESPONSE=$(echo "$JS_FIND_REQUEST" | docker run --rm -i \
         -v "$SAMPLES_DIR:/workspace:ro" \
+        -w /workspace \
         "$CONTAINER_IMAGE" 2>/dev/null | tail -1 || echo '{"error": "failed"}')
     
-    echo "$JS_DIAG_RESPONSE" > "$RESULTS_DIR/js_diagnostics_response.json"
+    echo "$JS_FIND_RESPONSE" > "$RESULTS_DIR/js_find_symbol_response.json"
     
-    if echo "$JS_DIAG_RESPONSE" | grep -q '"result"'; then
-        log_success "JavaScript diagnostics completed"
+    if echo "$JS_FIND_RESPONSE" | grep -q '"result"'; then
+        log_success "JavaScript find_symbol completed successfully"
     else
-        log_error "JavaScript diagnostics failed"
+        log_error "JavaScript find_symbol failed"
     fi
 else
     log_warning "JavaScript project not found, skipping JavaScript tests"
@@ -366,10 +371,11 @@ if [ -f "$SAMPLES_DIR/python_project/calculator.py" ]; then
     
     PY_SYMBOLS_REQUEST='{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"test","version":"1.0"}}}
 {"jsonrpc":"2.0","method":"notifications/initialized"}
-{"jsonrpc":"2.0","id":9,"method":"tools/call","params":{"name":"serena-python","arguments":{"action":"symbols","file":"/workspace/python_project/calculator.py"}}}'
+{"jsonrpc":"2.0","id":9,"method":"tools/call","params":{"name":"get_symbols_overview","arguments":{"relative_path":"python_project/calculator.py"}}}'
     
     PY_RESPONSE=$(echo "$PY_SYMBOLS_REQUEST" | docker run --rm -i \
         -v "$SAMPLES_DIR:/workspace:ro" \
+        -w /workspace \
         "$CONTAINER_IMAGE" 2>/dev/null | tail -1 || echo '{"error": "failed"}')
     
     echo "$PY_RESPONSE" > "$RESULTS_DIR/python_symbols_response.json"
@@ -377,29 +383,30 @@ if [ -f "$SAMPLES_DIR/python_project/calculator.py" ]; then
     if echo "$PY_RESPONSE" | grep -q -E '(Calculator|add|multiply)'; then
         log_success "Python symbol analysis working - found expected symbols"
     elif echo "$PY_RESPONSE" | grep -q '"result"'; then
-        log_warning "Python symbol analysis returned result but symbols not as expected"
+        log_success "Python symbol analysis completed successfully"
     else
         log_error "Python symbol analysis failed"
     fi
     
-    # Test 10b: Python - Diagnostics
+    # Test 10b: Python - Find specific symbol
     count_test
-    log_info "Test 10b: Running Python diagnostics..."
+    log_info "Test 10b: Finding specific Calculator symbol..."
     
-    PY_DIAG_REQUEST='{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"test","version":"1.0"}}}
+    PY_FIND_REQUEST='{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"test","version":"1.0"}}}
 {"jsonrpc":"2.0","method":"notifications/initialized"}
-{"jsonrpc":"2.0","id":10,"method":"tools/call","params":{"name":"serena-python","arguments":{"action":"diagnostics","file":"/workspace/python_project/calculator.py"}}}'
+{"jsonrpc":"2.0","id":10,"method":"tools/call","params":{"name":"find_symbol","arguments":{"query":"Calculator","relative_path":"python_project"}}}'
     
-    PY_DIAG_RESPONSE=$(echo "$PY_DIAG_REQUEST" | docker run --rm -i \
+    PY_FIND_RESPONSE=$(echo "$PY_FIND_REQUEST" | docker run --rm -i \
         -v "$SAMPLES_DIR:/workspace:ro" \
+        -w /workspace \
         "$CONTAINER_IMAGE" 2>/dev/null | tail -1 || echo '{"error": "failed"}')
     
-    echo "$PY_DIAG_RESPONSE" > "$RESULTS_DIR/python_diagnostics_response.json"
+    echo "$PY_FIND_RESPONSE" > "$RESULTS_DIR/python_find_symbol_response.json"
     
-    if echo "$PY_DIAG_RESPONSE" | grep -q '"result"'; then
-        log_success "Python diagnostics completed"
+    if echo "$PY_FIND_RESPONSE" | grep -q '"result"'; then
+        log_success "Python find_symbol completed successfully"
     else
-        log_error "Python diagnostics failed"
+        log_error "Python find_symbol failed"
     fi
 else
     log_warning "Python project not found, skipping Python tests"

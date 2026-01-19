@@ -1,4 +1,4 @@
-.PHONY: build lint test test-unit test-integration test-all coverage test-ci format clean install release help agent-finished
+.PHONY: build lint test test-unit test-integration test-all test-serena coverage test-ci format clean install release help agent-finished
 
 # Default target
 .DEFAULT_GOAL := help
@@ -89,6 +89,14 @@ coverage:
 	@echo ""
 	@echo "Coverage profile saved to coverage.out"
 	@echo "To view HTML coverage report, run: go tool cover -html=coverage.out"
+
+# Run Serena MCP Server tests
+test-serena:
+	@echo "Running Serena MCP Server tests..."
+	@cd test/serena-mcp-tests && ./test_serena.sh
+	@echo ""
+	@echo "Test results saved to test/serena-mcp-tests/results/"
+	@echo "For detailed analysis, see test/serena-mcp-tests/TEST_REPORT.md"
 
 # Run unit tests with coverage and JSON output for CI
 test-ci:
@@ -236,6 +244,7 @@ help:
 	@echo "  test-unit       - Run unit tests (no build required)"
 	@echo "  test-integration - Run binary integration tests (requires built binary)"
 	@echo "  test-all        - Run all tests (unit + integration)"
+	@echo "  test-serena     - Run Serena MCP Server integration tests"
 	@echo "  coverage        - Run unit tests with coverage report"
 	@echo "  test-ci         - Run unit tests with coverage and JSON output for CI"
 	@echo "  format          - Format Go code using gofmt"

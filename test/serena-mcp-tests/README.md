@@ -2,6 +2,29 @@
 
 Comprehensive shell script tests for the Serena MCP Server (`ghcr.io/githubnext/serena-mcp-server:latest`).
 
+## Quick Start
+
+### Run Tests with Make
+
+The easiest way to run the tests:
+
+```bash
+make test-serena
+```
+
+### Run Tests Directly
+
+From the repository root:
+```bash
+./test/serena-mcp-tests/test_serena.sh
+```
+
+Or from this directory:
+```bash
+cd test/serena-mcp-tests
+./test_serena.sh
+```
+
 ## Overview
 
 This test suite validates that the Serena MCP Server correctly supports multiple programming languages (Go, Java, JavaScript, and Python) through the Model Context Protocol (MCP). The tests include sample codebases with known structures and verify that the server provides correct responses for various code analysis operations.
