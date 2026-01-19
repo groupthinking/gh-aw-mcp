@@ -71,6 +71,8 @@ make test-serena-gateway
 diff -r test/serena-mcp-tests/results/ test/serena-mcp-tests/results-gateway/
 ```
 
+**Important**: See [`GATEWAY_TEST_FINDINGS.md`](GATEWAY_TEST_FINDINGS.md) for documented behavioral differences between direct stdio connections and HTTP-proxied connections through the gateway. The stdio-based Serena server requires connection-level session state that is not currently maintained across independent HTTP requests.
+
 ## Overview
 
 This test suite validates that the Serena MCP Server correctly supports multiple programming languages (Go, Java, JavaScript, and Python) through the Model Context Protocol (MCP). The tests comprehensively cover all 23 available tools including file operations, symbol analysis, memory management, configuration, onboarding, thinking operations, and instructions.
