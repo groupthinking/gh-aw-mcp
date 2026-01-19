@@ -9,9 +9,12 @@ import (
 	"strings"
 
 	"github.com/githubnext/gh-aw-mcpg/internal/launcher"
+	"github.com/githubnext/gh-aw-mcpg/internal/logger"
 	"github.com/githubnext/gh-aw-mcpg/internal/mcp"
 	"github.com/githubnext/gh-aw-mcpg/internal/sys"
 )
+
+var logServer = logger.New("server:server")
 
 // Server represents the MCPG HTTP server
 type Server struct {
@@ -23,6 +26,7 @@ type Server struct {
 
 // New creates a new Server
 func New(ctx context.Context, l *launcher.Launcher, mode string) *Server {
+	logServer.Printf("Creating new server: mode=%s", mode)
 	s := &Server{
 		launcher:  l,
 		sysServer: sys.NewSysServer(l.ServerIDs()),
@@ -35,12 +39,15 @@ func New(ctx context.Context, l *launcher.Launcher, mode string) *Server {
 }
 
 func (s *Server) setupRoutes() {
+	logServer.Printf("Setting up routes for mode: %s", s.mode)
 	if s.mode == "routed" {
 		// Routed mode: /mcp/{server}/{method}
 		s.mux.HandleFunc("/mcp/", s.handleRoutedMCP)
+		logServer.Print("Registered routed MCP handler at /mcp/")
 	} else {
 		// Unified mode: /mcp (single endpoint for all servers)
 		s.mux.HandleFunc("/mcp", s.handleUnifiedMCP)
+		logServer.Print("Registered unified MCP handler at /mcp")
 	}
 
 	// Health check
@@ -80,11 +87,13 @@ func (s *Server) handleUnifiedMCP(w http.ResponseWriter, r *http.Request) {
 	// TODO: Implement proper routing logic based on tool name or other criteria
 	serverIDs := s.launcher.ServerIDs()
 	if len(serverIDs) == 0 {
+		logServer.Print("No MCP servers configured for unified mode")
 		s.sendError(w, -32603, "No MCP servers configured", nil)
 		return
 	}
 
 	serverID := serverIDs[0] // Simple: use first server
+	logServer.Printf("Routing unified request to first server: serverID=%s, method=%s", serverID, req.Method)
 	s.proxyToServer(w, r, serverID, &req)
 }
 
@@ -99,6 +108,7 @@ func (s *Server) handleRoutedMCP(w http.ResponseWriter, r *http.Request) {
 	// Parse path: /mcp/{serverID}
 	path := strings.TrimPrefix(r.URL.Path, "/mcp/")
 	serverID := strings.Split(path, "/")[0]
+	logServer.Printf("Parsed routed request: path=%s, serverID=%s", path, serverID)
 
 	if serverID == "" {
 		log.Printf("No server ID in path")
@@ -161,8 +171,11 @@ func (s *Server) handleInitialize(w http.ResponseWriter, req *mcp.Request, serve
 }
 
 func (s *Server) proxyToServer(w http.ResponseWriter, r *http.Request, serverID string, req *mcp.Request) {
+	logServer.Printf("Proxying request: serverID=%s, method=%s", serverID, req.Method)
+	
 	// Handle built-in sys server
 	if serverID == "sys" {
+		logServer.Print("Routing to built-in sys server")
 		s.handleSysRequest(w, req)
 		return
 	}
@@ -263,5 +276,6 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 // ListenAndServe starts the HTTP server
 func (s *Server) ListenAndServe(addr string) error {
 	log.Printf("Starting MCPG HTTP server on %s (mode: %s)", addr, s.mode)
+	logServer.Printf("Server listening: addr=%s, mode=%s", addr, s.mode)
 	return http.ListenAndServe(addr, s)
 }
