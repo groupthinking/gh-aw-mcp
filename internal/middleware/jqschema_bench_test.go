@@ -33,8 +33,8 @@ func BenchmarkApplyJqSchema_CompiledCode(b *testing.B) {
 			name: "large nested object",
 			input: map[string]interface{}{
 				"user": map[string]interface{}{
-					"id":      123,
-					"login":   "testuser",
+					"id":       123,
+					"login":    "testuser",
 					"verified": true,
 					"profile": map[string]interface{}{
 						"bio":      "Test bio",
@@ -108,8 +108,8 @@ func BenchmarkApplyJqSchema_ParseEveryTime(b *testing.B) {
 			name: "large nested object",
 			input: map[string]interface{}{
 				"user": map[string]interface{}{
-					"id":      123,
-					"login":   "testuser",
+					"id":       123,
+					"login":    "testuser",
 					"verified": true,
 					"profile": map[string]interface{}{
 						"bio":      "Test bio",
@@ -153,13 +153,13 @@ func BenchmarkApplyJqSchema_ParseEveryTime(b *testing.B) {
 				if err != nil {
 					b.Fatalf("Parse failed: %v", err)
 				}
-				
+
 				iter := query.RunWithContext(ctx, tt.input)
 				v, ok := iter.Next()
 				if !ok {
 					b.Fatal("No results")
 				}
-				
+
 				if err, ok := v.(error); ok {
 					b.Fatalf("Query error: %v", err)
 				}
