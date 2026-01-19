@@ -426,7 +426,7 @@ test_tool_for_language() {
     
     TOOL_REQUEST='{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"test","version":"1.0"}}}
 {"jsonrpc":"2.0","method":"notifications/initialized"}
-{"jsonrpc":"2.0","id":'${test_id}',"method":"tools/call","params":{"name":"'${tool_name}'"'"${args}"'}}'
+{"jsonrpc":"2.0","id":'${test_id}',"method":"tools/call","params":{"name":"'${tool_name}'"'${args}'}}'
     
     TOOL_RESPONSE=$(echo "$TOOL_REQUEST" | docker run --rm -i \
         -v "$SAMPLES_DIR:/workspace:ro" \

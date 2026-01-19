@@ -194,7 +194,7 @@ Test 5: MCP Protocol Initialize
 Test Summary
 ========================================
 
-[INFO] Total Tests: 35+
+[INFO] Total Tests: 35
 [✓] Passed: 32
 [✗] Failed: 3
 
