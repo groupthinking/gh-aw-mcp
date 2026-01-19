@@ -47,3 +47,6 @@ go.work.sum
 # Test configuration files
 test-*.toml
 test-*.json
+
+# Serena test results
+test/serena-mcp-tests/results/
