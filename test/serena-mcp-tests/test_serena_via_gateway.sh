@@ -246,8 +246,24 @@ send_mcp_request() {
     
     curl -s -X POST "$endpoint" \
         -H "Content-Type: application/json" \
+        -H "Accept: application/json, text/event-stream" \
         -H "Authorization: $GATEWAY_API_KEY" \
         -d "$request" 2>/dev/null || echo '{"error": "request failed"}'
+}
+
+# Function to send MCP request and parse response (handles SSE)
+send_and_parse_mcp_request() {
+    local request="$1"
+    local raw_response=$(send_mcp_request "$request")
+    
+    # Check if response is SSE format
+    if echo "$raw_response" | grep -q "^event: message"; then
+        # Extract JSON from "data: {...}" line
+        echo "$raw_response" | grep "^data: " | sed 's/^data: //' | tail -1
+    else
+        # Already JSON
+        echo "$raw_response"
+    fi
 }
 
 # Test 6: MCP Protocol - Initialize
@@ -257,22 +273,30 @@ log_info "Sending MCP initialize request through gateway..."
 
 INIT_REQUEST='{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"test-client","version":"1.0.0"}}}'
 
-INIT_RESPONSE=$(send_mcp_request "$INIT_REQUEST")
+INIT_JSON=$(send_and_parse_mcp_request "$INIT_REQUEST")
 
-echo "$INIT_RESPONSE" > "$RESULTS_DIR/initialize_response.json"
+echo "$INIT_JSON" > "$RESULTS_DIR/initialize_response.json"
 
-if echo "$INIT_RESPONSE" | grep -q '"jsonrpc"'; then
-    if echo "$INIT_RESPONSE" | grep -q '"result"'; then
+if echo "$INIT_JSON" | grep -q '"jsonrpc"'; then
+    if echo "$INIT_JSON" | grep -q '"result"'; then
         log_success "MCP initialize succeeded through gateway"
         log_info "Response saved to: $RESULTS_DIR/initialize_response.json"
     else
         log_error "MCP initialize returned error through gateway"
-        echo "$INIT_RESPONSE" | head -5
+        echo "$INIT_JSON" | head -5
     fi
 else
     log_error "MCP initialize failed - no valid JSON-RPC response"
-    echo "$INIT_RESPONSE" | head -10
+    echo "$INIT_JSON" | head -10
 fi
+
+# Send initialized notification to complete handshake
+log_info "Sending initialized notification to complete MCP handshake..."
+INITIALIZED_NOTIF='{"jsonrpc":"2.0","method":"notifications/initialized"}'
+send_mcp_request "$INITIALIZED_NOTIF" >/dev/null 2>&1
+
+# Give the server a moment to process the notification
+sleep 1
 
 # Test 7: MCP Protocol - List Tools
 log_section "Test 7: MCP Protocol - List Available Tools (via Gateway)"
@@ -281,21 +305,21 @@ log_info "Requesting list of available tools through gateway..."
 
 TOOLS_REQUEST='{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}'
 
-TOOLS_RESPONSE=$(send_mcp_request "$TOOLS_REQUEST")
+TOOLS_JSON=$(send_and_parse_mcp_request "$TOOLS_REQUEST")
 
-echo "$TOOLS_RESPONSE" > "$RESULTS_DIR/tools_list_response.json"
+echo "$TOOLS_JSON" > "$RESULTS_DIR/tools_list_response.json"
 
-if echo "$TOOLS_RESPONSE" | grep -q '"tools"'; then
-    TOOL_COUNT=$(echo "$TOOLS_RESPONSE" | grep -o '"name"' | wc -l)
+if echo "$TOOLS_JSON" | grep -q '"tools"'; then
+    TOOL_COUNT=$(echo "$TOOLS_JSON" | grep -o '"name"' | wc -l)
     log_success "Tools list retrieved through gateway - found $TOOL_COUNT tools"
     log_info "Response saved to: $RESULTS_DIR/tools_list_response.json"
     
     # Display available tools
     log_info "Available Serena tools:"
-    echo "$TOOLS_RESPONSE" | grep -o '"name":"[^"]*"' | sed 's/"name":"/  - /' | sed 's/"$//'
+    echo "$TOOLS_JSON" | grep -o '"name":"[^"]*"' | sed 's/"name":"/  - /' | sed 's/"$//'
 else
     log_error "Failed to retrieve tools list through gateway"
-    echo "$TOOLS_RESPONSE" | head -10
+    echo "$TOOLS_JSON" | head -10
 fi
 
 # Test 8: Go Code Analysis
@@ -310,7 +334,7 @@ if [ -f "$SAMPLES_DIR/go_project/main.go" ]; then
     
     SYMBOLS_REQUEST='{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"get_symbols_overview","arguments":{"relative_path":"go_project/main.go"}}}'
     
-    GO_RESPONSE=$(send_mcp_request "$SYMBOLS_REQUEST")
+    GO_RESPONSE=$(send_and_parse_mcp_request "$SYMBOLS_REQUEST")
     
     echo "$GO_RESPONSE" > "$RESULTS_DIR/go_symbols_response.json"
     
@@ -329,7 +353,7 @@ if [ -f "$SAMPLES_DIR/go_project/main.go" ]; then
     
     FIND_SYMBOL_REQUEST='{"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"find_symbol","arguments":{"query":"Calculator","relative_path":"go_project"}}}'
     
-    FIND_RESPONSE=$(send_mcp_request "$FIND_SYMBOL_REQUEST")
+    FIND_RESPONSE=$(send_and_parse_mcp_request "$FIND_SYMBOL_REQUEST")
     
     echo "$FIND_RESPONSE" > "$RESULTS_DIR/go_find_symbol_response.json"
     
@@ -355,7 +379,7 @@ if [ -f "$SAMPLES_DIR/java_project/Calculator.java" ]; then
     
     JAVA_SYMBOLS_REQUEST='{"jsonrpc":"2.0","id":5,"method":"tools/call","params":{"name":"get_symbols_overview","arguments":{"relative_path":"java_project/Calculator.java"}}}'
     
-    JAVA_RESPONSE=$(send_mcp_request "$JAVA_SYMBOLS_REQUEST")
+    JAVA_RESPONSE=$(send_and_parse_mcp_request "$JAVA_SYMBOLS_REQUEST")
     
     echo "$JAVA_RESPONSE" > "$RESULTS_DIR/java_symbols_response.json"
     
@@ -374,7 +398,7 @@ if [ -f "$SAMPLES_DIR/java_project/Calculator.java" ]; then
     
     JAVA_FIND_REQUEST='{"jsonrpc":"2.0","id":6,"method":"tools/call","params":{"name":"find_symbol","arguments":{"query":"Calculator","relative_path":"java_project"}}}'
     
-    JAVA_FIND_RESPONSE=$(send_mcp_request "$JAVA_FIND_REQUEST")
+    JAVA_FIND_RESPONSE=$(send_and_parse_mcp_request "$JAVA_FIND_REQUEST")
     
     echo "$JAVA_FIND_RESPONSE" > "$RESULTS_DIR/java_find_symbol_response.json"
     
@@ -400,7 +424,7 @@ if [ -f "$SAMPLES_DIR/js_project/calculator.js" ]; then
     
     JS_SYMBOLS_REQUEST='{"jsonrpc":"2.0","id":7,"method":"tools/call","params":{"name":"get_symbols_overview","arguments":{"relative_path":"js_project/calculator.js"}}}'
     
-    JS_RESPONSE=$(send_mcp_request "$JS_SYMBOLS_REQUEST")
+    JS_RESPONSE=$(send_and_parse_mcp_request "$JS_SYMBOLS_REQUEST")
     
     echo "$JS_RESPONSE" > "$RESULTS_DIR/js_symbols_response.json"
     
@@ -419,7 +443,7 @@ if [ -f "$SAMPLES_DIR/js_project/calculator.js" ]; then
     
     JS_FIND_REQUEST='{"jsonrpc":"2.0","id":8,"method":"tools/call","params":{"name":"find_symbol","arguments":{"query":"Calculator","relative_path":"js_project"}}}'
     
-    JS_FIND_RESPONSE=$(send_mcp_request "$JS_FIND_REQUEST")
+    JS_FIND_RESPONSE=$(send_and_parse_mcp_request "$JS_FIND_REQUEST")
     
     echo "$JS_FIND_RESPONSE" > "$RESULTS_DIR/js_find_symbol_response.json"
     
@@ -445,7 +469,7 @@ if [ -f "$SAMPLES_DIR/python_project/calculator.py" ]; then
     
     PY_SYMBOLS_REQUEST='{"jsonrpc":"2.0","id":9,"method":"tools/call","params":{"name":"get_symbols_overview","arguments":{"relative_path":"python_project/calculator.py"}}}'
     
-    PY_RESPONSE=$(send_mcp_request "$PY_SYMBOLS_REQUEST")
+    PY_RESPONSE=$(send_and_parse_mcp_request "$PY_SYMBOLS_REQUEST")
     
     echo "$PY_RESPONSE" > "$RESULTS_DIR/py_symbols_response.json"
     
@@ -464,7 +488,7 @@ if [ -f "$SAMPLES_DIR/python_project/calculator.py" ]; then
     
     PY_FIND_REQUEST='{"jsonrpc":"2.0","id":10,"method":"tools/call","params":{"name":"find_symbol","arguments":{"query":"Calculator","relative_path":"python_project"}}}'
     
-    PY_FIND_RESPONSE=$(send_mcp_request "$PY_FIND_REQUEST")
+    PY_FIND_RESPONSE=$(send_and_parse_mcp_request "$PY_FIND_REQUEST")
     
     echo "$PY_FIND_RESPONSE" > "$RESULTS_DIR/py_find_symbol_response.json"
     
@@ -487,7 +511,7 @@ log_info "Test 12a: Testing list_dir tool through gateway..."
 
 LIST_DIR_REQUEST='{"jsonrpc":"2.0","id":11,"method":"tools/call","params":{"name":"list_dir","arguments":{"relative_path":"go_project"}}}'
 
-LIST_DIR_RESPONSE=$(send_mcp_request "$LIST_DIR_REQUEST")
+LIST_DIR_RESPONSE=$(send_and_parse_mcp_request "$LIST_DIR_REQUEST")
 
 echo "$LIST_DIR_RESPONSE" > "$RESULTS_DIR/list_dir_response.json"
 
@@ -504,7 +528,7 @@ log_info "Test 12b: Testing find_file tool through gateway..."
 
 FIND_FILE_REQUEST='{"jsonrpc":"2.0","id":12,"method":"tools/call","params":{"name":"find_file","arguments":{"pattern":"*.go","relative_path":"go_project"}}}'
 
-FIND_FILE_RESPONSE=$(send_mcp_request "$FIND_FILE_REQUEST")
+FIND_FILE_RESPONSE=$(send_and_parse_mcp_request "$FIND_FILE_REQUEST")
 
 echo "$FIND_FILE_RESPONSE" > "$RESULTS_DIR/find_file_response.json"
 
@@ -521,7 +545,7 @@ log_info "Test 12c: Testing search_for_pattern tool through gateway..."
 
 SEARCH_PATTERN_REQUEST='{"jsonrpc":"2.0","id":13,"method":"tools/call","params":{"name":"search_for_pattern","arguments":{"pattern":"Calculator","relative_path":"go_project"}}}'
 
-SEARCH_PATTERN_RESPONSE=$(send_mcp_request "$SEARCH_PATTERN_REQUEST")
+SEARCH_PATTERN_RESPONSE=$(send_and_parse_mcp_request "$SEARCH_PATTERN_REQUEST")
 
 echo "$SEARCH_PATTERN_RESPONSE" > "$RESULTS_DIR/search_pattern_response.json"
 
@@ -541,7 +565,7 @@ log_info "Test 13a: Testing write_memory tool through gateway..."
 
 WRITE_MEMORY_REQUEST='{"jsonrpc":"2.0","id":14,"method":"tools/call","params":{"name":"write_memory","arguments":{"key":"test_key","value":"test_value"}}}'
 
-WRITE_MEMORY_RESPONSE=$(send_mcp_request "$WRITE_MEMORY_REQUEST")
+WRITE_MEMORY_RESPONSE=$(send_and_parse_mcp_request "$WRITE_MEMORY_REQUEST")
 
 echo "$WRITE_MEMORY_RESPONSE" > "$RESULTS_DIR/write_memory_response.json"
 
@@ -558,7 +582,7 @@ log_info "Test 13b: Testing read_memory tool through gateway..."
 
 READ_MEMORY_REQUEST='{"jsonrpc":"2.0","id":15,"method":"tools/call","params":{"name":"read_memory","arguments":{"key":"test_key"}}}'
 
-READ_MEMORY_RESPONSE=$(send_mcp_request "$READ_MEMORY_REQUEST")
+READ_MEMORY_RESPONSE=$(send_and_parse_mcp_request "$READ_MEMORY_REQUEST")
 
 echo "$READ_MEMORY_RESPONSE" > "$RESULTS_DIR/read_memory_response.json"
 
@@ -579,7 +603,7 @@ log_info "Test 13c: Testing list_memories tool through gateway..."
 
 LIST_MEMORIES_REQUEST='{"jsonrpc":"2.0","id":16,"method":"tools/call","params":{"name":"list_memories","arguments":{}}}'
 
-LIST_MEMORIES_RESPONSE=$(send_mcp_request "$LIST_MEMORIES_REQUEST")
+LIST_MEMORIES_RESPONSE=$(send_and_parse_mcp_request "$LIST_MEMORIES_REQUEST")
 
 echo "$LIST_MEMORIES_RESPONSE" > "$RESULTS_DIR/list_memories_response.json"
 
@@ -599,7 +623,7 @@ log_info "Test 14a: Testing invalid tool name error handling through gateway..."
 
 INVALID_TOOL_REQUEST='{"jsonrpc":"2.0","id":17,"method":"tools/call","params":{"name":"nonexistent_tool","arguments":{}}}'
 
-INVALID_TOOL_RESPONSE=$(send_mcp_request "$INVALID_TOOL_REQUEST")
+INVALID_TOOL_RESPONSE=$(send_and_parse_mcp_request "$INVALID_TOOL_REQUEST")
 
 echo "$INVALID_TOOL_RESPONSE" > "$RESULTS_DIR/invalid_tool_response.json"
 
@@ -615,7 +639,7 @@ log_info "Test 14b: Testing malformed JSON error handling through gateway..."
 
 MALFORMED_REQUEST='{"jsonrpc":"2.0","id":18,"method":"tools/call","params":{'
 
-MALFORMED_RESPONSE=$(send_mcp_request "$MALFORMED_REQUEST")
+MALFORMED_RESPONSE=$(send_and_parse_mcp_request "$MALFORMED_REQUEST")
 
 echo "$MALFORMED_RESPONSE" > "$RESULTS_DIR/malformed_json_response.json"
 
