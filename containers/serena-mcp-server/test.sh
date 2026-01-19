@@ -122,32 +122,32 @@ echo ""
 echo "Test 4: Verifying language runtimes"
 
 # Python
-if docker run --rm "$CONTAINER_IMAGE" python3 --version > /dev/null 2>&1; then
-    PYTHON_VERSION=$(docker run --rm "$CONTAINER_IMAGE" python3 --version 2>&1)
+if docker run --rm --entrypoint python3 "$CONTAINER_IMAGE" --version > /dev/null 2>&1; then
+    PYTHON_VERSION=$(docker run --rm --entrypoint python3 "$CONTAINER_IMAGE" --version 2>&1)
     echo "✓ Python: $PYTHON_VERSION"
 else
     echo "✗ Python not found"
 fi
 
 # Java
-if docker run --rm "$CONTAINER_IMAGE" java -version > /dev/null 2>&1; then
-    JAVA_VERSION=$(docker run --rm "$CONTAINER_IMAGE" java -version 2>&1 | head -1)
+if docker run --rm --entrypoint java "$CONTAINER_IMAGE" -version > /dev/null 2>&1; then
+    JAVA_VERSION=$(docker run --rm --entrypoint java "$CONTAINER_IMAGE" -version 2>&1 | head -1)
     echo "✓ Java: $JAVA_VERSION"
 else
     echo "✗ Java not found"
 fi
 
 # Node.js
-if docker run --rm "$CONTAINER_IMAGE" node --version > /dev/null 2>&1; then
-    NODE_VERSION=$(docker run --rm "$CONTAINER_IMAGE" node --version 2>&1)
+if docker run --rm --entrypoint node "$CONTAINER_IMAGE" --version > /dev/null 2>&1; then
+    NODE_VERSION=$(docker run --rm --entrypoint node "$CONTAINER_IMAGE" --version 2>&1)
     echo "✓ Node.js: $NODE_VERSION"
 else
     echo "✗ Node.js not found"
 fi
 
 # Go
-if docker run --rm "$CONTAINER_IMAGE" go version > /dev/null 2>&1; then
-    GO_VERSION=$(docker run --rm "$CONTAINER_IMAGE" go version 2>&1)
+if docker run --rm --entrypoint go "$CONTAINER_IMAGE" version > /dev/null 2>&1; then
+    GO_VERSION=$(docker run --rm --entrypoint go "$CONTAINER_IMAGE" version 2>&1)
     echo "✓ Go: $GO_VERSION"
 else
     echo "✗ Go not found"
@@ -158,28 +158,28 @@ echo ""
 echo "Test 5: Verifying language servers"
 
 # Check for Pyright (Python)
-if docker run --rm "$CONTAINER_IMAGE" sh -c "command -v pyright" > /dev/null 2>&1; then
+if docker run --rm --entrypoint sh "$CONTAINER_IMAGE" -c "command -v pyright" > /dev/null 2>&1; then
     echo "✓ Pyright (Python LSP) installed"
 else
     echo "⚠ Pyright not found in PATH (may be in uv tools)"
 fi
 
 # Check for gopls (Go)
-if docker run --rm "$CONTAINER_IMAGE" sh -c "command -v gopls" > /dev/null 2>&1; then
+if docker run --rm --entrypoint sh "$CONTAINER_IMAGE" -c "command -v gopls" > /dev/null 2>&1; then
     echo "✓ gopls (Go LSP) installed"
 else
     echo "⚠ gopls not found in PATH"
 fi
 
 # Check for typescript-language-server (JS/TS)
-if docker run --rm "$CONTAINER_IMAGE" sh -c "command -v typescript-language-server" > /dev/null 2>&1; then
+if docker run --rm --entrypoint sh "$CONTAINER_IMAGE" -c "command -v typescript-language-server" > /dev/null 2>&1; then
     echo "✓ typescript-language-server installed"
 else
     echo "⚠ typescript-language-server not found in PATH"
 fi
 
 # Check for Serena itself
-if docker run --rm "$CONTAINER_IMAGE" sh -c "command -v serena-mcp-server" > /dev/null 2>&1; then
+if docker run --rm --entrypoint sh "$CONTAINER_IMAGE" -c "command -v serena-mcp-server" > /dev/null 2>&1; then
     echo "✓ serena-mcp-server installed"
 else
     echo "✗ serena-mcp-server not found"
