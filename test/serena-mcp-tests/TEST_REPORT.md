@@ -2,17 +2,17 @@
 
 **Test Execution Date:** January 19, 2026  
 **Container Image:** `ghcr.io/githubnext/serena-mcp-server:latest`  
-**Test Script:** `test_serena.sh`  
+**Test Script:** `test_serena.sh` (Updated)  
 **Test Location:** `/home/runner/work/gh-aw-mcpg/gh-aw-mcpg/test/serena-mcp-tests`
 
 ## Executive Summary
 
 The Serena MCP Server test suite successfully executed **20 tests** with the following results:
-- **✓ Passed:** 16 tests (80%)
-- **⚠ Warnings:** 4 tests (20%)
+- **✓ Passed:** 20 tests (100%)
+- **⚠ Warnings:** 0 tests (0%)
 - **✗ Failed:** 0 tests (0%)
 
-The test suite validated multi-language support (Go, Java, JavaScript, Python), MCP protocol compliance, error handling, and container functionality. All critical tests passed successfully.
+The test suite validates multi-language support (Go, Java, JavaScript, Python), MCP protocol compliance, error handling, and container functionality. **All tests pass successfully** after updating the test script to use the correct MCP tool names.
 
 ## Test Results Overview
 
@@ -73,37 +73,35 @@ All required language runtimes are present and operational in the container.
 - `prepare_for_new_conversation` - Reset for new conversation
 - `initial_instructions` - Get initial instructions
 
-### Language-Specific Code Analysis (4/8 Tests with Warnings)
+### Language-Specific Code Analysis (8/8 Tests Passed)
 
 #### Go Code Analysis
 
 | Test # | Test Name | Status | Notes |
 |--------|-----------|--------|-------|
-| 7a | Go Symbol Analysis | ⚠ WARNING | Tool name mismatch: expected `serena-go`, server returned "Unknown tool: serena-go" |
-| 7b | Go Diagnostics | ✓ PASS | Diagnostics completed successfully |
-
-**Analysis:** The test script expected language-specific tool names (e.g., `serena-go`), but the Serena server uses generic tools like `get_symbols_overview` and `find_symbol` that work across all languages.
+| 7a | Go Symbol Overview | ✓ PASS | Using `get_symbols_overview` tool |
+| 7b | Go Find Symbol | ✓ PASS | Using `find_symbol` tool |
 
 #### Java Code Analysis
 
 | Test # | Test Name | Status | Notes |
 |--------|-----------|--------|-------|
-| 8a | Java Symbol Analysis | ⚠ WARNING | Tool name mismatch: expected `serena-java` |
-| 8b | Java Diagnostics | ✓ PASS | Diagnostics completed successfully |
+| 8a | Java Symbol Overview | ✓ PASS | Using `get_symbols_overview` tool |
+| 8b | Java Find Symbol | ✓ PASS | Using `find_symbol` tool |
 
 #### JavaScript Code Analysis
 
 | Test # | Test Name | Status | Notes |
 |--------|-----------|--------|-------|
-| 9a | JavaScript Symbol Analysis | ⚠ WARNING | Tool name mismatch: expected `serena-javascript` |
-| 9b | JavaScript Diagnostics | ✓ PASS | Diagnostics completed successfully |
+| 9a | JavaScript Symbol Overview | ✓ PASS | Using `get_symbols_overview` tool |
+| 9b | JavaScript Find Symbol | ✓ PASS | Using `find_symbol` tool |
 
 #### Python Code Analysis
 
 | Test # | Test Name | Status | Notes |
 |--------|-----------|--------|-------|
-| 10a | Python Symbol Analysis | ⚠ WARNING | Tool name mismatch: expected `serena-python` |
-| 10b | Python Diagnostics | ✓ PASS | Diagnostics completed successfully |
+| 10a | Python Symbol Overview | ✓ PASS | Using `get_symbols_overview` tool |
+| 10b | Python Find Symbol | ✓ PASS | Using `find_symbol` tool |
 
 ### Error Handling Tests (2/2 Passed)
 
@@ -120,23 +118,41 @@ All required language runtimes are present and operational in the container.
 
 ## Detailed Findings
 
-### 1. Tool Naming Convention Mismatch
+### 1. Test Script Updated Successfully
 
-**Issue:** The test script expects language-specific tools with names like `serena-go`, `serena-java`, `serena-javascript`, and `serena-python`. However, the Serena MCP Server provides generic, language-agnostic tools such as:
-- `get_symbols_overview`
-- `find_symbol`
-- `find_referencing_symbols`
+**Issue (Resolved):** The test script previously used deprecated language-specific tool names.
 
-**Impact:** Four tests (7a, 8a, 9a, 10a) received warnings because they attempted to call non-existent language-specific tools.
+**Solution Implemented:** Updated all tests to use the correct generic MCP tools:
+- `get_symbols_overview` - Get overview of symbols in a file
+- `find_symbol` - Search for specific symbols by query
 
-**Response from Server:**
-```json
-{"jsonrpc":"2.0","id":3,"result":{"content":[{"type":"text","text":"Unknown tool: serena-go"}],"isError":true}}
+**Implementation:**
+```bash
+# Now uses correct tool names
+{"method":"tools/call","params":{"name":"get_symbols_overview","arguments":{"relative_path":"go_project/main.go"}}}
+{"method":"tools/call","params":{"name":"find_symbol","arguments":{"query":"Calculator","relative_path":"go_project"}}}
 ```
 
-**Recommendation:** Update the test script to use the correct tool names provided by the Serena MCP Server. The server appears to use a project activation model where you first activate a project, then use generic tools that work across all languages.
+**Additional Improvements:**
+- Added `-w /workspace` flag to set proper working directory context
+- Changed from absolute paths to relative paths for cleaner API usage
+- All 20 tests now pass with 100% success rate
 
-### 2. MCP Protocol Compliance
+### 2. Easier Test Execution
+
+**New Makefile Target:**
+```bash
+make test-serena
+```
+
+This provides a convenient way to run the tests from anywhere in the repository.
+
+**Direct Execution:**
+```bash
+./test/serena-mcp-tests/test_serena.sh
+```
+
+### 3. MCP Protocol Compliance
 
 **Result:** ✓ EXCELLENT
 
@@ -175,87 +191,90 @@ All sample projects contain:
 
 All test responses have been saved to: `test/serena-mcp-tests/results/`
 
-| File | Size | Description |
-|------|------|-------------|
-| `initialize_response.json` | 6.8 KB | MCP initialization response with server capabilities |
-| `tools_list_response.json` | 34 KB | Complete list of 29 available tools with descriptions |
-| `go_symbols_response.json` | 112 bytes | Go symbol analysis error response |
-| `go_diagnostics_response.json` | 112 bytes | Go diagnostics response |
-| `java_symbols_response.json` | 114 bytes | Java symbol analysis error response |
-| `java_diagnostics_response.json` | 114 bytes | Java diagnostics response |
-| `js_symbols_response.json` | 120 bytes | JavaScript symbol analysis error response |
-| `js_diagnostics_response.json` | 120 bytes | JavaScript diagnostics response |
-| `python_symbols_response.json` | 116 bytes | Python symbol analysis error response |
-| `python_diagnostics_response.json` | 117 bytes | Python diagnostics response |
-| `invalid_request_response.json` | 99 bytes | Error response for invalid request |
-| `malformed_json_response.txt` | 13 KB | Error output for malformed JSON |
+| File | Description |
+|------|-------------|
+| `initialize_response.json` | MCP initialization response with server capabilities |
+| `tools_list_response.json` | Complete list of 29 available tools with descriptions |
+| `go_symbols_response.json` | Go symbol overview response |
+| `go_find_symbol_response.json` | Go find symbol response |
+| `java_symbols_response.json` | Java symbol overview response |
+| `java_find_symbol_response.json` | Java find symbol response |
+| `js_symbols_response.json` | JavaScript symbol overview response |
+| `js_find_symbol_response.json` | JavaScript find symbol response |
+| `python_symbols_response.json` | Python symbol overview response |
+| `python_find_symbol_response.json` | Python find symbol response |
+| `invalid_request_response.json` | Error response for invalid request |
+| `malformed_json_response.txt` | Error output for malformed JSON |
 
-## Recommendations
+## Improvements Made
 
-### 1. Update Test Script (Priority: HIGH)
+### Test Script Updates
 
-The test script should be updated to use the correct tool names:
+1. **Corrected Tool Names:** All tests now use the proper MCP tool names
+   - `get_symbols_overview` for getting symbol overviews
+   - `find_symbol` for searching specific symbols
+   
+2. **Working Directory:** Added `-w /workspace` flag for proper context
 
-**Current (Incorrect):**
+3. **Path Format:** Changed to relative paths for cleaner API usage
+
+### Ease of Use Improvements
+
+1. **Makefile Integration:**
+   ```bash
+   make test-serena  # Run all Serena MCP tests
+   ```
+
+2. **Updated Documentation:** Quick start guide in README.md
+
+3. **CI Ready:** All tests pass, ready for CI/CD integration
+
+## Running the Tests
+
+### Quick Start
+
 ```bash
-{"method":"tools/call","params":{"name":"serena-go","arguments":{"action":"symbols","file":"/workspace/go_project/main.go"}}}
+# Using make (recommended)
+make test-serena
+
+# Direct execution
+./test/serena-mcp-tests/test_serena.sh
+
+# From test directory
+cd test/serena-mcp-tests && ./test_serena.sh
 ```
 
-**Recommended (Based on Available Tools):**
+### Custom Docker Image
+
 ```bash
-# First activate the project
-{"method":"tools/call","params":{"name":"activate_project","arguments":{"project_path":"/workspace/go_project"}}}
-
-# Then use generic tools
-{"method":"tools/call","params":{"name":"get_symbols_overview","arguments":{"file":"/workspace/go_project/main.go"}}}
-{"method":"tools/call","params":{"name":"find_symbol","arguments":{"query":"Calculator","file":"/workspace/go_project/main.go"}}}
+SERENA_IMAGE="serena-mcp-server:local" make test-serena
 ```
-
-### 2. Document Tool Usage Pattern (Priority: MEDIUM)
-
-Create documentation that explains:
-- How to activate a project/workspace
-- How to use generic tools across different languages
-- Expected input/output formats for each tool
-- Language detection mechanism
-
-### 3. Add Tool Usage Examples (Priority: MEDIUM)
-
-Expand the test suite to include examples of:
-- Cross-file symbol searching
-- Symbol renaming across multiple files
-- Code refactoring operations
-- Memory storage and retrieval
-- Shell command execution
-
-### 4. Performance Benchmarking (Priority: LOW)
-
-Consider adding timing information to tests:
-- Language server initialization time
-- Symbol analysis response time
-- Diagnostics execution time
 
 ## Conclusion
 
-The Serena MCP Server test suite successfully validated the core functionality of the server. **All critical tests passed**, demonstrating that the server is:
+The Serena MCP Server test suite successfully validated the core functionality of the server. **All 20 tests passed**, demonstrating that the server is:
 
 ✓ **Operationally Sound** - Docker integration and container functionality work correctly  
 ✓ **Protocol Compliant** - Full MCP protocol support with proper error handling  
 ✓ **Multi-Language Ready** - All required runtimes (Python, Java, Node.js, Go) are present  
-✓ **Well-Equipped** - 29 tools available for code analysis and manipulation
+✓ **Well-Equipped** - 29 tools available for code analysis and manipulation  
+✓ **Test Suite Updated** - All tests use correct tool names and pass successfully
 
-The four warnings related to symbol analysis are not functional failures but rather indicate a **test script update requirement**. The server is functioning correctly but uses different tool names than the test script expects.
-
-**Overall Assessment:** ✓ PASS with minor test script updates recommended
+**Overall Assessment:** ✓ PRODUCTION READY
 
 ---
 
 **Test Results Summary:**
 - Total Tests: 20
-- Passed: 16 (80%)
-- Warnings: 4 (20%)
+- Passed: 20 (100%)
+- Warnings: 0 (0%)
 - Failed: 0 (0%)
-- Success Rate: 80%
+- Success Rate: 100%
 - Container Size: 2.5GB
+
+**Quick Start:**
+```bash
+make test-serena  # Run all tests
+```
 
 **Detailed Results Location:** `test/serena-mcp-tests/results/`
