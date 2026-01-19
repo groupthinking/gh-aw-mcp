@@ -70,14 +70,15 @@ func generateRandomID() string {
 
 // applyJqSchema applies the jq schema transformation to JSON data
 // Uses pre-compiled query code for better performance (3-10x faster than parsing on each request)
-func applyJqSchema(jsonData interface{}) (string, error) {
+// Accepts a context for timeout and cancellation support
+func applyJqSchema(ctx context.Context, jsonData interface{}) (string, error) {
 	// Check if compilation succeeded at init time
 	if jqSchemaCompileErr != nil {
 		return "", jqSchemaCompileErr
 	}
 
-	// Run the pre-compiled query (much faster than Parse+Run)
-	iter := jqSchemaCode.Run(jsonData)
+	// Run the pre-compiled query with context support (much faster than Parse+Run)
+	iter := jqSchemaCode.RunWithContext(ctx, jsonData)
 	v, ok := iter.Next()
 	if !ok {
 		return "", fmt.Errorf("jq schema filter returned no results")
@@ -166,7 +167,7 @@ func WrapToolHandler(
 				return fmt.Errorf("failed to unmarshal for schema: %w", err)
 			}
 
-			schema, err := applyJqSchema(jsonData)
+			schema, err := applyJqSchema(ctx, jsonData)
 			if err != nil {
 				return err
 			}

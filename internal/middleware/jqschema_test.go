@@ -73,7 +73,7 @@ func TestApplyJqSchema(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := applyJqSchema(tt.input)
+			result, err := applyJqSchema(context.Background(), tt.input)
 			require.NoError(t, err, "applyJqSchema should not return error")
 			assert.JSONEq(t, tt.expected, result, "Schema should match expected")
 		})
@@ -256,7 +256,7 @@ func TestApplyJqSchema_ErrorCases(t *testing.T) {
 			},
 		}
 
-		result, err := applyJqSchema(input)
+		result, err := applyJqSchema(context.Background(), input)
 		require.NoError(t, err, "Should handle deeply nested structures")
 		assert.NotEmpty(t, result, "Result should not be empty")
 
