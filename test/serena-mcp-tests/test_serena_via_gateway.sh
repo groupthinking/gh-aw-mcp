@@ -191,7 +191,7 @@ GATEWAY_PID=$!
 
 # Wait for gateway to be ready
 log_info "Waiting for gateway to be ready (PID: $GATEWAY_PID)..."
-sleep 10
+sleep 5
 
 # Check if process is still running
 if ! kill -0 $GATEWAY_PID 2>/dev/null; then
@@ -201,11 +201,36 @@ if ! kill -0 $GATEWAY_PID 2>/dev/null; then
     exit 1
 fi
 
-# Check if gateway is responding
-log_info "Testing gateway connection..."
-GATEWAY_TEST=$(curl -s -o /dev/null -w "%{http_code}" "http://localhost:$GATEWAY_PORT/mcp/serena" 2>/dev/null || echo "000")
+# Wait for gateway to fully initialize (Serena backend takes ~20-25 seconds to start)
+log_info "Waiting for Serena backend initialization (this may take 20-30 seconds)..."
+sleep 25
 
-if [ "$GATEWAY_TEST" != "000" ]; then
+# Check if process is still running after backend init
+if ! kill -0 $GATEWAY_PID 2>/dev/null; then
+    log_error "Gateway process died during initialization"
+    log_info "Gateway logs:"
+    cat "$TEMP_DIR/gateway.log"
+    exit 1
+fi
+
+# Check if gateway is responding with retries
+log_info "Testing gateway connection..."
+GATEWAY_TEST="0"
+for i in 1 2 3 4 5; do
+    GATEWAY_TEST=$(curl -s -X POST "http://localhost:$GATEWAY_PORT/mcp/serena" \
+        -H "Content-Type: application/json" \
+        -H "Authorization: $GATEWAY_API_KEY" \
+        -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"test","version":"1.0"}}}' \
+        2>/dev/null | grep -c '"jsonrpc"' || echo "0")
+    
+    if [ "$GATEWAY_TEST" != "0" ]; then
+        break
+    fi
+    log_info "Retry $i/5..."
+    sleep 3
+done
+
+if [ "$GATEWAY_TEST" != "0" ]; then
     log_success "MCP Gateway started successfully and is responding"
     log_info "Gateway endpoint: http://localhost:$GATEWAY_PORT/mcp/serena"
 else
