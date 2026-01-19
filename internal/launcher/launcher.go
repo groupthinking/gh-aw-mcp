@@ -21,7 +21,8 @@ var logLauncher = logger.New("launcher:launcher")
 type Launcher struct {
 	ctx                context.Context
 	config             *config.Config
-	connections        map[string]*mcp.Connection
+	connections        map[string]*mcp.Connection  // Single connections per backend (stateless/HTTP)
+	sessionPool        *SessionConnectionPool       // Session-aware connections (stateful/stdio)
 	mu                 sync.RWMutex
 	runningInContainer bool
 }
@@ -39,6 +40,7 @@ func New(ctx context.Context, cfg *config.Config) *Launcher {
 		ctx:                ctx,
 		config:             cfg,
 		connections:        make(map[string]*mcp.Connection),
+		sessionPool:        NewSessionConnectionPool(ctx),
 		runningInContainer: inContainer,
 	}
 }
@@ -182,6 +184,117 @@ func GetOrLaunch(l *Launcher, serverID string) (*mcp.Connection, error) {
 	return conn, nil
 }
 
+// GetOrLaunchForSession returns a session-aware connection or launches a new one
+// This is used for stateful stdio backends that require persistent connections
+func GetOrLaunchForSession(l *Launcher, serverID, sessionID string) (*mcp.Connection, error) {
+	logger.LogDebug("backend", "GetOrLaunchForSession called: server=%s, session=%s", serverID, sessionID)
+	logLauncher.Printf("GetOrLaunchForSession called: serverID=%s, sessionID=%s", serverID, sessionID)
+
+	// Get server config first to determine backend type
+	l.mu.RLock()
+	serverCfg, ok := l.config.Servers[serverID]
+	l.mu.RUnlock()
+	
+	if !ok {
+		logger.LogError("backend", "Backend server not found in config: %s", serverID)
+		return nil, fmt.Errorf("server '%s' not found in config", serverID)
+	}
+
+	// For HTTP backends, use the regular GetOrLaunch (stateless)
+	if serverCfg.Type == "http" {
+		logLauncher.Printf("HTTP backend detected, using stateless connection: serverID=%s", serverID)
+		return GetOrLaunch(l, serverID)
+	}
+
+	// For stdio backends, check the session pool first
+	if conn, exists := l.sessionPool.Get(serverID, sessionID); exists {
+		logger.LogDebug("backend", "Reusing session connection: server=%s, session=%s", serverID, sessionID)
+		logLauncher.Printf("Reusing session connection: serverID=%s, sessionID=%s", serverID, sessionID)
+		return conn, nil
+	}
+
+	// Need to launch new connection for this session
+	logLauncher.Printf("Creating new session connection: serverID=%s, sessionID=%s", serverID, sessionID)
+
+	// Lock for launching
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
+	// Double-check after acquiring lock
+	if conn, exists := l.sessionPool.Get(serverID, sessionID); exists {
+		logger.LogDebug("backend", "Session connection created by another goroutine: server=%s, session=%s", serverID, sessionID)
+		logLauncher.Printf("Session connection created by another goroutine: serverID=%s, sessionID=%s", serverID, sessionID)
+		return conn, nil
+	}
+
+	// Warn if using direct command in a container
+	isDirectCommand := serverCfg.Command != "docker"
+	if l.runningInContainer && isDirectCommand {
+		logger.LogWarn("backend", "Server '%s' uses direct command execution inside a container (command: %s)", serverID, serverCfg.Command)
+		log.Printf("[LAUNCHER] ⚠️  WARNING: Server '%s' uses direct command execution inside a container", serverID)
+		log.Printf("[LAUNCHER] ⚠️  Security Notice: Command '%s' will execute with the same privileges as the gateway", serverCfg.Command)
+		log.Printf("[LAUNCHER] ⚠️  Consider using 'container' field instead for better isolation")
+	}
+
+	// Log the command being executed
+	logger.LogInfo("backend", "Launching MCP backend server for session: server=%s, session=%s, command=%s, args=%v", serverID, sessionID, serverCfg.Command, serverCfg.Args)
+	log.Printf("[LAUNCHER] Starting MCP server for session: %s (session: %s)", serverID, sessionID)
+	log.Printf("[LAUNCHER] Command: %s", serverCfg.Command)
+	log.Printf("[LAUNCHER] Args: %v", serverCfg.Args)
+	logLauncher.Printf("Launching new session server: serverID=%s, sessionID=%s, command=%s", serverID, sessionID, serverCfg.Command)
+
+	// Check for environment variable passthrough
+	for i := 0; i < len(serverCfg.Args); i++ {
+		arg := serverCfg.Args[i]
+		if arg == "-e" && i+1 < len(serverCfg.Args) {
+			nextArg := serverCfg.Args[i+1]
+			if !strings.Contains(nextArg, "=") {
+				if val := os.Getenv(nextArg); val != "" {
+					displayVal := val
+					if len(val) > 10 {
+						displayVal = val[:10] + "..."
+					}
+					log.Printf("[LAUNCHER] ✓ Env passthrough: %s=%s (from MCPG process)", nextArg, displayVal)
+				} else {
+					log.Printf("[LAUNCHER] ✗ WARNING: Env passthrough for %s requested but NOT FOUND in MCPG process", nextArg)
+				}
+			}
+			i++
+		}
+	}
+
+	if len(serverCfg.Env) > 0 {
+		log.Printf("[LAUNCHER] Additional env vars: %v", sanitize.TruncateSecretMap(serverCfg.Env))
+	}
+
+	// Create connection
+	conn, err := mcp.NewConnection(l.ctx, serverCfg.Command, serverCfg.Args, serverCfg.Env)
+	if err != nil {
+		logger.LogError("backend", "Failed to launch MCP backend server for session: server=%s, session=%s, error=%v", serverID, sessionID, err)
+		log.Printf("[LAUNCHER] ❌ FAILED to launch server '%s' for session '%s'", serverID, sessionID)
+		log.Printf("[LAUNCHER] Error: %v", err)
+		log.Printf("[LAUNCHER] Debug Information:")
+		log.Printf("[LAUNCHER]   - Command: %s", serverCfg.Command)
+		log.Printf("[LAUNCHER]   - Args: %v", serverCfg.Args)
+		log.Printf("[LAUNCHER]   - Env vars: %v", sanitize.TruncateSecretMap(serverCfg.Env))
+		log.Printf("[LAUNCHER]   - Running in container: %v", l.runningInContainer)
+		log.Printf("[LAUNCHER]   - Is direct command: %v", isDirectCommand)
+
+		// Record error in session pool
+		l.sessionPool.RecordError(serverID, sessionID)
+
+		return nil, fmt.Errorf("failed to create connection: %w", err)
+	}
+
+	logger.LogInfo("backend", "Successfully launched MCP backend server for session: server=%s, session=%s", serverID, sessionID)
+	log.Printf("[LAUNCHER] Successfully launched: %s (session: %s)", serverID, sessionID)
+	logLauncher.Printf("Session connection established: serverID=%s, sessionID=%s", serverID, sessionID)
+
+	// Add to session pool
+	l.sessionPool.Set(serverID, sessionID, conn)
+	return conn, nil
+}
+
 // ServerIDs returns all configured server IDs
 func (l *Launcher) ServerIDs() []string {
 	l.mu.RLock()
@@ -204,4 +317,10 @@ func (l *Launcher) Close() {
 		conn.Close()
 	}
 	l.connections = make(map[string]*mcp.Connection)
+	
+	// Stop session pool and close all session connections
+	if l.sessionPool != nil {
+		logLauncher.Printf("Stopping session connection pool")
+		l.sessionPool.Stop()
+	}
 }
