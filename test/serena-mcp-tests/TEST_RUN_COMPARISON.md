@@ -176,9 +176,15 @@ All failures share the same error pattern:
 
 ## Root Cause Analysis
 
+> **📖 For a comprehensive analysis of MCP server architecture patterns, see [MCP_SERVER_ARCHITECTURE_ANALYSIS.md](MCP_SERVER_ARCHITECTURE_ANALYSIS.md)**
+
 ### The Session Initialization Issue
 
-The gateway test failures are **expected behavior** due to fundamental differences in connection models:
+The gateway test failures are **expected behavior** due to fundamental differences in MCP server architecture patterns:
+
+**This is NOT unique to Serena!** It affects any MCP server designed with stateful stdio architecture. GitHub MCP Server works through the gateway because it's designed as a stateless HTTP-native server.
+
+### Connection Model Differences
 
 #### Direct Stdio Connection (Works ✅)
 ```
@@ -254,13 +260,23 @@ Client → Gateway → Docker Container (stdio)
 
 ## Implications and Recommendations
 
+> **💡 See [MCP_SERVER_ARCHITECTURE_ANALYSIS.md](MCP_SERVER_ARCHITECTURE_ANALYSIS.md) for detailed recommendations for developers and users**
+
 ### Current Limitations
 
-1. **Stdio-based MCP servers** (like Serena) require persistent connections and cannot be fully proxied through the current HTTP gateway architecture.
+1. **Stateful stdio-based MCP servers** (like Serena) require persistent connections and cannot be fully proxied through the current HTTP gateway architecture.
 
 2. **Full Serena functionality** is only available through direct stdio connections.
 
-3. **HTTP-native MCP servers** would work fine through the gateway since they're designed for stateless operation.
+3. **Stateless HTTP-native MCP servers** (like GitHub MCP Server) work perfectly through the gateway since they're designed for stateless operation.
+
+### Not Unique to Serena
+
+**Important:** This limitation affects **any stateful MCP server**, not just Serena:
+- ✅ **GitHub MCP Server** - Works (stateless HTTP-native design)
+- ❌ **Serena MCP Server** - Fails (stateful stdio design)
+- ❌ **Other stateful stdio servers** - Would also fail
+- ✅ **Other stateless HTTP servers** - Would work
 
 ### Recommendations
 
@@ -327,12 +343,23 @@ Despite the gateway test failures, both test suites provide significant value:
 ### Next Steps
 
 The test results successfully demonstrate:
-- ✅ Serena is fully functional and production-ready
+- ✅ Serena is fully functional and production-ready (stateful stdio server)
 - ✅ Gateway successfully starts and routes requests to Serena
-- ⚠️ HTTP-based proxying has limitations with stateful stdio servers
+- ✅ Gateway works perfectly with stateless HTTP-native servers (see GitHub MCP Server tests)
+- ⚠️ HTTP-based proxying has limitations with stateful stdio servers (architectural pattern)
 - 📝 These limitations are now documented for users and developers
 
-For full Serena functionality, users should use **direct stdio connections** until the gateway implements session persistence for stateful backends.
+### Architecture Guidance
+
+**For full functionality:**
+- **Stateful servers (Serena):** Use direct stdio connections
+- **Stateless servers (GitHub):** Use either direct connections or HTTP gateway
+
+**This is a fundamental architecture difference between:**
+1. **Stateless HTTP-native servers** - Designed for gateway deployment
+2. **Stateful stdio-based servers** - Designed for local/CLI use
+
+See [MCP_SERVER_ARCHITECTURE_ANALYSIS.md](MCP_SERVER_ARCHITECTURE_ANALYSIS.md) for complete details on these patterns, evidence from testing, and recommendations.
 
 ---
 
