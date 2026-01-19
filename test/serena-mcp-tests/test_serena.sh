@@ -2,6 +2,10 @@
 # Comprehensive test script for Serena MCP Server
 # Tests multi-language support: Go, Java, JavaScript, Python
 # Tests MCP protocol interactions and validates responses
+#
+# Portability: Compatible with bash 3.2+ (macOS) and bash 4+ (Ubuntu/Linux)
+# - Uses helper functions instead of associative arrays (bash 4+ feature)
+# - Arithmetic expressions use || true to work with set -e
 
 set -e
 
@@ -447,27 +451,33 @@ test_tool_for_language() {
 # Test 11: Comprehensive Tool Testing for All Languages
 log_section "Test 11: Comprehensive Tool Testing"
 
-# Define the languages and their corresponding projects
-declare -A LANGUAGE_PROJECTS
-LANGUAGE_PROJECTS["Go"]="go_project"
-LANGUAGE_PROJECTS["Java"]="java_project"
-LANGUAGE_PROJECTS["JavaScript"]="js_project"
-LANGUAGE_PROJECTS["Python"]="python_project"
+# Helper functions to get language-specific paths (bash 3.x compatible)
+get_language_project() {
+    case "$1" in
+        "Go") echo "go_project" ;;
+        "Java") echo "java_project" ;;
+        "JavaScript") echo "js_project" ;;
+        "Python") echo "python_project" ;;
+    esac
+}
 
-declare -A LANGUAGE_FILES
-LANGUAGE_FILES["Go"]="go_project/main.go"
-LANGUAGE_FILES["Java"]="java_project/Calculator.java"
-LANGUAGE_FILES["JavaScript"]="js_project/calculator.js"
-LANGUAGE_FILES["Python"]="python_project/calculator.py"
+get_language_file() {
+    case "$1" in
+        "Go") echo "go_project/main.go" ;;
+        "Java") echo "java_project/Calculator.java" ;;
+        "JavaScript") echo "js_project/calculator.js" ;;
+        "Python") echo "python_project/calculator.py" ;;
+    esac
+}
 
 TEST_ID=1000
 
 # Test list_dir for all languages
 log_section "Test 11a: list_dir Tool"
 for lang in "Go" "Java" "JavaScript" "Python"; do
-    project="${LANGUAGE_PROJECTS[$lang]}"
+    project="$(get_language_project "$lang")"
     if [ -d "$SAMPLES_DIR/$project" ]; then
-        ((TEST_ID++))
+        ((TEST_ID++)) || true
         test_tool_for_language "$lang" "list_dir" ',"arguments":{"relative_path":"'$project'"}' "$project" $TEST_ID "${lang}_list_dir_response.json"
     else
         log_warning "$lang project not found, skipping list_dir test"
@@ -477,9 +487,9 @@ done
 # Test find_file for all languages
 log_section "Test 11b: find_file Tool"
 for lang in "Go" "Java" "JavaScript" "Python"; do
-    project="${LANGUAGE_PROJECTS[$lang]}"
+    project="$(get_language_project "$lang")"
     if [ -d "$SAMPLES_DIR/$project" ]; then
-        ((TEST_ID++))
+        ((TEST_ID++)) || true
         case $lang in
             "Go")
                 test_tool_for_language "$lang" "find_file" ',"arguments":{"query":"*.go","relative_path":"'$project'"}' "$project" $TEST_ID "${lang}_find_file_response.json"
@@ -502,9 +512,9 @@ done
 # Test search_for_pattern for all languages
 log_section "Test 11c: search_for_pattern Tool"
 for lang in "Go" "Java" "JavaScript" "Python"; do
-    project="${LANGUAGE_PROJECTS[$lang]}"
+    project="$(get_language_project "$lang")"
     if [ -d "$SAMPLES_DIR/$project" ]; then
-        ((TEST_ID++))
+        ((TEST_ID++)) || true
         test_tool_for_language "$lang" "search_for_pattern" ',"arguments":{"pattern":"Calculator","relative_path":"'$project'"}' "$project" $TEST_ID "${lang}_search_pattern_response.json"
     else
         log_warning "$lang project not found, skipping search_for_pattern test"
@@ -514,10 +524,10 @@ done
 # Test find_referencing_symbols for all languages
 log_section "Test 11d: find_referencing_symbols Tool"
 for lang in "Go" "Java" "JavaScript" "Python"; do
-    project="${LANGUAGE_PROJECTS[$lang]}"
-    file="${LANGUAGE_FILES[$lang]}"
+    project="$(get_language_project "$lang")"
+    file="$(get_language_file "$lang")"
     if [ -f "$SAMPLES_DIR/$file" ]; then
-        ((TEST_ID++))
+        ((TEST_ID++)) || true
         test_tool_for_language "$lang" "find_referencing_symbols" ',"arguments":{"symbol_name":"Calculator","relative_path":"'$file'"}' "$project" $TEST_ID "${lang}_find_refs_response.json"
     else
         log_warning "$lang file not found, skipping find_referencing_symbols test"
@@ -527,10 +537,10 @@ done
 # Test replace_symbol_body for all languages
 log_section "Test 11e: replace_symbol_body Tool"
 for lang in "Go" "Java" "JavaScript" "Python"; do
-    project="${LANGUAGE_PROJECTS[$lang]}"
-    file="${LANGUAGE_FILES[$lang]}"
+    project="$(get_language_project "$lang")"
+    file="$(get_language_file "$lang")"
     if [ -f "$SAMPLES_DIR/$file" ]; then
-        ((TEST_ID++))
+        ((TEST_ID++)) || true
         # Using a simple replacement that should work for all languages
         case $lang in
             "Go")
@@ -554,10 +564,10 @@ done
 # Test insert_after_symbol for all languages
 log_section "Test 11f: insert_after_symbol Tool"
 for lang in "Go" "Java" "JavaScript" "Python"; do
-    project="${LANGUAGE_PROJECTS[$lang]}"
-    file="${LANGUAGE_FILES[$lang]}"
+    project="$(get_language_project "$lang")"
+    file="$(get_language_file "$lang")"
     if [ -f "$SAMPLES_DIR/$file" ]; then
-        ((TEST_ID++))
+        ((TEST_ID++)) || true
         case $lang in
             "Go")
                 test_tool_for_language "$lang" "insert_after_symbol" ',"arguments":{"symbol_name":"Add","code":"// Test comment","relative_path":"'$file'"}' "$project" $TEST_ID "${lang}_insert_after_response.json"
@@ -580,10 +590,10 @@ done
 # Test insert_before_symbol for all languages
 log_section "Test 11g: insert_before_symbol Tool"
 for lang in "Go" "Java" "JavaScript" "Python"; do
-    project="${LANGUAGE_PROJECTS[$lang]}"
-    file="${LANGUAGE_FILES[$lang]}"
+    project="$(get_language_project "$lang")"
+    file="$(get_language_file "$lang")"
     if [ -f "$SAMPLES_DIR/$file" ]; then
-        ((TEST_ID++))
+        ((TEST_ID++)) || true
         case $lang in
             "Go")
                 test_tool_for_language "$lang" "insert_before_symbol" ',"arguments":{"symbol_name":"Multiply","code":"// Before multiply","relative_path":"'$file'"}' "$project" $TEST_ID "${lang}_insert_before_response.json"
@@ -606,10 +616,10 @@ done
 # Test rename_symbol for all languages
 log_section "Test 11h: rename_symbol Tool"
 for lang in "Go" "Java" "JavaScript" "Python"; do
-    project="${LANGUAGE_PROJECTS[$lang]}"
-    file="${LANGUAGE_FILES[$lang]}"
+    project="$(get_language_project "$lang")"
+    file="$(get_language_file "$lang")"
     if [ -f "$SAMPLES_DIR/$file" ]; then
-        ((TEST_ID++))
+        ((TEST_ID++)) || true
         case $lang in
             "Go")
                 test_tool_for_language "$lang" "rename_symbol" ',"arguments":{"old_name":"Add","new_name":"AddNumbers","relative_path":"'$file'"}' "$project" $TEST_ID "${lang}_rename_symbol_response.json"
@@ -635,7 +645,7 @@ log_section "Test 12: Memory Operations"
 # Test write_memory
 count_test
 log_info "Test 12a: write_memory..."
-((TEST_ID++))
+((TEST_ID++)) || true
 WRITE_MEM_REQUEST='{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"test","version":"1.0"}}}
 {"jsonrpc":"2.0","method":"notifications/initialized"}
 {"jsonrpc":"2.0","id":'$TEST_ID',"method":"tools/call","params":{"name":"write_memory","arguments":{"key":"test_key","value":"test_value","tags":["test"]}}}'
@@ -656,7 +666,7 @@ fi
 # Test read_memory
 count_test
 log_info "Test 12b: read_memory..."
-((TEST_ID++))
+((TEST_ID++)) || true
 READ_MEM_REQUEST='{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"test","version":"1.0"}}}
 {"jsonrpc":"2.0","method":"notifications/initialized"}
 {"jsonrpc":"2.0","id":'$TEST_ID',"method":"tools/call","params":{"name":"read_memory","arguments":{"key":"test_key"}}}'
@@ -677,7 +687,7 @@ fi
 # Test list_memories
 count_test
 log_info "Test 12c: list_memories..."
-((TEST_ID++))
+((TEST_ID++)) || true
 LIST_MEM_REQUEST='{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"test","version":"1.0"}}}
 {"jsonrpc":"2.0","method":"notifications/initialized"}
 {"jsonrpc":"2.0","id":'$TEST_ID',"method":"tools/call","params":{"name":"list_memories","arguments":{}}}'
@@ -698,7 +708,7 @@ fi
 # Test edit_memory
 count_test
 log_info "Test 12d: edit_memory..."
-((TEST_ID++))
+((TEST_ID++)) || true
 EDIT_MEM_REQUEST='{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"test","version":"1.0"}}}
 {"jsonrpc":"2.0","method":"notifications/initialized"}
 {"jsonrpc":"2.0","id":'$TEST_ID',"method":"tools/call","params":{"name":"edit_memory","arguments":{"key":"test_key","value":"updated_value"}}}'
@@ -719,7 +729,7 @@ fi
 # Test delete_memory
 count_test
 log_info "Test 12e: delete_memory..."
-((TEST_ID++))
+((TEST_ID++)) || true
 DELETE_MEM_REQUEST='{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"test","version":"1.0"}}}
 {"jsonrpc":"2.0","method":"notifications/initialized"}
 {"jsonrpc":"2.0","id":'$TEST_ID',"method":"tools/call","params":{"name":"delete_memory","arguments":{"key":"test_key"}}}'
@@ -743,11 +753,11 @@ log_section "Test 13: Configuration and Project Management"
 # Test activate_project for each language
 log_section "Test 13a: activate_project Tool"
 for lang in "Go" "Java" "JavaScript" "Python"; do
-    project="${LANGUAGE_PROJECTS[$lang]}"
+    project="$(get_language_project "$lang")"
     if [ -d "$SAMPLES_DIR/$project" ]; then
         count_test
         log_info "Testing activate_project for ${lang}..."
-        ((TEST_ID++))
+        ((TEST_ID++)) || true
         
         ACTIVATE_REQUEST='{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"test","version":"1.0"}}}
 {"jsonrpc":"2.0","method":"notifications/initialized"}
@@ -773,7 +783,7 @@ done
 # Test get_current_config
 count_test
 log_info "Test 13b: get_current_config..."
-((TEST_ID++))
+((TEST_ID++)) || true
 CONFIG_REQUEST='{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"test","version":"1.0"}}}
 {"jsonrpc":"2.0","method":"notifications/initialized"}
 {"jsonrpc":"2.0","id":'$TEST_ID',"method":"tools/call","params":{"name":"get_current_config","arguments":{}}}'
@@ -797,7 +807,7 @@ log_section "Test 14: Onboarding Operations"
 # Test check_onboarding_performed
 count_test
 log_info "Test 14a: check_onboarding_performed..."
-((TEST_ID++))
+((TEST_ID++)) || true
 CHECK_ONBOARD_REQUEST='{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"test","version":"1.0"}}}
 {"jsonrpc":"2.0","method":"notifications/initialized"}
 {"jsonrpc":"2.0","id":'$TEST_ID',"method":"tools/call","params":{"name":"check_onboarding_performed","arguments":{}}}'
@@ -818,7 +828,7 @@ fi
 # Test onboarding
 count_test
 log_info "Test 14b: onboarding..."
-((TEST_ID++))
+((TEST_ID++)) || true
 ONBOARD_REQUEST='{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"test","version":"1.0"}}}
 {"jsonrpc":"2.0","method":"notifications/initialized"}
 {"jsonrpc":"2.0","id":'$TEST_ID',"method":"tools/call","params":{"name":"onboarding","arguments":{}}}'
@@ -842,7 +852,7 @@ log_section "Test 15: Thinking Operations"
 # Test think_about_collected_information
 count_test
 log_info "Test 15a: think_about_collected_information..."
-((TEST_ID++))
+((TEST_ID++)) || true
 THINK_INFO_REQUEST='{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"test","version":"1.0"}}}
 {"jsonrpc":"2.0","method":"notifications/initialized"}
 {"jsonrpc":"2.0","id":'$TEST_ID',"method":"tools/call","params":{"name":"think_about_collected_information","arguments":{"information":"Test information"}}}'
@@ -863,7 +873,7 @@ fi
 # Test think_about_task_adherence
 count_test
 log_info "Test 15b: think_about_task_adherence..."
-((TEST_ID++))
+((TEST_ID++)) || true
 THINK_TASK_REQUEST='{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"test","version":"1.0"}}}
 {"jsonrpc":"2.0","method":"notifications/initialized"}
 {"jsonrpc":"2.0","id":'$TEST_ID',"method":"tools/call","params":{"name":"think_about_task_adherence","arguments":{"task":"Test task"}}}'
@@ -884,7 +894,7 @@ fi
 # Test think_about_whether_you_are_done
 count_test
 log_info "Test 15c: think_about_whether_you_are_done..."
-((TEST_ID++))
+((TEST_ID++)) || true
 THINK_DONE_REQUEST='{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"test","version":"1.0"}}}
 {"jsonrpc":"2.0","method":"notifications/initialized"}
 {"jsonrpc":"2.0","id":'$TEST_ID',"method":"tools/call","params":{"name":"think_about_whether_you_are_done","arguments":{}}}'
@@ -907,7 +917,7 @@ log_section "Test 16: Initial Instructions"
 
 count_test
 log_info "Test 16a: initial_instructions..."
-((TEST_ID++))
+((TEST_ID++)) || true
 INITIAL_INSTR_REQUEST='{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"test","version":"1.0"}}}
 {"jsonrpc":"2.0","method":"notifications/initialized"}
 {"jsonrpc":"2.0","id":'$TEST_ID',"method":"tools/call","params":{"name":"initial_instructions","arguments":{}}}'
