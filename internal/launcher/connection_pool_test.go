@@ -255,6 +255,7 @@ func TestConnectionPoolDeleteNonExistent(t *testing.T) {
 func TestConnectionStateTransitions(t *testing.T) {
 	ctx := context.Background()
 	pool := NewSessionConnectionPool(ctx)
+	defer pool.Stop()
 	
 	mockConn := &mcp.Connection{}
 	pool.Set("backend1", "session1", mockConn)
@@ -269,4 +270,139 @@ func TestConnectionStateTransitions(t *testing.T) {
 	// After delete, connection should not exist
 	_, exists := pool.GetMetadata("backend1", "session1")
 	assert.False(t, exists)
+}
+
+func TestPoolConfigDefaults(t *testing.T) {
+	ctx := context.Background()
+	pool := NewSessionConnectionPool(ctx)
+	defer pool.Stop()
+	
+	assert.NotNil(t, pool)
+	assert.Equal(t, DefaultIdleTimeout, pool.idleTimeout)
+	assert.Equal(t, DefaultCleanupInterval, pool.cleanupInterval)
+	assert.Equal(t, DefaultMaxErrorCount, pool.maxErrorCount)
+}
+
+func TestPoolConfigCustom(t *testing.T) {
+	ctx := context.Background()
+	config := PoolConfig{
+		IdleTimeout:     10 * time.Minute,
+		CleanupInterval: 2 * time.Minute,
+		MaxErrorCount:   5,
+	}
+	pool := NewSessionConnectionPoolWithConfig(ctx, config)
+	defer pool.Stop()
+	
+	assert.Equal(t, config.IdleTimeout, pool.idleTimeout)
+	assert.Equal(t, config.CleanupInterval, pool.cleanupInterval)
+	assert.Equal(t, config.MaxErrorCount, pool.maxErrorCount)
+}
+
+func TestConnectionIdleCleanup(t *testing.T) {
+	ctx := context.Background()
+	config := PoolConfig{
+		IdleTimeout:     50 * time.Millisecond,
+		CleanupInterval: 20 * time.Millisecond,
+		MaxErrorCount:   10,
+	}
+	pool := NewSessionConnectionPoolWithConfig(ctx, config)
+	defer pool.Stop()
+	
+	mockConn := &mcp.Connection{}
+	pool.Set("backend1", "session1", mockConn)
+	
+	// Connection should exist initially
+	assert.Equal(t, 1, pool.Size())
+	
+	// Wait for idle timeout + cleanup interval
+	time.Sleep(100 * time.Millisecond)
+	
+	// Connection should be cleaned up
+	assert.Equal(t, 0, pool.Size())
+}
+
+func TestConnectionErrorCleanup(t *testing.T) {
+	ctx := context.Background()
+	config := PoolConfig{
+		IdleTimeout:     1 * time.Hour,
+		CleanupInterval: 20 * time.Millisecond,
+		MaxErrorCount:   3,
+	}
+	pool := NewSessionConnectionPoolWithConfig(ctx, config)
+	defer pool.Stop()
+	
+	mockConn := &mcp.Connection{}
+	pool.Set("backend1", "session1", mockConn)
+	
+	// Record multiple errors
+	pool.RecordError("backend1", "session1")
+	pool.RecordError("backend1", "session1")
+	pool.RecordError("backend1", "session1")
+	
+	// Connection should still exist
+	assert.Equal(t, 1, pool.Size())
+	
+	// Wait for cleanup
+	time.Sleep(50 * time.Millisecond)
+	
+	// Connection should be cleaned up due to errors
+	assert.Equal(t, 0, pool.Size())
+}
+
+func TestPoolStop(t *testing.T) {
+	ctx := context.Background()
+	pool := NewSessionConnectionPool(ctx)
+	
+	// Add some connections
+	pool.Set("backend1", "session1", &mcp.Connection{})
+	pool.Set("backend2", "session2", &mcp.Connection{})
+	
+	assert.Equal(t, 2, pool.Size())
+	
+	// Stop the pool
+	pool.Stop()
+	
+	// All connections should be removed
+	assert.Equal(t, 0, pool.Size())
+}
+
+func TestConnectionStateActive(t *testing.T) {
+	ctx := context.Background()
+	pool := NewSessionConnectionPool(ctx)
+	defer pool.Stop()
+	
+	mockConn := &mcp.Connection{}
+	pool.Set("backend1", "session1", mockConn)
+	
+	// After Set, state should be Active
+	metadata, _ := pool.GetMetadata("backend1", "session1")
+	assert.Equal(t, ConnectionStateActive, metadata.State)
+	
+	// After Get, state should remain Active
+	pool.Get("backend1", "session1")
+	metadata, _ = pool.GetMetadata("backend1", "session1")
+	assert.Equal(t, ConnectionStateActive, metadata.State)
+}
+
+func TestConnectionCleanupWithActivity(t *testing.T) {
+	ctx := context.Background()
+	config := PoolConfig{
+		IdleTimeout:     100 * time.Millisecond,
+		CleanupInterval: 30 * time.Millisecond,
+		MaxErrorCount:   10,
+	}
+	pool := NewSessionConnectionPoolWithConfig(ctx, config)
+	defer pool.Stop()
+	
+	mockConn := &mcp.Connection{}
+	pool.Set("backend1", "session1", mockConn)
+	
+	// Keep connection active by using it
+	for i := 0; i < 5; i++ {
+		time.Sleep(40 * time.Millisecond)
+		pool.Get("backend1", "session1") // This updates LastUsedAt
+	}
+	
+	// Connection should still exist because it was active
+	assert.Equal(t, 1, pool.Size())
 }

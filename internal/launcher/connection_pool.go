@@ -37,20 +37,160 @@ const (
 	ConnectionStateClosed ConnectionState = "closed"
 )
 
+// Default configuration values
+const (
+	DefaultIdleTimeout    = 30 * time.Minute
+	DefaultCleanupInterval = 5 * time.Minute
+	DefaultMaxErrorCount   = 10
+)
+
 // SessionConnectionPool manages connections keyed by (backend, session)
 type SessionConnectionPool struct {
-	connections map[ConnectionKey]*ConnectionMetadata
-	mu          sync.RWMutex
-	ctx         context.Context
+	connections      map[ConnectionKey]*ConnectionMetadata
+	mu               sync.RWMutex
+	ctx              context.Context
+	idleTimeout      time.Duration
+	cleanupInterval  time.Duration
+	maxErrorCount    int
+	cleanupTicker    *time.Ticker
+	cleanupDone      chan bool
 }
 
-// NewSessionConnectionPool creates a new connection pool
+// PoolConfig configures the connection pool
+type PoolConfig struct {
+	IdleTimeout     time.Duration
+	CleanupInterval time.Duration
+	MaxErrorCount   int
+}
+
+// NewSessionConnectionPool creates a new connection pool with default config
 func NewSessionConnectionPool(ctx context.Context) *SessionConnectionPool {
-	logPool.Print("Creating new session connection pool")
-	return &SessionConnectionPool{
-		connections: make(map[ConnectionKey]*ConnectionMetadata),
-		ctx:         ctx,
+	return NewSessionConnectionPoolWithConfig(ctx, PoolConfig{
+		IdleTimeout:     DefaultIdleTimeout,
+		CleanupInterval: DefaultCleanupInterval,
+		MaxErrorCount:   DefaultMaxErrorCount,
+	})
+}
+
+// NewSessionConnectionPoolWithConfig creates a new connection pool with custom config
+func NewSessionConnectionPoolWithConfig(ctx context.Context, config PoolConfig) *SessionConnectionPool {
+	logPool.Printf("Creating new session connection pool: idleTimeout=%v, cleanupInterval=%v, maxErrors=%d",
+		config.IdleTimeout, config.CleanupInterval, config.MaxErrorCount)
+	
+	pool := &SessionConnectionPool{
+		connections:     make(map[ConnectionKey]*ConnectionMetadata),
+		ctx:             ctx,
+		idleTimeout:     config.IdleTimeout,
+		cleanupInterval: config.CleanupInterval,
+		maxErrorCount:   config.MaxErrorCount,
+		cleanupDone:     make(chan bool),
 	}
+	
+	// Start cleanup goroutine
+	pool.startCleanup()
+	
+	return pool
+}
+
+// startCleanup starts the periodic cleanup goroutine
+func (p *SessionConnectionPool) startCleanup() {
+	p.cleanupTicker = time.NewTicker(p.cleanupInterval)
+	
+	go func() {
+		logPool.Print("Cleanup goroutine started")
+		for {
+			select {
+			case <-p.cleanupTicker.C:
+				p.cleanupIdleConnections()
+			case <-p.ctx.Done():
+				logPool.Print("Context cancelled, stopping cleanup")
+				p.cleanupTicker.Stop()
+				p.cleanupDone <- true
+				return
+			}
+		}
+	}()
+}
+
+// cleanupIdleConnections removes connections that have been idle too long or have too many errors
+func (p *SessionConnectionPool) cleanupIdleConnections() {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	
+	now := time.Now()
+	removed := 0
+	
+	for key, metadata := range p.connections {
+		shouldRemove := false
+		reason := ""
+		
+		// Check if idle for too long
+		if now.Sub(metadata.LastUsedAt) > p.idleTimeout {
+			shouldRemove = true
+			reason = "idle timeout"
+		}
+		
+		// Check if too many errors
+		if metadata.ErrorCount >= p.maxErrorCount {
+			shouldRemove = true
+			reason = "too many errors"
+		}
+		
+		// Check if already closed
+		if metadata.State == ConnectionStateClosed {
+			shouldRemove = true
+			reason = "already closed"
+		}
+		
+		if shouldRemove {
+			logPool.Printf("Cleaning up connection: backend=%s, session=%s, reason=%s, idle=%v, errors=%d",
+				key.BackendID, key.SessionID, reason, now.Sub(metadata.LastUsedAt), metadata.ErrorCount)
+			
+			// Close the connection if still active
+			if metadata.Connection != nil && metadata.State != ConnectionStateClosed {
+				// Note: mcp.Connection doesn't have a Close method in current implementation
+				// but we mark it as closed
+				metadata.State = ConnectionStateClosed
+			}
+			
+			delete(p.connections, key)
+			removed++
+		}
+	}
+	
+	if removed > 0 {
+		logPool.Printf("Cleanup complete: removed %d idle/failed connections, active=%d", removed, len(p.connections))
+	}
+}
+
+// Stop gracefully shuts down the connection pool
+func (p *SessionConnectionPool) Stop() {
+	logPool.Print("Stopping connection pool")
+	
+	// Stop cleanup goroutine
+	if p.cleanupTicker != nil {
+		p.cleanupTicker.Stop()
+	}
+	
+	// Wait for cleanup to finish
+	select {
+	case <-p.cleanupDone:
+		logPool.Print("Cleanup goroutine stopped")
+	case <-time.After(5 * time.Second):
+		logPool.Print("Cleanup goroutine stop timeout")
+	}
+	
+	// Close all connections
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	
+	for key, metadata := range p.connections {
+		logPool.Printf("Closing connection: backend=%s, session=%s", key.BackendID, key.SessionID)
+		metadata.State = ConnectionStateClosed
+		delete(p.connections, key)
+	}
+	
+	logPool.Print("Connection pool stopped")
 }
 
 // Get retrieves a connection from the pool
@@ -74,11 +214,12 @@ func (p *SessionConnectionPool) Get(backendID, sessionID string) (*mcp.Connectio
 	logPool.Printf("Reusing connection: backend=%s, session=%s, requests=%d", 
 		backendID, sessionID, metadata.RequestCount)
 	
-	// Update last used time (need write lock for this)
+	// Update last used time and state (need write lock for this)
 	p.mu.RUnlock()
 	p.mu.Lock()
 	metadata.LastUsedAt = time.Now()
 	metadata.RequestCount++
+	metadata.State = ConnectionStateActive
 	p.mu.Unlock()
 	p.mu.RLock()
 
