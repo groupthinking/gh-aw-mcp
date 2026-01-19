@@ -266,4 +266,21 @@ func TestApplyJqSchema_ErrorCases(t *testing.T) {
 		require.NoError(t, err, "Should be valid JSON")
 		assert.Contains(t, schema, "level1", "Should contain level1")
 	})
+
+	t.Run("handles context cancellation", func(t *testing.T) {
+		// Create a cancelled context
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel() // Cancel immediately
+
+		input := map[string]interface{}{"test": "data"}
+		
+		// The query should complete quickly, but context cancellation should be handled gracefully
+		// Note: For this simple query, it may complete before cancellation is processed
+		_, err := applyJqSchema(ctx, input)
+		
+		// Either succeeds (query completed before cancellation) or fails with context error
+		if err != nil {
+			assert.Contains(t, err.Error(), "context", "Error should mention context if cancelled")
+		}
+	})
 }

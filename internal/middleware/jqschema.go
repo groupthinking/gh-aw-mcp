@@ -84,8 +84,18 @@ func applyJqSchema(ctx context.Context, jsonData interface{}) (string, error) {
 		return "", fmt.Errorf("jq schema filter returned no results")
 	}
 
-	// Check for errors
+	// Check for errors with type-specific handling
 	if err, ok := v.(error); ok {
+		// Check for HaltError - a clean halt with exit code
+		if haltErr, ok := err.(*gojq.HaltError); ok {
+			// HaltError with nil value means clean halt (not an error)
+			if haltErr.Value() == nil {
+				return "", fmt.Errorf("jq schema filter halted cleanly with no output")
+			}
+			// HaltError with non-nil value is an actual error
+			return "", fmt.Errorf("jq schema filter halted with error (exit code %d): %w", haltErr.ExitCode(), err)
+		}
+		// Generic error case
 		return "", fmt.Errorf("jq schema filter error: %w", err)
 	}
 
