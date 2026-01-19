@@ -172,7 +172,7 @@ func (s *Server) handleInitialize(w http.ResponseWriter, req *mcp.Request, serve
 
 func (s *Server) proxyToServer(w http.ResponseWriter, r *http.Request, serverID string, req *mcp.Request) {
 	logServer.Printf("Proxying request: serverID=%s, method=%s", serverID, req.Method)
-	
+
 	// Handle built-in sys server
 	if serverID == "sys" {
 		logServer.Print("Routing to built-in sys server")
