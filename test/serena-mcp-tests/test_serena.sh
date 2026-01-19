@@ -467,8 +467,12 @@ fi
 echo ""
 
 # Calculate success rate
-SUCCESS_RATE=$((TESTS_PASSED * 100 / TESTS_TOTAL))
-log_info "Success Rate: $SUCCESS_RATE%"
+if [ $TESTS_TOTAL -gt 0 ]; then
+    SUCCESS_RATE=$((TESTS_PASSED * 100 / TESTS_TOTAL))
+    log_info "Success Rate: $SUCCESS_RATE%"
+else
+    log_warning "No tests were run"
+fi
 echo ""
 
 log_info "Detailed results saved to: $RESULTS_DIR"
