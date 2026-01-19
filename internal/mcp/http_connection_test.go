@@ -241,9 +241,9 @@ func TestTryPlainJSONTransport_InitializeFailure(t *testing.T) {
 			errorSubstring: "status=500",
 		},
 		{
-			name:         "invalid JSON response",
-			statusCode:   http.StatusOK,
-			responseBody: `this is not valid JSON`,
+			name:           "invalid JSON response",
+			statusCode:     http.StatusOK,
+			responseBody:   `this is not valid JSON`,
 			errorSubstring: "failed to parse",
 		},
 		{

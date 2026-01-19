@@ -358,10 +358,10 @@ func TestGetSessionID_EdgeCases(t *testing.T) {
 	defer us.Close()
 
 	tests := []struct {
-		name       string
-		ctx        context.Context
-		wantID     string
-		setupFunc  func(context.Context) context.Context
+		name        string
+		ctx         context.Context
+		wantID      string
+		setupFunc   func(context.Context) context.Context
 		description string
 	}{
 		{
