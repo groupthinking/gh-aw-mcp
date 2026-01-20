@@ -1003,10 +1003,10 @@ args = ["run", "--rm", "-i", "mcp/memory"]
 	require.NotNil(t, cfg, "LoadFromFile() returned nil config")
 
 	assert.Len(t, cfg.Servers, 2, "Expected 2 servers")
-	
+
 	_, ok := cfg.Servers["github"]
 	assert.True(t, ok, "Server 'github' not found")
-	
+
 	_, ok = cfg.Servers["memory"]
 	assert.True(t, ok, "Server 'memory' not found")
 }
