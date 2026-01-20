@@ -416,10 +416,11 @@ func TestCreateHTTPServerForMCP_Close(t *testing.T) {
 
 			// Verify response based on error expectation
 			if tt.wantError {
-				if tt.wantStatusCode == http.StatusMethodNotAllowed {
+				switch tt.wantStatusCode {
+				case http.StatusMethodNotAllowed:
 					// http.Error writes plain text for 405
 					assert.Contains(t, w.Body.String(), "Method not allowed")
-				} else if tt.wantStatusCode == http.StatusUnauthorized {
+				case http.StatusUnauthorized:
 					assert.Contains(t, w.Body.String(), "Unauthorized")
 				}
 			} else {
