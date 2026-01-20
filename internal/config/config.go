@@ -81,7 +81,7 @@ func LoadFromFile(path string) (*Config, error) {
 	if err != nil {
 		// Check if it's a ParseError to provide line numbers
 		if pErr, ok := err.(toml.ParseError); ok {
-			return nil, fmt.Errorf("TOML parse error at line %d: %w", pErr.Line, err)
+			return nil, fmt.Errorf("TOML parse error at line %d: %w", pErr.Position.Line, err)
 		}
 		return nil, fmt.Errorf("failed to decode TOML: %w", err)
 	}
