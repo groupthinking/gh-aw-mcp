@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestPortRange(t *testing.T) {
@@ -68,16 +69,9 @@ func TestPortRange(t *testing.T) {
 			err := PortRange(tt.port, tt.jsonPath)
 
 			if tt.shouldErr {
-				if err == nil {
-					t.Errorf("Expected error but got none")
-					return
-				}
-				if !strings.Contains(err.Message, tt.errMsg) {
-					t.Errorf("Expected error message to contain %q, got %q", tt.errMsg, err.Message)
-				}
-				if err.JSONPath != tt.jsonPath {
-					t.Errorf("Expected JSONPath %q, got %q", tt.jsonPath, err.JSONPath)
-				}
+				require.NotNil(t, err, "Expected error but got none")
+				assert.Contains(t, err.Message, tt.errMsg, "Error message should contain expected text")
+				assert.Equal(t, tt.jsonPath, err.JSONPath, "JSONPath should match")
 			} else {
 				assert.Nil(t, err, "Unexpected error")
 			}
@@ -138,19 +132,10 @@ func TestTimeoutPositive(t *testing.T) {
 			err := TimeoutPositive(tt.timeout, tt.fieldName, tt.jsonPath)
 
 			if tt.shouldErr {
-				if err == nil {
-					t.Errorf("Expected error but got none")
-					return
-				}
-				if !strings.Contains(err.Message, tt.errMsg) {
-					t.Errorf("Expected error message to contain %q, got %q", tt.errMsg, err.Message)
-				}
-				if err.JSONPath != tt.jsonPath {
-					t.Errorf("Expected JSONPath %q, got %q", tt.jsonPath, err.JSONPath)
-				}
-				if err.Field != tt.fieldName {
-					t.Errorf("Expected Field %q, got %q", tt.fieldName, err.Field)
-				}
+				require.NotNil(t, err, "Expected error but got none")
+				assert.Contains(t, err.Message, tt.errMsg, "Error message should contain expected text")
+				assert.Equal(t, tt.jsonPath, err.JSONPath, "JSONPath should match")
+				assert.Equal(t, tt.fieldName, err.Field, "Field name should match")
 			} else {
 				assert.Nil(t, err, "Unexpected error")
 			}
@@ -304,20 +289,13 @@ func TestMountFormat(t *testing.T) {
 			err := MountFormat(tt.mount, tt.jsonPath, tt.index)
 
 			if tt.shouldErr {
-				if err == nil {
-					t.Errorf("Expected error but got none")
-					return
-				}
-				if !strings.Contains(err.Message, tt.errMsg) {
-					t.Errorf("Expected error message to contain %q, got %q", tt.errMsg, err.Message)
-				}
+				require.NotNil(t, err, "Expected error but got none")
+				assert.Contains(t, err.Message, tt.errMsg, "Error message should contain expected text")
 				expectedPath := "mcpServers.github.mounts[0]"
 				if tt.index != 0 {
 					expectedPath = "mcpServers.github.mounts[1]"
 				}
-				if err.JSONPath != expectedPath {
-					t.Errorf("Expected JSONPath %q, got %q", expectedPath, err.JSONPath)
-				}
+				assert.Equal(t, expectedPath, err.JSONPath, "JSONPath should match expected pattern")
 			} else {
 				assert.Nil(t, err, "Unexpected error")
 			}
@@ -364,9 +342,7 @@ func TestValidationError_Error(t *testing.T) {
 			errStr := tt.valErr.Error()
 
 			for _, substr := range tt.wantSubstr {
-				if !strings.Contains(errStr, substr) {
-					t.Errorf("Error string should contain %q, got: %s", substr, errStr)
-				}
+				assert.Contains(t, errStr, substr, "Error string should contain expected substring")
 			}
 		})
 	}
@@ -400,24 +376,14 @@ func TestUnsupportedType(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			err := UnsupportedType(tt.fieldName, tt.actualType, tt.jsonPath, tt.suggestion)
 
-			if err.Field != tt.fieldName {
-				t.Errorf("Expected Field %q, got %q", tt.fieldName, err.Field)
-			}
-			if !strings.Contains(err.Message, tt.actualType) {
-				t.Errorf("Expected Message to contain %q, got %q", tt.actualType, err.Message)
-			}
-			if !strings.Contains(err.JSONPath, tt.jsonPath) {
-				t.Errorf("Expected JSONPath to contain %q, got %q", tt.jsonPath, err.JSONPath)
-			}
-			if err.Suggestion != tt.suggestion {
-				t.Errorf("Expected Suggestion %q, got %q", tt.suggestion, err.Suggestion)
-			}
+			assert.Equal(t, tt.fieldName, err.Field, "Field should match")
+			assert.Contains(t, err.Message, tt.actualType, "Message should contain actual type")
+			assert.Contains(t, err.JSONPath, tt.jsonPath, "JSONPath should contain json path")
+			assert.Equal(t, tt.suggestion, err.Suggestion, "Suggestion should match")
 
 			errStr := err.Error()
 			for _, substr := range tt.wantSubstr {
-				if !strings.Contains(errStr, substr) {
-					t.Errorf("Error string should contain %q, got: %s", substr, errStr)
-				}
+				assert.Contains(t, errStr, substr, "Error string should contain expected substring")
 			}
 		})
 	}
@@ -446,24 +412,14 @@ func TestUndefinedVariable(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			err := UndefinedVariable(tt.varName, tt.jsonPath)
 
-			if err.Field != "env variable" {
-				t.Errorf("Expected Field 'env variable', got %q", err.Field)
-			}
-			if !strings.Contains(err.Message, tt.varName) {
-				t.Errorf("Expected Message to contain %q, got %q", tt.varName, err.Message)
-			}
-			if err.JSONPath != tt.jsonPath {
-				t.Errorf("Expected JSONPath %q, got %q", tt.jsonPath, err.JSONPath)
-			}
-			if !strings.Contains(err.Suggestion, tt.varName) {
-				t.Errorf("Expected Suggestion to contain %q, got %q", tt.varName, err.Suggestion)
-			}
+			assert.Equal(t, "env variable", err.Field, "Field should be 'env variable'")
+			assert.Contains(t, err.Message, tt.varName, "Message should contain variable name")
+			assert.Equal(t, tt.jsonPath, err.JSONPath, "JSONPath should match")
+			assert.Contains(t, err.Suggestion, tt.varName, "Suggestion should contain variable name")
 
 			errStr := err.Error()
 			for _, substr := range tt.wantSubstr {
-				if !strings.Contains(errStr, substr) {
-					t.Errorf("Error string should contain %q, got: %s", substr, errStr)
-				}
+				assert.Contains(t, errStr, substr, "Error string should contain expected substring")
 			}
 		})
 	}
@@ -510,27 +466,15 @@ func TestMissingRequired(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			err := MissingRequired(tt.fieldName, tt.serverType, tt.jsonPath, tt.suggestion)
 
-			if err.Field != tt.fieldName {
-				t.Errorf("Expected Field %q, got %q", tt.fieldName, err.Field)
-			}
-			if !strings.Contains(err.Message, tt.fieldName) {
-				t.Errorf("Expected Message to contain %q, got %q", tt.fieldName, err.Message)
-			}
-			if !strings.Contains(err.Message, tt.serverType) {
-				t.Errorf("Expected Message to contain %q, got %q", tt.serverType, err.Message)
-			}
-			if err.JSONPath != tt.jsonPath {
-				t.Errorf("Expected JSONPath %q, got %q", tt.jsonPath, err.JSONPath)
-			}
-			if err.Suggestion != tt.suggestion {
-				t.Errorf("Expected Suggestion %q, got %q", tt.suggestion, err.Suggestion)
-			}
+			assert.Equal(t, tt.fieldName, err.Field, "Field should match")
+			assert.Contains(t, err.Message, tt.fieldName, "Message should contain field name")
+			assert.Contains(t, err.Message, tt.serverType, "Message should contain server type")
+			assert.Equal(t, tt.jsonPath, err.JSONPath, "JSONPath should match")
+			assert.Equal(t, tt.suggestion, err.Suggestion, "Suggestion should match")
 
 			errStr := err.Error()
 			for _, substr := range tt.wantSubstr {
-				if !strings.Contains(errStr, substr) {
-					t.Errorf("Error string should contain %q, got: %s", substr, errStr)
-				}
+				assert.Contains(t, errStr, substr, "Error string should contain expected substring")
 			}
 		})
 	}
@@ -563,24 +507,14 @@ func TestUnsupportedField(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			err := UnsupportedField(tt.fieldName, tt.message, tt.jsonPath, tt.suggestion)
 
-			if err.Field != tt.fieldName {
-				t.Errorf("Expected Field %q, got %q", tt.fieldName, err.Field)
-			}
-			if err.Message != tt.message {
-				t.Errorf("Expected Message %q, got %q", tt.message, err.Message)
-			}
-			if err.JSONPath != tt.jsonPath {
-				t.Errorf("Expected JSONPath %q, got %q", tt.jsonPath, err.JSONPath)
-			}
-			if err.Suggestion != tt.suggestion {
-				t.Errorf("Expected Suggestion %q, got %q", tt.suggestion, err.Suggestion)
-			}
+			assert.Equal(t, tt.fieldName, err.Field, "Field should match")
+			assert.Equal(t, tt.message, err.Message, "Message should match")
+			assert.Equal(t, tt.jsonPath, err.JSONPath, "JSONPath should match")
+			assert.Equal(t, tt.suggestion, err.Suggestion, "Suggestion should match")
 
 			errStr := err.Error()
 			for _, substr := range tt.wantSubstr {
-				if !strings.Contains(errStr, substr) {
-					t.Errorf("Error string should contain %q, got: %s", substr, errStr)
-				}
+				assert.Contains(t, errStr, substr, "Error string should contain expected substring")
 			}
 		})
 	}
@@ -600,23 +534,13 @@ func TestAppendConfigDocsFooter(t *testing.T) {
 	}
 
 	for _, substr := range wantSubstr {
-		if !strings.Contains(result, substr) {
-			t.Errorf("Footer should contain %q, got: %s", substr, result)
-		}
+		assert.Contains(t, result, substr, "Footer should contain expected substring")
 	}
 }
 
 func TestDocumentationURLConstants(t *testing.T) {
-	if ConfigSpecURL == "" {
-		t.Error("ConfigSpecURL should not be empty")
-	}
-	if SchemaURL == "" {
-		t.Error("SchemaURL should not be empty")
-	}
-	if !strings.HasPrefix(ConfigSpecURL, "https://") {
-		t.Errorf("ConfigSpecURL should start with https://, got: %s", ConfigSpecURL)
-	}
-	if !strings.HasPrefix(SchemaURL, "https://") {
-		t.Errorf("SchemaURL should start with https://, got: %s", SchemaURL)
-	}
+	assert.NotEmpty(t, ConfigSpecURL, "ConfigSpecURL should not be empty")
+	assert.NotEmpty(t, SchemaURL, "SchemaURL should not be empty")
+	assert.True(t, strings.HasPrefix(ConfigSpecURL, "https://"), "ConfigSpecURL should start with https://")
+	assert.True(t, strings.HasPrefix(SchemaURL, "https://"), "SchemaURL should start with https://")
 }
