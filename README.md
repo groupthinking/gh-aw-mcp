@@ -496,6 +496,61 @@ See [`docs/DIFC_INTEGRATION_PROPOSAL.md`](docs/DIFC_INTEGRATION_PROPOSAL.md) for
 
 **Current Status**: All DIFC infrastructure is implemented and tested, but only the `NoopGuard` is active (which returns empty labels, effectively disabling enforcement). Custom guards for specific backends (GitHub, filesystem, etc.) are not yet implemented.
 
+## MCP Server Compatibility
+
+**Not all MCP servers work the same way through the HTTP gateway.** The key difference is **architecture** (stateless vs stateful), not transport.
+
+### Critical Fact
+
+**In production, both GitHub and Serena use stdio transport via Docker containers:**
+```bash
+docker run -i ghcr.io/github/github-mcp-server          # stdio
+docker run -i ghcr.io/githubnext/serena-mcp-server     # stdio
+```
+
+Both use the same backend connection management (session connection pool). The difference is purely architectural.
+
+### Quick Compatibility Check
+
+| Server | Architecture | Transport | Backend Connection | Compatible? |
+|--------|--------------|-----------|-------------------|-------------|
+| **GitHub MCP** | Stateless | Stdio (Docker) | Session pool | ✅ **YES** |
+| **Serena MCP** | Stateful | Stdio (Docker) | Session pool | ❌ **NO*** |
+
+\* Backend connection reuse works, but SDK protocol state doesn't persist across HTTP requests
+
+### Understanding the Difference
+
+**Stateless servers** (like GitHub MCP):
+- Process each request independently
+- No session state required
+- Don't validate initialization state
+- SDK protocol state recreation doesn't matter
+
+**Stateful servers** (like Serena MCP):
+- Require session state
+- Validate initialization before handling requests
+- SDK protocol state recreation breaks them
+- Need direct stdio connection (bypasses HTTP gateway layer)
+
+### The Real Issue
+
+Both servers use identical infrastructure:
+- ✅ Stdio transport via Docker
+- ✅ Session connection pool
+- ✅ Backend process reuse
+- ✅ Stdio pipe reuse
+
+The problem: SDK's `StreamableHTTPHandler` creates new protocol state per HTTP request. Stateless servers don't care; stateful servers reject requests.
+
+### Examples
+
+✅ **GitHub MCP Server**: Stateless - doesn't check protocol state - works through gateway  
+❌ **Serena MCP Server**: Stateful - checks protocol state - use direct stdio connection
+
+📖 **[Detailed Explanation](docs/WHY_GITHUB_WORKS_BUT_SERENA_DOESNT.md)** - Complete technical analysis  
+📋 **[Quick Reference Guide](docs/GATEWAY_COMPATIBILITY_QUICK_REFERENCE.md)** - Fast compatibility lookup
+
 ## Contributing
 
 For development setup, build instructions, testing guidelines, and project architecture details, see [CONTRIBUTING.md](CONTRIBUTING.md).

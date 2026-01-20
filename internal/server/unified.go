@@ -465,7 +465,12 @@ func (g *guardBackendCaller) CallTool(ctx context.Context, toolName string, args
 	// This bypasses DIFC checks since it's internal to the guard
 	log.Printf("[DIFC] Guard calling backend %s tool %s for metadata", g.serverID, toolName)
 
-	conn, err := launcher.GetOrLaunch(g.server.launcher, g.serverID)
+	// Get or launch backend connection (use session-aware connection for stateful backends)
+	sessionID := g.ctx.Value(SessionIDContextKey)
+	if sessionID == nil {
+		sessionID = "default"
+	}
+	conn, err := launcher.GetOrLaunchForSession(g.server.launcher, g.serverID, sessionID.(string))
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect: %w", err)
 	}
@@ -590,7 +595,9 @@ func (us *UnifiedServer) callBackendTool(ctx context.Context, serverID, toolName
 	log.Printf("[DIFC] Access ALLOWED for agent %s to %s", agentID, resource.Description)
 
 	// **Phase 3: Execute the backend call**
-	conn, err := launcher.GetOrLaunch(us.launcher, serverID)
+	// Get or launch backend connection (use session-aware connection for stateful backends)
+	sessionID := us.getSessionID(ctx)
+	conn, err := launcher.GetOrLaunchForSession(us.launcher, serverID, sessionID)
 	if err != nil {
 		return &sdk.CallToolResult{IsError: true}, nil, fmt.Errorf("failed to connect: %w", err)
 	}

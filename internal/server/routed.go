@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/githubnext/gh-aw-mcpg/internal/logger"
@@ -18,6 +19,52 @@ import (
 )
 
 var logRouted = logger.New("server:routed")
+
+// filteredServerCache caches filtered server instances per (backend, session) key
+type filteredServerCache struct {
+	servers map[string]*sdk.Server
+	mu      sync.RWMutex
+}
+
+// newFilteredServerCache creates a new server cache
+func newFilteredServerCache() *filteredServerCache {
+	return &filteredServerCache{
+		servers: make(map[string]*sdk.Server),
+	}
+}
+
+// getOrCreate returns a cached server or creates a new one
+func (c *filteredServerCache) getOrCreate(backendID, sessionID string, creator func() *sdk.Server) *sdk.Server {
+	key := fmt.Sprintf("%s/%s", backendID, sessionID)
+	
+	// Try read lock first
+	c.mu.RLock()
+	if server, exists := c.servers[key]; exists {
+		c.mu.RUnlock()
+		logRouted.Printf("Reusing cached filtered server: backend=%s, session=%s", backendID, sessionID)
+		log.Printf("[CACHE] Reusing cached filtered server: backend=%s, session=%s", backendID, sessionID)
+		return server
+	}
+	c.mu.RUnlock()
+	
+	// Need to create, acquire write lock
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	
+	// Double-check after acquiring write lock
+	if server, exists := c.servers[key]; exists {
+		logRouted.Printf("Filtered server created by another goroutine: backend=%s, session=%s", backendID, sessionID)
+		log.Printf("[CACHE] Filtered server created by another goroutine: backend=%s, session=%s", backendID, sessionID)
+		return server
+	}
+	
+	// Create new server
+	logRouted.Printf("Creating new filtered server: backend=%s, session=%s", backendID, sessionID)
+	log.Printf("[CACHE] Creating new filtered server: backend=%s, session=%s", backendID, sessionID)
+	server := creator()
+	c.servers[key] = server
+	return server
+}
 
 // CreateHTTPServerForRoutedMode creates an HTTP server for routed mode
 // In routed mode, each backend is accessible at /mcp/<server>
@@ -43,6 +90,9 @@ func CreateHTTPServerForRoutedMode(addr string, unifiedServer *UnifiedServer, ap
 		logRouted.Printf("DIFC disabled: excluding sys from route registration")
 	}
 	logRouted.Printf("Registering routes for %d backends: %v", len(allBackends), allBackends)
+
+	// Create server cache for session-aware server instances
+	serverCache := newFilteredServerCache()
 
 	// Create a proxy for each backend server (sys included only when DIFC is enabled)
 	for _, serverID := range allBackends {
@@ -98,8 +148,11 @@ func CreateHTTPServerForRoutedMode(addr string, unifiedServer *UnifiedServer, ap
 			log.Printf("✓ Injected session ID and backend ID into context")
 			log.Printf("===================================\n")
 
-			// Return a filtered proxy server that only exposes this backend's tools
-			return createFilteredServer(unifiedServer, backendID)
+			// Return a cached filtered proxy server for this backend and session
+			// This ensures the same server instance is reused for all requests in a session
+			return serverCache.getOrCreate(backendID, sessionID, func() *sdk.Server {
+				return createFilteredServer(unifiedServer, backendID)
+			})
 		}, &sdk.StreamableHTTPOptions{
 			Stateless: false,
 		})
