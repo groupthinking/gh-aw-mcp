@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -851,4 +852,161 @@ func TestLoadFromStdin_InvalidMountFormat(t *testing.T) {
 			assert.Contains(t, err.Error(), tt.errorMsg, "Expected error containing %q", tt.errorMsg)
 		})
 	}
+}
+
+// Tests for LoadFromFile function with TOML files
+
+func TestLoadFromFile_ValidTOML(t *testing.T) {
+	// Create a temporary TOML file
+	tmpDir := t.TempDir()
+	tmpFile := filepath.Join(tmpDir, "config.toml")
+
+	tomlContent := `
+[servers.test]
+command = "docker"
+args = ["run", "--rm", "-i", "test/container:latest"]
+
+[servers.test.env]
+TEST_VAR = "value"
+`
+
+	err := os.WriteFile(tmpFile, []byte(tomlContent), 0644)
+	require.NoError(t, err, "Failed to write temp TOML file")
+
+	cfg, err := LoadFromFile(tmpFile)
+	require.NoError(t, err, "LoadFromFile() failed")
+	require.NotNil(t, cfg, "LoadFromFile() returned nil config")
+
+	assert.Len(t, cfg.Servers, 1, "Expected 1 server")
+	server, ok := cfg.Servers["test"]
+	require.True(t, ok, "Server 'test' not found")
+	assert.Equal(t, "docker", server.Command)
+	assert.Equal(t, []string{"run", "--rm", "-i", "test/container:latest"}, server.Args)
+	assert.Equal(t, "value", server.Env["TEST_VAR"])
+}
+
+func TestLoadFromFile_WithGatewayConfig(t *testing.T) {
+	tmpDir := t.TempDir()
+	tmpFile := filepath.Join(tmpDir, "config.toml")
+
+	tomlContent := `
+[gateway]
+port = 8080
+api_key = "test-key-123"
+domain = "localhost"
+startup_timeout = 30
+tool_timeout = 60
+
+[servers.test]
+command = "docker"
+args = ["run", "--rm", "-i", "test/container:latest"]
+`
+
+	err := os.WriteFile(tmpFile, []byte(tomlContent), 0644)
+	require.NoError(t, err, "Failed to write temp TOML file")
+
+	cfg, err := LoadFromFile(tmpFile)
+	require.NoError(t, err, "LoadFromFile() failed")
+	require.NotNil(t, cfg, "LoadFromFile() returned nil config")
+	require.NotNil(t, cfg.Gateway, "Gateway config should not be nil")
+
+	assert.Equal(t, 8080, cfg.Gateway.Port)
+	assert.Equal(t, "test-key-123", cfg.Gateway.APIKey)
+	assert.Equal(t, "localhost", cfg.Gateway.Domain)
+	assert.Equal(t, 30, cfg.Gateway.StartupTimeout)
+	assert.Equal(t, 60, cfg.Gateway.ToolTimeout)
+}
+
+func TestLoadFromFile_InvalidTOMLWithLineNumber(t *testing.T) {
+	tmpDir := t.TempDir()
+	tmpFile := filepath.Join(tmpDir, "config.toml")
+
+	// Invalid TOML: unterminated string on line 2
+	tomlContent := `[servers.test]
+command = "docker
+args = ["run"]
+`
+
+	err := os.WriteFile(tmpFile, []byte(tomlContent), 0644)
+	require.NoError(t, err, "Failed to write temp TOML file")
+
+	cfg, err := LoadFromFile(tmpFile)
+	require.Error(t, err, "Expected error for invalid TOML")
+	assert.Nil(t, cfg, "Config should be nil on error")
+
+	// Error should contain line number information
+	assert.Contains(t, err.Error(), "line", "Error should mention line number")
+}
+
+func TestLoadFromFile_UnknownKeys(t *testing.T) {
+	tmpDir := t.TempDir()
+	tmpFile := filepath.Join(tmpDir, "config.toml")
+
+	// TOML with unknown key "unknown_field"
+	tomlContent := `
+[servers.test]
+command = "docker"
+args = ["run", "--rm", "-i", "test/container:latest"]
+unknown_field = "should trigger warning"
+`
+
+	err := os.WriteFile(tmpFile, []byte(tomlContent), 0644)
+	require.NoError(t, err, "Failed to write temp TOML file")
+
+	// Should still load successfully but log warning
+	cfg, err := LoadFromFile(tmpFile)
+	require.NoError(t, err, "LoadFromFile() should succeed with unknown keys")
+	require.NotNil(t, cfg, "Config should not be nil")
+}
+
+func TestLoadFromFile_NonExistentFile(t *testing.T) {
+	cfg, err := LoadFromFile("/nonexistent/path/config.toml")
+	require.Error(t, err, "Expected error for nonexistent file")
+	assert.Nil(t, cfg, "Config should be nil on error")
+}
+
+func TestLoadFromFile_EmptyFile(t *testing.T) {
+	tmpDir := t.TempDir()
+	tmpFile := filepath.Join(tmpDir, "empty.toml")
+
+	err := os.WriteFile(tmpFile, []byte(""), 0644)
+	require.NoError(t, err, "Failed to write temp TOML file")
+
+	cfg, err := LoadFromFile(tmpFile)
+	require.NoError(t, err, "LoadFromFile() should succeed with empty file")
+	require.NotNil(t, cfg, "Config should not be nil")
+	assert.Empty(t, cfg.Servers, "Servers should be empty")
+}
+
+func TestLoadFromFile_MultipleServers(t *testing.T) {
+	tmpDir := t.TempDir()
+	tmpFile := filepath.Join(tmpDir, "config.toml")
+
+	tomlContent := `
+[servers.github]
+command = "docker"
+args = ["run", "--rm", "-i", "ghcr.io/github/github-mcp-server:latest"]
+
+[servers.github.env]
+GITHUB_TOKEN = ""
+
+[servers.memory]
+command = "docker"
+args = ["run", "--rm", "-i", "mcp/memory"]
+`
+
+	err := os.WriteFile(tmpFile, []byte(tomlContent), 0644)
+	require.NoError(t, err, "Failed to write temp TOML file")
+
+	cfg, err := LoadFromFile(tmpFile)
+	require.NoError(t, err, "LoadFromFile() failed")
+	require.NotNil(t, cfg, "LoadFromFile() returned nil config")
+
+	assert.Len(t, cfg.Servers, 2, "Expected 2 servers")
+
+	_, ok := cfg.Servers["github"]
+	assert.True(t, ok, "Server 'github' not found")
+
+	_, ok = cfg.Servers["memory"]
+	assert.True(t, ok, "Server 'memory' not found")
 }
