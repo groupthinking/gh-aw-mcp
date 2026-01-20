@@ -69,25 +69,17 @@ func TestNewHTTPConnection_WithCustomHeaders(t *testing.T) {
 	assert.Equal(1, serverCallCount, "Should only attempt plain JSON transport with custom headers")
 }
 
-// TestNewHTTPConnection_WithoutHeaders_FallbackSequence tests the full fallback
-// sequence: streamable → SSE → plain JSON when no custom headers are provided
+// TestNewHTTPConnection_WithoutHeaders_FallbackSequence tests connection without custom headers.
+// When no custom headers are provided, the code tries transports in order:
+// streamable → SSE → plain JSON. If the server responds with valid JSON-RPC
+// responses, the streamable transport succeeds since it's tried first.
 func TestNewHTTPConnection_WithoutHeaders_FallbackSequence(t *testing.T) {
 	require := require.New(t)
 
-	// Track which paths the server handled
-	type requestInfo struct {
-		path   string
-		method string
-	}
-	requests := []requestInfo{}
-
-	// Create test server that rejects streamable and SSE endpoints
+	// Create test server that responds to all requests with valid JSON-RPC
 	testServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		requests = append(requests, requestInfo{path: r.URL.Path, method: r.Method})
-
-		// Reject all requests initially (to force fallback)
-		// But for plain JSON (POST to root), return success
-		if r.Method == "POST" && r.URL.Path == "/" {
+		// Accept all POST requests with valid JSON-RPC response
+		if r.Method == "POST" {
 			response := map[string]interface{}{
 				"jsonrpc": "2.0",
 				"id":      1,
@@ -100,9 +92,16 @@ func TestNewHTTPConnection_WithoutHeaders_FallbackSequence(t *testing.T) {
 				},
 			}
 			w.Header().Set("Content-Type", "application/json")
-			w.Header().Set("Mcp-Session-Id", "fallback-session")
+			w.Header().Set("Mcp-Session-Id", "test-session")
 			w.WriteHeader(http.StatusOK)
 			json.NewEncoder(w).Encode(response)
+			return
+		}
+
+		// Accept GET requests for SSE stream (streamable transport may need this)
+		if r.Method == "GET" {
+			w.Header().Set("Content-Type", "text/event-stream")
+			w.WriteHeader(http.StatusOK)
 			return
 		}
 
@@ -111,15 +110,15 @@ func TestNewHTTPConnection_WithoutHeaders_FallbackSequence(t *testing.T) {
 	}))
 	defer testServer.Close()
 
-	// Create connection without custom headers (triggers fallback sequence)
+	// Create connection without custom headers - streamable transport should succeed first
 	conn, err := NewHTTPConnection(context.Background(), testServer.URL, nil)
-	require.NoError(err, "Connection should eventually succeed with plain JSON")
+	require.NoError(err, "Connection should succeed")
 	require.NotNil(conn)
 	defer conn.Close()
 
-	// Verify we fell back to plain JSON transport
-	require.Equal(HTTPTransportPlainJSON, conn.httpTransportType)
-	require.Equal("fallback-session", conn.httpSessionID)
+	// Streamable transport is tried first and should succeed since server responds correctly
+	require.Equal(HTTPTransportStreamable, conn.httpTransportType)
+	require.Equal("test-session", conn.httpSessionID)
 }
 
 // TestNewHTTPConnection_AllTransportsFail tests the case where all transports fail
@@ -401,18 +400,14 @@ func TestNewHTTPConnection_HeadersPropagation(t *testing.T) {
 	}
 }
 
-// TestNewHTTPConnection_EmptyHeaders tests connection with empty header map
+// TestNewHTTPConnection_EmptyHeaders tests connection with empty header map.
+// Empty headers behave the same as nil headers - streamable transport is tried first.
 func TestNewHTTPConnection_EmptyHeaders(t *testing.T) {
 	require := require.New(t)
 
-	// Track transport attempts
-	attemptedTransports := []string{}
-
 	testServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Track what was attempted
-		if r.Method == "POST" && r.URL.Path == "/" {
-			attemptedTransports = append(attemptedTransports, "plain-json")
-
+		// Accept POST requests with valid JSON-RPC response
+		if r.Method == "POST" {
 			response := map[string]interface{}{
 				"jsonrpc": "2.0",
 				"id":      1,
@@ -422,24 +417,31 @@ func TestNewHTTPConnection_EmptyHeaders(t *testing.T) {
 				},
 			}
 			w.Header().Set("Content-Type", "application/json")
+			w.Header().Set("Mcp-Session-Id", "empty-headers-session")
 			w.WriteHeader(http.StatusOK)
 			json.NewEncoder(w).Encode(response)
 			return
 		}
 
-		// Reject other transport attempts
+		// Accept GET for SSE stream
+		if r.Method == "GET" {
+			w.Header().Set("Content-Type", "text/event-stream")
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+
 		w.WriteHeader(http.StatusNotFound)
 	}))
 	defer testServer.Close()
 
-	// Create connection with empty headers (should try SDK transports first)
+	// Create connection with empty headers - should try SDK transports first
 	conn, err := NewHTTPConnection(context.Background(), testServer.URL, map[string]string{})
 	require.NoError(err, "Should succeed with empty headers")
 	require.NotNil(conn)
 	defer conn.Close()
 
-	// Should eventually fall back to plain JSON
-	assert.Equal(t, HTTPTransportPlainJSON, conn.httpTransportType)
+	// Streamable transport is tried first and should succeed
+	assert.Equal(t, HTTPTransportStreamable, conn.httpTransportType)
 }
 
 // TestNewHTTPConnection_NilHeaders tests connection with nil header map

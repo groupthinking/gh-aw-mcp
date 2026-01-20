@@ -451,26 +451,26 @@ func TestClose(t *testing.T) {
 }
 
 func TestGetOrLaunchForSession_HTTPBackend(t *testing.T) {
-// HTTP backends should use regular GetOrLaunch (stateless)
-mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-response := map[string]interface{}{
-"jsonrpc": "2.0",
-"id":      1,
-"result": map[string]interface{}{
-"protocolVersion": "2024-11-05",
-"capabilities":    map[string]interface{}{},
-"serverInfo": map[string]interface{}{
-"name":    "http-test",
-"version": "1.0.0",
-},
-},
-}
-w.Header().Set("Content-Type", "application/json")
-json.NewEncoder(w).Encode(response)
-}))
-defer mockServer.Close()
+	// HTTP backends should use regular GetOrLaunch (stateless)
+	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		response := map[string]interface{}{
+			"jsonrpc": "2.0",
+			"id":      1,
+			"result": map[string]interface{}{
+				"protocolVersion": "2024-11-05",
+				"capabilities":    map[string]interface{}{},
+				"serverInfo": map[string]interface{}{
+					"name":    "http-test",
+					"version": "1.0.0",
+				},
+			},
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(response)
+	}))
+	defer mockServer.Close()
 
-jsonConfig := fmt.Sprintf(`{
+	jsonConfig := fmt.Sprintf(`{
 "mcpServers": {
 "http-backend": {
 "type": "http",
@@ -484,53 +484,53 @@ jsonConfig := fmt.Sprintf(`{
 }
 }`, mockServer.URL)
 
-cfg := loadConfigFromJSON(t, jsonConfig)
-ctx := context.Background()
-l := New(ctx, cfg)
-defer l.Close()
+	cfg := loadConfigFromJSON(t, jsonConfig)
+	ctx := context.Background()
+	l := New(ctx, cfg)
+	defer l.Close()
 
-// Get connection for two different sessions
-conn1, err := GetOrLaunchForSession(l, "http-backend", "session1")
-require.NoError(t, err)
-require.NotNil(t, conn1)
+	// Get connection for two different sessions
+	conn1, err := GetOrLaunchForSession(l, "http-backend", "session1")
+	require.NoError(t, err)
+	require.NotNil(t, conn1)
 
-conn2, err := GetOrLaunchForSession(l, "http-backend", "session2")
-require.NoError(t, err)
-require.NotNil(t, conn2)
+	conn2, err := GetOrLaunchForSession(l, "http-backend", "session2")
+	require.NoError(t, err)
+	require.NotNil(t, conn2)
 
-// For HTTP backends, both should return the same connection (stateless)
-assert.Equal(t, conn1, conn2, "HTTP backends should reuse same connection")
+	// For HTTP backends, both should return the same connection (stateless)
+	assert.Equal(t, conn1, conn2, "HTTP backends should reuse same connection")
 
-// Should be in regular connections map, not session pool
-assert.Equal(t, 1, len(l.connections), "Should have one connection in regular map")
-assert.Equal(t, 0, l.sessionPool.Size(), "Session pool should be empty for HTTP")
+	// Should be in regular connections map, not session pool
+	assert.Equal(t, 1, len(l.connections), "Should have one connection in regular map")
+	assert.Equal(t, 0, l.sessionPool.Size(), "Session pool should be empty for HTTP")
 }
 
 func TestGetOrLaunchForSession_SessionReuse(t *testing.T) {
-// Note: We can't fully test stdio backends without actual processes
-// This test verifies the session pool is consulted
-ctx := context.Background()
-cfg := &config.Config{
-Servers: map[string]*config.ServerConfig{},
-}
-l := New(ctx, cfg)
-defer l.Close()
+	// Note: We can't fully test stdio backends without actual processes
+	// This test verifies the session pool is consulted
+	ctx := context.Background()
+	cfg := &config.Config{
+		Servers: map[string]*config.ServerConfig{},
+	}
+	l := New(ctx, cfg)
+	defer l.Close()
 
-// Verify session pool was created
-assert.NotNil(t, l.sessionPool, "Session pool should be initialized")
+	// Verify session pool was created
+	assert.NotNil(t, l.sessionPool, "Session pool should be initialized")
 }
 
 func TestGetOrLaunchForSession_InvalidServer(t *testing.T) {
-ctx := context.Background()
-cfg := &config.Config{
-Servers: map[string]*config.ServerConfig{},
-}
-l := New(ctx, cfg)
-defer l.Close()
+	ctx := context.Background()
+	cfg := &config.Config{
+		Servers: map[string]*config.ServerConfig{},
+	}
+	l := New(ctx, cfg)
+	defer l.Close()
 
-// Try to get connection for non-existent server
-conn, err := GetOrLaunchForSession(l, "nonexistent", "session1")
-assert.Error(t, err)
-assert.Nil(t, conn)
-assert.Contains(t, err.Error(), "not found in config")
+	// Try to get connection for non-existent server
+	conn, err := GetOrLaunchForSession(l, "nonexistent", "session1")
+	assert.Error(t, err)
+	assert.Nil(t, conn)
+	assert.Contains(t, err.Error(), "not found in config")
 }

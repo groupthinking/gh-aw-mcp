@@ -153,10 +153,13 @@ func CreateHTTPServerForMCP(addr string, unifiedServer *UnifiedServer, apiKey st
 		Stateless: false, // Support stateful sessions
 	})
 
+	// Wrap SDK handler with detailed logging for JSON-RPC translation debugging
+	loggedHandler := WithSDKLogging(streamableHandler, "unified")
+
 	// Apply auth middleware if API key is configured (spec 7.1)
-	var finalHandler http.Handler = streamableHandler
+	finalHandler := loggedHandler
 	if apiKey != "" {
-		finalHandler = authMiddleware(apiKey, streamableHandler.ServeHTTP)
+		finalHandler = authMiddleware(apiKey, loggedHandler.ServeHTTP)
 	}
 
 	// Mount handler at /mcp endpoint (logging is done in the callback above)

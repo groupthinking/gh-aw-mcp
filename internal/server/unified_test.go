@@ -374,11 +374,11 @@ func TestGetSessionID_EdgeCases(t *testing.T) {
 		{
 			name:   "empty string session ID",
 			ctx:    ctx,
-			wantID: "",
+			wantID: "default",
 			setupFunc: func(c context.Context) context.Context {
 				return context.WithValue(c, SessionIDContextKey, "")
 			},
-			description: "should preserve empty string session ID",
+			description: "empty string session ID should return default since empty is not a valid session ID",
 		},
 		{
 			name:   "whitespace session ID",

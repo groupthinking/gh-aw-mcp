@@ -36,7 +36,7 @@ func newFilteredServerCache() *filteredServerCache {
 // getOrCreate returns a cached server or creates a new one
 func (c *filteredServerCache) getOrCreate(backendID, sessionID string, creator func() *sdk.Server) *sdk.Server {
 	key := fmt.Sprintf("%s/%s", backendID, sessionID)
-	
+
 	// Try read lock first
 	c.mu.RLock()
 	if server, exists := c.servers[key]; exists {
@@ -46,18 +46,18 @@ func (c *filteredServerCache) getOrCreate(backendID, sessionID string, creator f
 		return server
 	}
 	c.mu.RUnlock()
-	
+
 	// Need to create, acquire write lock
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	
+
 	// Double-check after acquiring write lock
 	if server, exists := c.servers[key]; exists {
 		logRouted.Printf("Filtered server created by another goroutine: backend=%s, session=%s", backendID, sessionID)
 		log.Printf("[CACHE] Filtered server created by another goroutine: backend=%s, session=%s", backendID, sessionID)
 		return server
 	}
-	
+
 	// Create new server
 	logRouted.Printf("Creating new filtered server: backend=%s, session=%s", backendID, sessionID)
 	log.Printf("[CACHE] Creating new filtered server: backend=%s, session=%s", backendID, sessionID)
@@ -157,10 +157,13 @@ func CreateHTTPServerForRoutedMode(addr string, unifiedServer *UnifiedServer, ap
 			Stateless: false,
 		})
 
+		// Wrap SDK handler with detailed logging for JSON-RPC translation debugging
+		loggedHandler := WithSDKLogging(routeHandler, "routed:"+backendID)
+
 		// Apply auth middleware if API key is configured (spec 7.1)
-		var finalHandler http.Handler = routeHandler
+		finalHandler := loggedHandler
 		if apiKey != "" {
-			finalHandler = authMiddleware(apiKey, routeHandler.ServeHTTP)
+			finalHandler = authMiddleware(apiKey, loggedHandler.ServeHTTP)
 		}
 
 		// Mount the handler at both /mcp/<server> and /mcp/<server>/

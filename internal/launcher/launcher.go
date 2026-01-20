@@ -21,8 +21,8 @@ var logLauncher = logger.New("launcher:launcher")
 type Launcher struct {
 	ctx                context.Context
 	config             *config.Config
-	connections        map[string]*mcp.Connection  // Single connections per backend (stateless/HTTP)
-	sessionPool        *SessionConnectionPool       // Session-aware connections (stateful/stdio)
+	connections        map[string]*mcp.Connection // Single connections per backend (stateless/HTTP)
+	sessionPool        *SessionConnectionPool     // Session-aware connections (stateful/stdio)
 	mu                 sync.RWMutex
 	runningInContainer bool
 }
@@ -194,7 +194,7 @@ func GetOrLaunchForSession(l *Launcher, serverID, sessionID string) (*mcp.Connec
 	l.mu.RLock()
 	serverCfg, ok := l.config.Servers[serverID]
 	l.mu.RUnlock()
-	
+
 	if !ok {
 		logger.LogError("backend", "Backend server not found in config: %s", serverID)
 		return nil, fmt.Errorf("server '%s' not found in config", serverID)
@@ -317,7 +317,7 @@ func (l *Launcher) Close() {
 		conn.Close()
 	}
 	l.connections = make(map[string]*mcp.Connection)
-	
+
 	// Stop session pool and close all session connections
 	if l.sessionPool != nil {
 		logLauncher.Printf("Stopping session connection pool")
