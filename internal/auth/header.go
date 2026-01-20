@@ -126,3 +126,42 @@ func ExtractAgentID(authHeader string) string {
 
 	return agentID
 }
+
+// ExtractSessionID extracts session ID from Authorization header.
+// Per spec 7.1: When API key is configured, Authorization contains plain API key.
+// When API key is not configured, supports Bearer token for backward compatibility.
+//
+// This function is specifically designed for server connection handling where:
+//   - Empty auth headers should return "" (to allow rejection of unauthenticated requests)
+//   - Bearer tokens should have whitespace trimmed (for backward compatibility)
+//
+// Returns:
+//   - Empty string if authHeader is empty
+//   - Trimmed token value if Bearer format
+//   - Plain authHeader value otherwise
+func ExtractSessionID(authHeader string) string {
+	log.Printf("Extracting session ID from auth header: sanitized=%s", sanitize.TruncateSecret(authHeader))
+	
+	if authHeader == "" {
+		log.Print("Auth header empty, returning empty session ID")
+		return ""
+	}
+
+	// Handle "Bearer <token>" format (backward compatibility)
+	// Trim spaces for backward compatibility with older clients
+	if strings.HasPrefix(authHeader, "Bearer ") {
+		log.Print("Detected Bearer format, trimming spaces for backward compatibility")
+		sessionID := strings.TrimPrefix(authHeader, "Bearer ")
+		return strings.TrimSpace(sessionID)
+	}
+
+	// Handle "Agent <agent-id>" format
+	if strings.HasPrefix(authHeader, "Agent ") {
+		log.Print("Detected Agent format")
+		return strings.TrimPrefix(authHeader, "Agent ")
+	}
+
+	// Plain format (per spec 7.1 - API key is session ID)
+	log.Print("Using plain API key as session ID")
+	return authHeader
+}
