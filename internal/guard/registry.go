@@ -2,7 +2,6 @@ package guard
 
 import (
 	"fmt"
-	"log"
 	"sync"
 
 	"github.com/githubnext/gh-aw-mcpg/internal/logger"
