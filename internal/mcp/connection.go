@@ -313,61 +313,73 @@ func NewHTTPConnection(ctx context.Context, url string, headers map[string]strin
 	return nil, fmt.Errorf("failed to connect using any HTTP transport (tried streamable, SSE, and plain JSON-RPC): last error: %w", err)
 }
 
-// tryStreamableHTTPTransport attempts to connect using the streamable HTTP transport (2025-03-26 spec)
-func tryStreamableHTTPTransport(ctx context.Context, cancel context.CancelFunc, url string, headers map[string]string, httpClient *http.Client) (*Connection, error) {
+// transportConnector is a function that creates an SDK transport for a given URL and HTTP client
+type transportConnector func(url string, httpClient *http.Client) sdk.Transport
+
+// trySDKTransport is a generic function to attempt connection with any SDK-based transport
+// It handles the common logic of creating a client, connecting with timeout, and returning a connection
+func trySDKTransport(
+	ctx context.Context,
+	cancel context.CancelFunc,
+	url string,
+	headers map[string]string,
+	httpClient *http.Client,
+	transportType HTTPTransportType,
+	transportName string,
+	createTransport transportConnector,
+) (*Connection, error) {
 	// Create MCP client
 	client := newMCPClient()
 
-	// Create streamable HTTP transport
-	transport := &sdk.StreamableClientTransport{
-		Endpoint:   url,
-		HTTPClient: httpClient,
-		MaxRetries: 0, // Don't retry on failure - we'll try other transports
-	}
+	// Create transport using the provided connector
+	transport := createTransport(url, httpClient)
 
-	// Try to connect with a timeout - this will fail if the server doesn't support streamable HTTP
+	// Try to connect with a timeout - this will fail if the server doesn't support this transport
 	// Use a short timeout to fail fast and try other transports
 	connectCtx, connectCancel := context.WithTimeout(ctx, 5*time.Second)
 	defer connectCancel()
 
 	session, err := client.Connect(connectCtx, transport, nil)
 	if err != nil {
-		return nil, fmt.Errorf("streamable HTTP transport connect failed: %w", err)
+		return nil, fmt.Errorf("%s transport connect failed: %w", transportName, err)
 	}
 
-	conn := newHTTPConnection(ctx, cancel, client, session, url, headers, httpClient, HTTPTransportStreamable)
+	conn := newHTTPConnection(ctx, cancel, client, session, url, headers, httpClient, transportType)
 
-	logger.LogInfo("backend", "Streamable HTTP transport connected successfully")
-	logConn.Printf("Connected with streamable HTTP transport")
+	logger.LogInfo("backend", "%s transport connected successfully", transportName)
+	logConn.Printf("Connected with %s transport", transportName)
 	return conn, nil
+}
+
+// tryStreamableHTTPTransport attempts to connect using the streamable HTTP transport (2025-03-26 spec)
+func tryStreamableHTTPTransport(ctx context.Context, cancel context.CancelFunc, url string, headers map[string]string, httpClient *http.Client) (*Connection, error) {
+	return trySDKTransport(
+		ctx, cancel, url, headers, httpClient,
+		HTTPTransportStreamable,
+		"streamable HTTP",
+		func(url string, httpClient *http.Client) sdk.Transport {
+			return &sdk.StreamableClientTransport{
+				Endpoint:   url,
+				HTTPClient: httpClient,
+				MaxRetries: 0, // Don't retry on failure - we'll try other transports
+			}
+		},
+	)
 }
 
 // trySSETransport attempts to connect using the SSE transport (2024-11-05 spec)
 func trySSETransport(ctx context.Context, cancel context.CancelFunc, url string, headers map[string]string, httpClient *http.Client) (*Connection, error) {
-	// Create MCP client
-	client := newMCPClient()
-
-	// Create SSE transport
-	transport := &sdk.SSEClientTransport{
-		Endpoint:   url,
-		HTTPClient: httpClient,
-	}
-
-	// Try to connect with a timeout - this will fail if the server doesn't support SSE
-	// Use a short timeout to fail fast and try other transports
-	connectCtx, connectCancel := context.WithTimeout(ctx, 5*time.Second)
-	defer connectCancel()
-
-	session, err := client.Connect(connectCtx, transport, nil)
-	if err != nil {
-		return nil, fmt.Errorf("SSE transport connect failed: %w", err)
-	}
-
-	conn := newHTTPConnection(ctx, cancel, client, session, url, headers, httpClient, HTTPTransportSSE)
-
-	logger.LogInfo("backend", "SSE transport connected successfully")
-	logConn.Printf("Connected with SSE transport")
-	return conn, nil
+	return trySDKTransport(
+		ctx, cancel, url, headers, httpClient,
+		HTTPTransportSSE,
+		"SSE",
+		func(url string, httpClient *http.Client) sdk.Transport {
+			return &sdk.SSEClientTransport{
+				Endpoint:   url,
+				HTTPClient: httpClient,
+			}
+		},
+	)
 }
 
 // tryPlainJSONTransport attempts to connect using plain JSON-RPC 2.0 over HTTP POST (non-standard)
