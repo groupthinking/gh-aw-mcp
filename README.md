@@ -496,6 +496,31 @@ See [`docs/DIFC_INTEGRATION_PROPOSAL.md`](docs/DIFC_INTEGRATION_PROPOSAL.md) for
 
 **Current Status**: All DIFC infrastructure is implemented and tested, but only the `NoopGuard` is active (which returns empty labels, effectively disabling enforcement). Custom guards for specific backends (GitHub, filesystem, etc.) are not yet implemented.
 
+## MCP Server Compatibility
+
+**Not all MCP servers work the same way through the HTTP gateway.** Understanding your server's architecture is crucial:
+
+### Quick Compatibility Check
+
+| Server Type | Gateway Compatible? | Direct Connection? |
+|-------------|--------------------|--------------------|
+| **HTTP-native** (`"type": "http"`) | ✅ **YES** | ✅ Yes |
+| **Stdio-based** (`"type": "stdio"`) | ❌ **NO*** | ✅ Yes |
+
+\* Without gateway enhancement (connection pooling)
+
+### Why?
+
+- **HTTP-native servers** (e.g., GitHub MCP) are stateless - each request is independent
+- **Stdio-based servers** (e.g., Serena MCP) are stateful - require persistent connections
+
+**Examples:**
+- ✅ **GitHub MCP Server**: HTTP-native, works through gateway
+- ❌ **Serena MCP Server**: Stdio-based, use direct connection
+
+📖 **[Detailed Explanation](docs/WHY_GITHUB_WORKS_BUT_SERENA_DOESNT.md)** - Full analysis with code examples  
+📋 **[Quick Reference Guide](docs/GATEWAY_COMPATIBILITY_QUICK_REFERENCE.md)** - Fast compatibility lookup
+
 ## Contributing
 
 For development setup, build instructions, testing guidelines, and project architecture details, see [CONTRIBUTING.md](CONTRIBUTING.md).
