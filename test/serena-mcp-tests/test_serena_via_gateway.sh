@@ -124,8 +124,12 @@ fi
 # Test 3: Pull gateway container image
 log_section "Test 3: Gateway Container Image Availability"
 count_test
-log_info "Pulling gateway container image..."
-if docker pull "$GATEWAY_IMAGE" >/dev/null 2>&1; then
+# Check if image exists locally first
+if docker image inspect "$GATEWAY_IMAGE" >/dev/null 2>&1; then
+    log_info "Using local gateway image (skipping pull)"
+    log_success "Gateway container image is available"
+elif docker pull "$GATEWAY_IMAGE" >/dev/null 2>&1; then
+    log_info "Pulling gateway container image..."
     log_success "Gateway container image is available"
 else
     log_error "Failed to pull gateway container image: $GATEWAY_IMAGE"
@@ -239,22 +243,63 @@ else
     exit 1
 fi
 
-# Function to send MCP request via gateway
-send_mcp_request() {
-    local request="$1"
-    local endpoint="http://localhost:$GATEWAY_PORT/mcp/serena"
-    
-    curl -s -X POST "$endpoint" \
-        -H "Content-Type: application/json" \
-        -H "Accept: application/json, text/event-stream" \
-        -H "Authorization: $GATEWAY_API_KEY" \
-        -d "$request" 2>/dev/null || echo '{"error": "request failed"}'
+# Session ID for MCP Streamable HTTP transport
+# Stored in a file to survive subshell boundaries
+MCP_SESSION_FILE="$TEMP_DIR/mcp_session_id.txt"
+echo "" > "$MCP_SESSION_FILE"
+
+# Response file for avoiding subshell variable scope issues
+MCP_RESPONSE_FILE="$TEMP_DIR/mcp_response.txt"
+
+# Function to get the current session ID
+get_session_id() {
+    cat "$MCP_SESSION_FILE" 2>/dev/null || echo ""
 }
 
-# Function to send MCP request and parse response (handles SSE)
-send_and_parse_mcp_request() {
+# Function to send MCP request and capture session ID
+# This writes response to MCP_RESPONSE_FILE and updates session ID file
+send_mcp_request_direct() {
     local request="$1"
-    local raw_response=$(send_mcp_request "$request")
+    local endpoint="http://localhost:$GATEWAY_PORT/mcp/serena"
+    local headers_file="$TEMP_DIR/response_headers.txt"
+    local session_id=$(get_session_id)
+    
+    # Run curl and save response to file
+    if [ -n "$session_id" ]; then
+        curl -s -X POST "$endpoint" \
+            -H "Content-Type: application/json" \
+            -H "Accept: application/json, text/event-stream" \
+            -H "Authorization: $GATEWAY_API_KEY" \
+            -H "Mcp-Session-Id: $session_id" \
+            -D "$headers_file" \
+            -d "$request" > "$MCP_RESPONSE_FILE" 2>/dev/null || echo '{"error": "request failed"}' > "$MCP_RESPONSE_FILE"
+    else
+        curl -s -X POST "$endpoint" \
+            -H "Content-Type: application/json" \
+            -H "Accept: application/json, text/event-stream" \
+            -H "Authorization: $GATEWAY_API_KEY" \
+            -D "$headers_file" \
+            -d "$request" > "$MCP_RESPONSE_FILE" 2>/dev/null || echo '{"error": "request failed"}' > "$MCP_RESPONSE_FILE"
+    fi
+    
+    # Capture session ID from response headers and save to file
+    if [ -f "$headers_file" ]; then
+        local new_session_id=$(grep -i "^mcp-session-id:" "$headers_file" | sed 's/^[Mm]cp-[Ss]ession-[Ii]d: *//;s/\r$//' | head -1)
+        if [ -n "$new_session_id" ]; then
+            echo "$new_session_id" > "$MCP_SESSION_FILE"
+        fi
+    fi
+}
+
+# Function to send MCP request and get the raw response
+# Call send_mcp_request_direct first, then use get_mcp_response
+get_mcp_response() {
+    cat "$MCP_RESPONSE_FILE"
+}
+
+# Function to get parsed JSON from SSE response
+get_mcp_response_json() {
+    local raw_response=$(cat "$MCP_RESPONSE_FILE")
     
     # Check if response is SSE format
     if echo "$raw_response" | grep -q "^event: message"; then
@@ -266,6 +311,21 @@ send_and_parse_mcp_request() {
     fi
 }
 
+# Legacy function for backward compatibility
+send_mcp_request() {
+    local request="$1"
+    send_mcp_request_direct "$request"
+    get_mcp_response
+}
+
+# Legacy function for backward compatibility - parses SSE response
+# NOTE: Session ID is now persisted to file, so it survives subshell usage
+send_and_parse_mcp_request() {
+    local request="$1"
+    send_mcp_request_direct "$request"
+    get_mcp_response_json
+}
+
 # Test 6: MCP Protocol - Initialize
 log_section "Test 6: MCP Protocol Initialize (via Gateway)"
 count_test
@@ -273,14 +333,21 @@ log_info "Sending MCP initialize request through gateway..."
 
 INIT_REQUEST='{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"test-client","version":"1.0.0"}}}'
 
+# Send request - session ID will be captured and saved to file
 INIT_JSON=$(send_and_parse_mcp_request "$INIT_REQUEST")
 
 echo "$INIT_JSON" > "$RESULTS_DIR/initialize_response.json"
 
+MCP_SESSION_ID=$(get_session_id)
 if echo "$INIT_JSON" | grep -q '"jsonrpc"'; then
     if echo "$INIT_JSON" | grep -q '"result"'; then
         log_success "MCP initialize succeeded through gateway"
         log_info "Response saved to: $RESULTS_DIR/initialize_response.json"
+        if [ -n "$MCP_SESSION_ID" ]; then
+            log_info "MCP Session ID: $MCP_SESSION_ID"
+        else
+            log_warning "No MCP Session ID captured - subsequent requests may fail"
+        fi
     else
         log_error "MCP initialize returned error through gateway"
         echo "$INIT_JSON" | head -5
@@ -293,7 +360,7 @@ fi
 # Send initialized notification to complete handshake
 log_info "Sending initialized notification to complete MCP handshake..."
 INITIALIZED_NOTIF='{"jsonrpc":"2.0","method":"notifications/initialized"}'
-send_mcp_request "$INITIALIZED_NOTIF" >/dev/null 2>&1
+send_mcp_request_direct "$INITIALIZED_NOTIF"
 
 # Give the server a moment to process the notification
 sleep 1
