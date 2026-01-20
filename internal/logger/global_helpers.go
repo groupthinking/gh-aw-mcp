@@ -1,6 +1,6 @@
 // Package logger provides structured logging for the MCP Gateway.
 //
-// This file contains helper functions for managing global logger state with proper
+// This file contains generic helper functions for managing global logger state with proper
 // mutex handling. These helpers encapsulate common patterns for initializing and
 // closing global loggers (FileLogger, JSONLLogger, MarkdownLogger) to reduce code
 // duplication while maintaining thread safety.
@@ -14,84 +14,102 @@
 // directly by external code. Use the public Init* and Close* functions instead.
 package logger
 
-// This file contains helper functions that encapsulate the common patterns
-// for global logger initialization and cleanup. These helpers reduce code
-// duplication while maintaining type safety.
+import "sync"
 
-// initGlobalFileLogger is a helper that encapsulates the common pattern for
-// initializing a global FileLogger with proper mutex handling.
+// closableLogger is a constraint for types that have a Close method.
+// This is satisfied by *FileLogger, *JSONLLogger, and *MarkdownLogger.
+type closableLogger interface {
+*FileLogger | *JSONLLogger | *MarkdownLogger
+Close() error
+}
+
+// initGlobalLogger is a generic helper that encapsulates the common pattern for
+// initializing a global logger with proper mutex handling.
+//
+// Type parameters:
+//   - T: Any pointer type that satisfies closableLogger constraint
+//
+// Parameters:
+//   - mu: Mutex to protect access to the global logger
+//   - current: Pointer to the current global logger instance
+//   - newLogger: New logger instance to set as the global logger
+//
+// This function:
+//  1. Acquires the mutex lock
+//  2. Closes any existing logger if present
+//  3. Sets the new logger as the global instance
+//  4. Releases the mutex lock
+func initGlobalLogger[T closableLogger](mu *sync.RWMutex, current *T, newLogger T) {
+mu.Lock()
+defer mu.Unlock()
+
+if *current != nil {
+(*current).Close()
+}
+*current = newLogger
+}
+
+// closeGlobalLogger is a generic helper that encapsulates the common pattern for
+// closing and clearing a global logger with proper mutex handling.
+//
+// Type parameters:
+//   - T: Any pointer type that satisfies closableLogger constraint
+//
+// Parameters:
+//   - mu: Mutex to protect access to the global logger
+//   - logger: Pointer to the global logger instance to close
+//
+// Returns:
+//   - error: Any error returned by the logger's Close() method
+//
+// This function:
+//  1. Acquires the mutex lock
+//  2. Closes the logger if it exists
+//  3. Sets the logger pointer to nil
+//  4. Releases the mutex lock
+//  5. Returns any error from the Close() operation
+func closeGlobalLogger[T closableLogger](mu *sync.RWMutex, logger *T) error {
+mu.Lock()
+defer mu.Unlock()
+
+if *logger != nil {
+err := (*logger).Close()
+var zero T
+*logger = zero
+return err
+}
+return nil
+}
+
+// Type-specific helper functions that use the generic implementations above.
+// These maintain backward compatibility with existing code.
+
+// initGlobalFileLogger initializes the global FileLogger using the generic helper.
 func initGlobalFileLogger(logger *FileLogger) {
-	globalLoggerMu.Lock()
-	defer globalLoggerMu.Unlock()
-
-	if globalFileLogger != nil {
-		globalFileLogger.Close()
-	}
-	globalFileLogger = logger
+initGlobalLogger(&globalLoggerMu, &globalFileLogger, logger)
 }
 
-// closeGlobalFileLogger is a helper that encapsulates the common pattern for
-// closing and clearing a global FileLogger with proper mutex handling.
+// closeGlobalFileLogger closes the global FileLogger using the generic helper.
 func closeGlobalFileLogger() error {
-	globalLoggerMu.Lock()
-	defer globalLoggerMu.Unlock()
-
-	if globalFileLogger != nil {
-		err := globalFileLogger.Close()
-		globalFileLogger = nil
-		return err
-	}
-	return nil
+return closeGlobalLogger(&globalLoggerMu, &globalFileLogger)
 }
 
-// initGlobalJSONLLogger is a helper that encapsulates the common pattern for
-// initializing a global JSONLLogger with proper mutex handling.
+// initGlobalJSONLLogger initializes the global JSONLLogger using the generic helper.
 func initGlobalJSONLLogger(logger *JSONLLogger) {
-	globalJSONLMu.Lock()
-	defer globalJSONLMu.Unlock()
-
-	if globalJSONLLogger != nil {
-		globalJSONLLogger.Close()
-	}
-	globalJSONLLogger = logger
+initGlobalLogger(&globalJSONLMu, &globalJSONLLogger, logger)
 }
 
-// closeGlobalJSONLLogger is a helper that encapsulates the common pattern for
-// closing and clearing a global JSONLLogger with proper mutex handling.
+// closeGlobalJSONLLogger closes the global JSONLLogger using the generic helper.
 func closeGlobalJSONLLogger() error {
-	globalJSONLMu.Lock()
-	defer globalJSONLMu.Unlock()
-
-	if globalJSONLLogger != nil {
-		err := globalJSONLLogger.Close()
-		globalJSONLLogger = nil
-		return err
-	}
-	return nil
+return closeGlobalLogger(&globalJSONLMu, &globalJSONLLogger)
 }
 
-// initGlobalMarkdownLogger is a helper that encapsulates the common pattern for
-// initializing a global MarkdownLogger with proper mutex handling.
+// initGlobalMarkdownLogger initializes the global MarkdownLogger using the generic helper.
 func initGlobalMarkdownLogger(logger *MarkdownLogger) {
-	globalMarkdownMu.Lock()
-	defer globalMarkdownMu.Unlock()
-
-	if globalMarkdownLogger != nil {
-		globalMarkdownLogger.Close()
-	}
-	globalMarkdownLogger = logger
+initGlobalLogger(&globalMarkdownMu, &globalMarkdownLogger, logger)
 }
 
-// closeGlobalMarkdownLogger is a helper that encapsulates the common pattern for
-// closing and clearing a global MarkdownLogger with proper mutex handling.
+// closeGlobalMarkdownLogger closes the global MarkdownLogger using the generic helper.
 func closeGlobalMarkdownLogger() error {
-	globalMarkdownMu.Lock()
-	defer globalMarkdownMu.Unlock()
-
-	if globalMarkdownLogger != nil {
-		err := globalMarkdownLogger.Close()
-		globalMarkdownLogger = nil
-		return err
-	}
-	return nil
+return closeGlobalLogger(&globalMarkdownMu, &globalMarkdownLogger)
 }
