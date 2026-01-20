@@ -19,8 +19,8 @@ import "sync"
 // closableLogger is a constraint for types that have a Close method.
 // This is satisfied by *FileLogger, *JSONLLogger, and *MarkdownLogger.
 type closableLogger interface {
-*FileLogger | *JSONLLogger | *MarkdownLogger
-Close() error
+	*FileLogger | *JSONLLogger | *MarkdownLogger
+	Close() error
 }
 
 // initGlobalLogger is a generic helper that encapsulates the common pattern for
@@ -40,13 +40,13 @@ Close() error
 //  3. Sets the new logger as the global instance
 //  4. Releases the mutex lock
 func initGlobalLogger[T closableLogger](mu *sync.RWMutex, current *T, newLogger T) {
-mu.Lock()
-defer mu.Unlock()
+	mu.Lock()
+	defer mu.Unlock()
 
-if *current != nil {
-(*current).Close()
-}
-*current = newLogger
+	if *current != nil {
+		(*current).Close()
+	}
+	*current = newLogger
 }
 
 // closeGlobalLogger is a generic helper that encapsulates the common pattern for
@@ -69,16 +69,16 @@ if *current != nil {
 //  4. Releases the mutex lock
 //  5. Returns any error from the Close() operation
 func closeGlobalLogger[T closableLogger](mu *sync.RWMutex, logger *T) error {
-mu.Lock()
-defer mu.Unlock()
+	mu.Lock()
+	defer mu.Unlock()
 
-if *logger != nil {
-err := (*logger).Close()
-var zero T
-*logger = zero
-return err
-}
-return nil
+	if *logger != nil {
+		err := (*logger).Close()
+		var zero T
+		*logger = zero
+		return err
+	}
+	return nil
 }
 
 // Type-specific helper functions that use the generic implementations above.
@@ -86,30 +86,30 @@ return nil
 
 // initGlobalFileLogger initializes the global FileLogger using the generic helper.
 func initGlobalFileLogger(logger *FileLogger) {
-initGlobalLogger(&globalLoggerMu, &globalFileLogger, logger)
+	initGlobalLogger(&globalLoggerMu, &globalFileLogger, logger)
 }
 
 // closeGlobalFileLogger closes the global FileLogger using the generic helper.
 func closeGlobalFileLogger() error {
-return closeGlobalLogger(&globalLoggerMu, &globalFileLogger)
+	return closeGlobalLogger(&globalLoggerMu, &globalFileLogger)
 }
 
 // initGlobalJSONLLogger initializes the global JSONLLogger using the generic helper.
 func initGlobalJSONLLogger(logger *JSONLLogger) {
-initGlobalLogger(&globalJSONLMu, &globalJSONLLogger, logger)
+	initGlobalLogger(&globalJSONLMu, &globalJSONLLogger, logger)
 }
 
 // closeGlobalJSONLLogger closes the global JSONLLogger using the generic helper.
 func closeGlobalJSONLLogger() error {
-return closeGlobalLogger(&globalJSONLMu, &globalJSONLLogger)
+	return closeGlobalLogger(&globalJSONLMu, &globalJSONLLogger)
 }
 
 // initGlobalMarkdownLogger initializes the global MarkdownLogger using the generic helper.
 func initGlobalMarkdownLogger(logger *MarkdownLogger) {
-initGlobalLogger(&globalMarkdownMu, &globalMarkdownLogger, logger)
+	initGlobalLogger(&globalMarkdownMu, &globalMarkdownLogger, logger)
 }
 
 // closeGlobalMarkdownLogger closes the global MarkdownLogger using the generic helper.
 func closeGlobalMarkdownLogger() error {
-return closeGlobalLogger(&globalMarkdownMu, &globalMarkdownLogger)
+	return closeGlobalLogger(&globalMarkdownMu, &globalMarkdownLogger)
 }
