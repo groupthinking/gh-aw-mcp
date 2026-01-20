@@ -81,6 +81,11 @@ func newMCPClient() *sdk.Client {
 
 // newHTTPConnection creates a new HTTP Connection struct with common fields
 func newHTTPConnection(ctx context.Context, cancel context.CancelFunc, client *sdk.Client, session *sdk.ClientSession, url string, headers map[string]string, httpClient *http.Client, transportType HTTPTransportType) *Connection {
+	// Extract session ID from SDK session if available
+	var sessionID string
+	if session != nil {
+		sessionID = session.ID()
+	}
 	return &Connection{
 		client:            client,
 		session:           session,
@@ -91,6 +96,7 @@ func newHTTPConnection(ctx context.Context, cancel context.CancelFunc, client *s
 		headers:           headers,
 		httpClient:        httpClient,
 		httpTransportType: transportType,
+		httpSessionID:     sessionID,
 	}
 }
 
