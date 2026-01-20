@@ -36,23 +36,6 @@ type JSONRPCError struct {
 	Data    json.RawMessage `json:"data,omitempty"`
 }
 
-// sdkLoggingResponseWriter captures response for logging
-type sdkLoggingResponseWriter struct {
-	http.ResponseWriter
-	body       bytes.Buffer
-	statusCode int
-}
-
-func (w *sdkLoggingResponseWriter) WriteHeader(statusCode int) {
-	w.statusCode = statusCode
-	w.ResponseWriter.WriteHeader(statusCode)
-}
-
-func (w *sdkLoggingResponseWriter) Write(b []byte) (int, error) {
-	w.body.Write(b)
-	return w.ResponseWriter.Write(b)
-}
-
 // WithSDKLogging wraps an SDK StreamableHTTPHandler to log JSON-RPC translation results
 // This captures the request/response at the HTTP boundary to understand what the SDK
 // sees and what it returns, particularly for debugging protocol state issues
@@ -92,10 +75,7 @@ func WithSDKLogging(handler http.Handler, mode string) http.Handler {
 		}
 
 		// Wrap response writer to capture output
-		lw := &sdkLoggingResponseWriter{
-			ResponseWriter: w,
-			statusCode:     http.StatusOK,
-		}
+		lw := newResponseWriter(w)
 
 		// Call the actual SDK handler
 		handler.ServeHTTP(lw, r)
@@ -103,7 +83,7 @@ func WithSDKLogging(handler http.Handler, mode string) http.Handler {
 		duration := time.Since(startTime)
 
 		// Parse and log response
-		responseBody := lw.body.Bytes()
+		responseBody := lw.Body()
 		if len(responseBody) > 0 {
 			// Try to parse as JSON-RPC response
 			var jsonrpcResp JSONRPCResponse
@@ -111,7 +91,7 @@ func WithSDKLogging(handler http.Handler, mode string) http.Handler {
 				if jsonrpcResp.Error != nil {
 					// Error response - this is what we're particularly interested in
 					logSDK.Printf("<<< SDK Response [%s] ERROR status=%d duration=%v",
-						mode, lw.statusCode, duration)
+						mode, lw.StatusCode(), duration)
 					logSDK.Printf("    JSON-RPC Error: code=%d message=%q",
 						jsonrpcResp.Error.Code, jsonrpcResp.Error.Message)
 
@@ -136,7 +116,7 @@ func WithSDKLogging(handler http.Handler, mode string) http.Handler {
 				} else {
 					// Success response
 					logSDK.Printf("<<< SDK Response [%s] SUCCESS status=%d duration=%v",
-						mode, lw.statusCode, duration)
+						mode, lw.StatusCode(), duration)
 					logSDK.Printf("    JSON-RPC Response id=%v has result=%v",
 						jsonrpcResp.ID, jsonrpcResp.Result != nil)
 
@@ -147,7 +127,7 @@ func WithSDKLogging(handler http.Handler, mode string) http.Handler {
 			} else {
 				// Could be SSE stream or other format
 				logSDK.Printf("<<< SDK Response [%s] status=%d duration=%v (non-JSON or stream)",
-					mode, lw.statusCode, duration)
+					mode, lw.StatusCode(), duration)
 				if len(responseBody) < 500 {
 					logSDK.Printf("    Raw response: %s", string(responseBody))
 				} else {
@@ -156,7 +136,7 @@ func WithSDKLogging(handler http.Handler, mode string) http.Handler {
 			}
 		} else {
 			logSDK.Printf("<<< SDK Response [%s] status=%d duration=%v (empty body)",
-				mode, lw.statusCode, duration)
+				mode, lw.StatusCode(), duration)
 		}
 	})
 }

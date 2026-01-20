@@ -47,30 +47,13 @@ func (t *HTTPTransport) Close() error {
 	return nil
 }
 
-// loggingResponseWriter wraps http.ResponseWriter to capture response body
-type loggingResponseWriter struct {
-	http.ResponseWriter
-	body       []byte
-	statusCode int
-}
-
-func (w *loggingResponseWriter) WriteHeader(statusCode int) {
-	w.statusCode = statusCode
-	w.ResponseWriter.WriteHeader(statusCode)
-}
-
-func (w *loggingResponseWriter) Write(b []byte) (int, error) {
-	w.body = append(w.body, b...)
-	return w.ResponseWriter.Write(b)
-}
-
 // withResponseLogging wraps an http.Handler to log response bodies
 func withResponseLogging(handler http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		lw := &loggingResponseWriter{ResponseWriter: w, body: []byte{}, statusCode: http.StatusOK}
+		lw := newResponseWriter(w)
 		handler.ServeHTTP(lw, r)
-		if len(lw.body) > 0 {
-			log.Printf("[%s] %s %s - Status: %d, Response: %s", r.RemoteAddr, r.Method, r.URL.Path, lw.statusCode, string(lw.body))
+		if len(lw.Body()) > 0 {
+			log.Printf("[%s] %s %s - Status: %d, Response: %s", r.RemoteAddr, r.Method, r.URL.Path, lw.StatusCode(), string(lw.Body()))
 		}
 	})
 }
