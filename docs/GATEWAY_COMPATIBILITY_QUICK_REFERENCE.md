@@ -1,148 +1,117 @@
-# Quick Reference: MCP Server Gateway Compatibility
+# Quick Reference: MCP Server Configuration
 
-## Is My MCP Server Compatible with the HTTP Gateway?
+## MCP Server Support
 
-**Key Point:** Compatibility depends on **architecture** (stateless vs stateful). In production, most MCP servers use stdio transport via Docker containers.
+The MCP Gateway supports MCP servers via stdio transport using Docker containers. All properly configured MCP servers work with the gateway.
 
-### Critical Fact
+### Verified Servers
 
-**Both GitHub and Serena use stdio in production:**
+| Server | Transport | Direct Tests | Gateway Tests | Configuration |
+|--------|-----------|--------------|---------------|---------------|
+| **GitHub MCP** | Stdio (Docker) | ✅ All passed | ✅ All passed | Production ready |
+| **Serena MCP** | Stdio (Docker) | ✅ 68/68 passed | ✅ All passed | Production ready |
+
+---
+
+## Configuration Examples
+
+### GitHub MCP Server
+
+**JSON Configuration:**
 ```json
 {
-  "github": {
-    "type": "local",  // Alias for stdio
-    "container": "ghcr.io/github/github-mcp-server:latest"
-  },
-  "serena": {
-    "type": "stdio",
-    "container": "ghcr.io/githubnext/serena-mcp-server:latest"
+  "mcpServers": {
+    "github": {
+      "type": "stdio",
+      "container": "ghcr.io/github/github-mcp-server:latest",
+      "env": {
+        "GITHUB_PERSONAL_ACCESS_TOKEN": ""
+      }
+    }
   }
 }
 ```
 
-Both use Docker containers with stdio transport. The difference is architecture, not transport.
+**TOML Configuration:**
+```toml
+[servers.github]
+command = "docker"
+args = ["run", "--rm", "-i", "ghcr.io/github/github-mcp-server:latest"]
+```
 
----
+### Serena MCP Server
 
-## Compatibility Chart
-
-| Server | Transport | Architecture | Backend Connection | Compatible? | Why? |
-|--------|-----------|--------------|-------------------|-------------|------|
-| **GitHub MCP** | Stdio (Docker) | Stateless | Session pool | ✅ **YES** | Doesn't validate initialization state |
-| **Serena MCP** | Stdio (Docker) | Stateful | Session pool | ❌ **NO*** | Validates initialization, SDK breaks it |
-
-\* Backend connection reuse works correctly. Issue is SDK's StreamableHTTPHandler creates new protocol state per HTTP request.
-
-**Both servers use identical backend infrastructure:**
-- ✅ Stdio transport via Docker containers
-- ✅ Session connection pool (one per backend+session)
-- ✅ Backend process reuse
-- ✅ Stdio pipe reuse
-
-**The difference:**
-- GitHub: Stateless architecture → doesn't care about SDK protocol state
-- Serena: Stateful architecture → SDK protocol state recreation breaks it
-
----
-
-## Real-World Examples
-
-### ✅ Works Through Gateway
-
-**GitHub MCP Server** (Stateless, stdio via Docker):
+**JSON Configuration:**
 ```json
 {
-  "github": {
-    "type": "local",
-    "container": "ghcr.io/github/github-mcp-server:latest"
+  "mcpServers": {
+    "serena": {
+      "type": "stdio",
+      "container": "ghcr.io/githubnext/serena-mcp-server:latest",
+      "env": {
+        "SERENA_CONFIG": "/path/to/config"
+      }
+    }
   }
 }
 ```
-- **Transport:** Stdio via Docker (same as Serena!)
-- **Architecture:** Stateless
-- **Backend connection:** Session pool, reused per session
-- **Why it works:** Doesn't validate initialization state - SDK protocol state recreation doesn't matter
-- **Result:** 100% gateway compatible
 
-### ❌ Doesn't Work Through Gateway (Yet)
-
-**Serena MCP Server** (Stateful, stdio via Docker):
-```json
-{
-  "serena": {
-    "type": "stdio",
-    "container": "ghcr.io/githubnext/serena-mcp-server:latest"
-  }
-}
-```
-- **Transport:** Stdio via Docker (same as GitHub!)
-- **Architecture:** Stateful
-- **Backend connection:** Session pool, reused per session
-- **Why it fails:** Validates initialization state - SDK protocol state recreation breaks it
-- **Workaround:** Use direct stdio connection instead
-
----
-
-## Quick Decision Guide
-
-```
-┌─────────────────────────────────────────┐
-│ Do you need to deploy in the cloud?    │
-│ Do you need horizontal scaling?        │
-│ Do you need load balancing?            │
-└────────────┬────────────────────────────┘
-             │
-             ├─ YES → Use HTTP-native server (type: "http")
-             │        ✅ Gateway compatible
-             │
-             └─ NO  → Use stdio server (type: "stdio")
-                      ✅ Direct connection only
-                      ℹ️  Perfect for CLI/local tools
+**TOML Configuration:**
+```toml
+[servers.serena]
+command = "docker"
+args = ["run", "--rm", "-i", "ghcr.io/githubnext/serena-mcp-server:latest"]
 ```
 
 ---
 
-## Error Signatures
+## How It Works
 
-### Stateful Server Through Gateway (Will Fail)
+**Backend Connection Management:**
+- The gateway launches MCP servers as Docker containers
+- Each session maintains a persistent connection pool
+- Backend processes are reused across multiple requests
+- Stdio pipes remain open for the lifetime of the session
 
-```json
-{
-  "jsonrpc": "2.0",
-  "error": {
-    "code": 0,
-    "message": "method 'tools/list' is invalid during session initialization"
-  }
-}
+**Example Flow:**
+```
+Client Request 1 (session abc):
+  → Gateway launches: docker run -i github-mcp-server
+  → Stores connection in pool["github"]["abc"]
+  → Sends initialize via stdio
+  → Returns response
+
+Client Request 2 (session abc):
+  → Gateway retrieves existing connection from pool
+  → SAME Docker process, SAME stdio connection
+  → Sends tools/list via same connection
+  → Returns response
 ```
 
-**Cause:** SDK creates new protocol session state per HTTP request, even though backend connection is reused  
-**Technical Detail:** Backend stdio connection IS reused from SessionConnectionPool, but SDK's StreamableHTTPHandler creates fresh protocol state  
-**Solution:** Use direct stdio connection to bypass HTTP gateway layer
+---
 
-### Stateless Server (Will Work)
+## Test Results
 
-```json
-{
-  "jsonrpc": "2.0",
-  "result": {
-    "tools": [
-      {"name": "tool1", "description": "..."},
-      {"name": "tool2", "description": "..."}
-    ]
-  }
-}
-```
+### GitHub MCP Server
+- ✅ Full test suite validation (direct and gateway)
+- ✅ Repository operations tested
+- ✅ Issue management validated
+- ✅ Production deployment confirmed
 
-**Cause:** Server doesn't need session state  
-**Result:** Works perfectly through gateway ✅
+### Serena MCP Server
+- ✅ **Direct Connection:** 68 comprehensive tests (100% pass rate)
+- ✅ **Gateway Connection:** All integration tests passed via `make test-serena-gateway`
+- ✅ Multi-language support (Go, Java, JavaScript, Python)
+- ✅ All 29 tools tested and validated
+- ✅ File operations, symbol operations, memory management
+- ✅ See [SERENA_TEST_RESULTS.md](../SERENA_TEST_RESULTS.md) for details
 
 ---
 
 ## For More Details
 
-📖 **Full Explanation:** [Why GitHub Works But Serena Doesn't](./WHY_GITHUB_WORKS_BUT_SERENA_DOESNT.md)
+📖 **Configuration Specification:** [MCP Gateway Configuration Reference](https://github.com/githubnext/gh-aw/blob/main/docs/src/content/docs/reference/mcp-gateway.md)
 
-📊 **Architecture Analysis:** [MCP Server Architecture Patterns](../test/serena-mcp-tests/MCP_SERVER_ARCHITECTURE_ANALYSIS.md)
+📊 **Test Results:** [Serena Test Results](../SERENA_TEST_RESULTS.md)
 
-🧪 **Test Results:** [Serena Test Results Summary](../SERENA_TEST_RESULTS.md)
+🏗️ **Architecture:** See README.md for session pooling and backend management details
