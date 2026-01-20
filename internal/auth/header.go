@@ -141,7 +141,7 @@ func ExtractAgentID(authHeader string) string {
 //   - Plain authHeader value otherwise
 func ExtractSessionID(authHeader string) string {
 	log.Printf("Extracting session ID from auth header: sanitized=%s", sanitize.TruncateSecret(authHeader))
-	
+
 	if authHeader == "" {
 		log.Print("Auth header empty, returning empty session ID")
 		return ""
