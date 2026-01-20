@@ -27,7 +27,6 @@ Quick reference for AI agents working with MCP Gateway (Go-based MCP proxy serve
 - `internal/server/` - HTTP server (routed/unified modes)
 - `internal/mcp/` - MCP protocol types with enhanced error logging
 - `internal/launcher/` - Backend process management
-- `internal/difc/` - Security labels (not enabled)
 - `internal/guard/` - Security guards (NoopGuard active)
 - `internal/auth/` - Authentication header parsing and middleware
 - `internal/logger/` - Debug logging framework (micro logger)
@@ -355,11 +354,9 @@ DEBUG_COLORS=0 DEBUG=* ./awmg --config config.toml
 
 - **Auth**: `Authorization: <apiKey>` header (plain API key per spec 7.1, NOT Bearer scheme)
 - **Sessions**: Session ID extracted from Authorization header value
-- **DIFC**: Implemented but disabled (NoopGuard active)
 - **Stdio servers**: Containerized execution only (no direct command support)
 
 ## Resources
 
 - [README.md](./README.md) - Full documentation
-- [DIFC Proposal](./docs/DIFC_INTEGRATION_PROPOSAL.md) - Security design
 - [MCP Protocol](https://github.com/modelcontextprotocol) - Specification
