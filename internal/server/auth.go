@@ -3,6 +3,7 @@ package server
 import (
 	"log"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/githubnext/gh-aw-mcpg/internal/logger"
@@ -39,6 +40,21 @@ func authMiddleware(apiKey string, next http.HandlerFunc) http.HandlerFunc {
 		// Token is valid, proceed to handler
 		next(w, r)
 	}
+}
+
+// extractSessionFromAuth extracts session ID from Authorization header
+// Per spec 7.1: When API key is configured, Authorization contains plain API key
+// When API key is not configured, supports Bearer token for backward compatibility
+func extractSessionFromAuth(authHeader string) string {
+	if strings.HasPrefix(authHeader, "Bearer ") {
+		// Bearer token format (for backward compatibility when no API key)
+		sessionID := strings.TrimPrefix(authHeader, "Bearer ")
+		return strings.TrimSpace(sessionID)
+	} else if authHeader != "" {
+		// Plain format (per spec 7.1 - API key is session ID)
+		return authHeader
+	}
+	return ""
 }
 
 // logRuntimeError logs runtime errors to stdout per spec section 9.2
