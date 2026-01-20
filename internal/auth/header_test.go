@@ -283,3 +283,64 @@ func TestExtractAgentID(t *testing.T) {
 		})
 	}
 }
+
+func TestExtractSessionID(t *testing.T) {
+	tests := []struct {
+		name       string
+		authHeader string
+		want       string
+	}{
+		{
+			name:       "Empty header returns empty string",
+			authHeader: "",
+			want:       "",
+		},
+		{
+			name:       "Plain API key",
+			authHeader: "my-api-key",
+			want:       "my-api-key",
+		},
+		{
+			name:       "Bearer token",
+			authHeader: "Bearer my-token-123",
+			want:       "my-token-123",
+		},
+		{
+			name:       "Bearer token with trailing space (trimmed)",
+			authHeader: "Bearer my-token-123 ",
+			want:       "my-token-123",
+		},
+		{
+			name:       "Bearer token with leading and trailing spaces (trimmed)",
+			authHeader: "Bearer  my-token-123  ",
+			want:       "my-token-123",
+		},
+		{
+			name:       "Agent format",
+			authHeader: "Agent agent-abc",
+			want:       "agent-abc",
+		},
+		{
+			name:       "Long API key",
+			authHeader: "my-super-long-api-key-with-many-characters",
+			want:       "my-super-long-api-key-with-many-characters",
+		},
+		{
+			name:       "API key with special characters",
+			authHeader: "key!@#$%^&*()",
+			want:       "key!@#$%^&*()",
+		},
+		{
+			name:       "Whitespace only header",
+			authHeader: "   ",
+			want:       "   ",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := ExtractSessionID(tt.authHeader)
+			assert.Equal(t, tt.want, got)
+		})
+	}
+}
