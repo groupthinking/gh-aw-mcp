@@ -500,32 +500,39 @@ See [`docs/DIFC_INTEGRATION_PROPOSAL.md`](docs/DIFC_INTEGRATION_PROPOSAL.md) for
 
 **Not all MCP servers work the same way through the HTTP gateway.** The key difference is **architecture** (stateless vs stateful), not transport (HTTP vs stdio).
 
+### Backend Connection Management
+
+**How Gateway Connects to Backends:**
+- **HTTP backends** (`"type": "http"`): ONE persistent connection per backend, shared across ALL frontend requests
+- **Stdio backends** (`"type": "stdio"`): Session connection pool - one per (backend, session) tuple
+
 ### Quick Compatibility Check
 
-| Gateway Config | Server Architecture | Gateway Compatible? |
-|----------------|--------------------|--------------------|
-| `"type": "http"` | Stateless | ✅ **YES** |
-| `"type": "stdio"` | Stateful | ❌ **NO*** |
+| Gateway Config | Server Architecture | Backend Connection | Compatible? |
+|----------------|--------------------|--------------------|-------------|
+| `"type": "http"` | Stateless | Single persistent HTTP connection | ✅ **YES** |
+| `"type": "stdio"` | Stateful | Session pool (one per session) | ❌ **NO*** |
 
-\* Without gateway enhancement (connection pooling)
+\* Backend connection reuse works, but SDK protocol state doesn't persist across HTTP requests
 
 ### Understanding the Difference
 
 **Stateless servers** (like GitHub MCP):
 - Process each request independently
 - No session state between requests
+- Single backend connection shared across all frontend requests
 - Gateway compatible
-- May support both HTTP AND stdio transports
 
 **Stateful servers** (like Serena MCP):
-- Require persistent connection
-- Maintain session state in memory
+- Require persistent protocol session state
+- Backend connection IS reused via session pool
+- BUT: SDK creates new protocol state per HTTP request
 - Need direct stdio connection (not gateway)
 
 ### Examples
 
-✅ **GitHub MCP Server**: Stateless architecture, works through gateway  
-❌ **Serena MCP Server**: Stateful architecture, use direct connection
+✅ **GitHub MCP Server**: Stateless architecture, single persistent HTTP connection, works through gateway  
+❌ **Serena MCP Server**: Stateful architecture, backend connection reused but SDK limitation prevents it from working
 
 📖 **[Detailed Explanation](docs/WHY_GITHUB_WORKS_BUT_SERENA_DOESNT.md)** - Full analysis with code examples  
 📋 **[Quick Reference Guide](docs/GATEWAY_COMPATIBILITY_QUICK_REFERENCE.md)** - Fast compatibility lookup

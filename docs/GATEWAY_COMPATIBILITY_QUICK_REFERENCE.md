@@ -20,15 +20,19 @@ Look at the `"type"` field - this tells the gateway HOW to connect to your serve
 
 ### Compatibility Chart
 
-| Gateway Config | Server Architecture | Gateway Compatible? | Notes |
-|----------------|--------------------|--------------------|-------|
-| **`"http"`** | Stateless | ✅ **YES** | Server processes each request independently |
-| **`"stdio"`** | Stateless | ✅ **YES** | Would work if accessed directly, but gateway creates new connections |
-| **`"stdio"`** | Stateful | ❌ **NO*** | Requires persistent connection, gateway creates new ones |
+| Gateway Config | Server Architecture | Backend Connection | Gateway Compatible? | Notes |
+|----------------|--------------------|--------------------|---------------------|-------|
+| **`"http"`** | Stateless | Single persistent HTTP connection per backend | ✅ **YES** | Server processes each request independently |
+| **`"stdio"`** | Stateless | Single persistent stdio connection per backend | ✅ **YES** | Would work if SDK supported it |
+| **`"stdio"`** | Stateful | Session pool (one connection per session) | ❌ **NO*** | Backend connection reuse works, but SDK creates new protocol state per HTTP request |
 
-\* Without gateway enhancement (connection pooling not yet implemented)
+\* Connection pooling infrastructure implemented but SDK limitation prevents it from working
 
-**Important:** `"type": "http"` means the gateway connects via HTTP, but the server may support multiple transports. The real question is whether the server's **architecture** is stateless or stateful.
+**Important Clarification:**
+- **HTTP backends**: Gateway maintains ONE persistent connection per backend, reused across ALL frontend HTTP requests
+- **Stdio backends**: Gateway implements session connection pool (one per backend+session), but SDK's `StreamableHTTPHandler` creates new protocol state per request
+- The issue is NOT backend connection management - that works correctly
+- The issue is SDK protocol session state not persisting across HTTP requests
 
 ---
 
@@ -48,7 +52,8 @@ Look at the `"type"` field - this tells the gateway HOW to connect to your serve
 - **Architecture:** Stateless
 - **Supports:** Both stdio AND HTTP transports
 - **Gateway uses:** HTTP transport (`"type": "http"`)
-- **Why it works:** Stateless design - each request is independent
+- **Backend connection:** Single persistent HTTP connection, reused for ALL requests
+- **Why it works:** Stateless design - no session state needed between requests
 - **Result:** 100% gateway compatible
 
 ### ❌ Doesn't Work Through Gateway (Yet)
@@ -65,7 +70,8 @@ Look at the `"type"` field - this tells the gateway HOW to connect to your serve
 - **Architecture:** Stateful
 - **Supports:** Stdio transport only
 - **Gateway uses:** Stdio transport (`"type": "stdio"`)
-- **Why it fails:** Stateful design - requires persistent connection
+- **Backend connection:** Session pool (one per backend+session), connection IS reused
+- **Why it fails:** Backend connection reuse works, but SDK creates new protocol state per HTTP request
 - **Workaround:** Use direct stdio connection instead
 
 ---
@@ -103,8 +109,9 @@ Look at the `"type"` field - this tells the gateway HOW to connect to your serve
 }
 ```
 
-**Cause:** Gateway creates new connection per request, loses session state  
-**Solution:** Use direct stdio connection instead
+**Cause:** SDK creates new protocol session state per HTTP request, even though backend connection is reused  
+**Technical Detail:** Backend stdio connection IS reused from SessionConnectionPool, but SDK's StreamableHTTPHandler creates fresh protocol state  
+**Solution:** Use direct stdio connection to bypass HTTP gateway layer
 
 ### Stateless Server (Will Work)
 

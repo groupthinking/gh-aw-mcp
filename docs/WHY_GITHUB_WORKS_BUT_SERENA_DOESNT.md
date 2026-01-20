@@ -83,6 +83,33 @@ Many people think "HTTP-native" means the server ONLY works with HTTP. **This is
 
 ---
 
+## Gateway Backend Connection Management
+
+### How the Gateway Connects to Backends
+
+**HTTP Backends (like GitHub MCP):**
+```
+Frontend HTTP Request 1 → Gateway → Backend HTTP Connection (persistent)
+Frontend HTTP Request 2 → Gateway → SAME Backend HTTP Connection
+Frontend HTTP Request 3 → Gateway → SAME Backend HTTP Connection
+```
+- **One persistent HTTP connection per backend**, shared across ALL frontend requests
+- All requests to `/mcp/github` use the SAME backend connection
+- Works because GitHub MCP is stateless - doesn't need per-session isolation
+
+**Stdio Backends (like Serena MCP):**
+```
+Frontend HTTP Request 1 → Gateway → Backend Stdio Connection (pooled by session)
+Frontend HTTP Request 2 → Gateway → SAME Backend Stdio Connection (if same session ID)
+Frontend HTTP Request 3 → Gateway → SAME Backend Stdio Connection (if same session ID)
+```
+- **Connection pool keyed by (backend, sessionID)** in `SessionConnectionPool`
+- Requests with same Authorization header should get same backend connection
+- **Problem:** SDK's `StreamableHTTPHandler` creates new protocol state per HTTP request
+- Even though backend connection is reused, protocol initialization state is lost
+
+---
+
 ## How They Work Differently
 
 ### GitHub MCP Server: Stateless Architecture
@@ -92,6 +119,7 @@ Many people think "HTTP-native" means the server ONLY works with HTTP. **This is
 │ Request 1: Initialize                                    │
 ├─────────────────────────────────────────────────────────┤
 │ Client → Gateway (HTTP) → GitHub Server                 │
+│         (reuses SAME backend HTTP connection)           │
 │                                                          │
 │ POST /mcp/github                                         │
 │ {"method": "initialize", ...}                           │
@@ -142,42 +170,58 @@ Many people think "HTTP-native" means the server ONLY works with HTTP. **This is
 
 ```
 ┌─────────────────────────────────────────────────────────┐
-│ Request 1: Initialize                                    │
+│ Request 1: Initialize (Session ID: abc123)              │
 ├─────────────────────────────────────────────────────────┤
-│ Client → Gateway → NEW Serena Process (via stdio)       │
+│ Client → Gateway → Serena Process (via stdio)           │
+│         (Gateway attempts to reuse pooled connection)   │
 │                                                          │
-│ Gateway launches: docker run -i serena-mcp-server       │
+│ Gateway: GetOrLaunchForSession("serena", "abc123")      │
+│ - Launches: docker run -i serena-mcp-server             │
+│ - Stores in SessionConnectionPool["serena"]["abc123"]   │
+│ - SDK creates Server instance with protocol state       │
+│                                                          │
 │ Sends to stdin: {"method": "initialize", ...}          │
 │                                                          │
 │ Serena Server (stateful):                               │
 │   - Creates session state: "initializing"               │
 │   - Starts language servers                             │
 │   - Returns initialization response                     │
+│   - Session state: "ready"                              │
 │                                                          │
-│ Gateway receives response                                │
-│ Connection CLOSES ❌ (session state LOST!)               │
+│ ✅ Backend stdio connection kept alive in pool          │
+│ ❌ SDK creates NEW protocol state for next request      │
 └─────────────────────────────────────────────────────────┘
 
 ┌─────────────────────────────────────────────────────────┐
-│ Request 2: List Tools (SEPARATE HTTP REQUEST)           │
+│ Request 2: List Tools (Session ID: abc123)              │
 ├─────────────────────────────────────────────────────────┤
-│ Client → Gateway → NEW Serena Process (via stdio)       │
+│ Client → Gateway → Serena Process (via stdio)           │
+│         (Gateway retrieves SAME pooled connection)      │
 │                                                          │
-│ Gateway launches: docker run -i serena-mcp-server       │
-│ (This is a FRESH process - no memory of Request 1!)    │
+│ Gateway: GetOrLaunchForSession("serena", "abc123")      │
+│ ✅ Retrieves existing stdio connection from pool        │
+│ ✅ SAME backend process, SAME stdio pipes               │
+│ ❌ SDK StreamableHTTPHandler creates NEW protocol state │
+│                                                          │
 │ Sends to stdin: {"method": "tools/list", ...}          │
 │                                                          │
 │ Serena Server (stateful):                               │
-│   - Session state: "uninitialized" (NEW PROCESS!)       │
-│   - Checks: "Am I initialized?" → NO                    │
-│   - Returns ERROR ❌                                     │
+│   - Receives tools/list on SAME stdio connection        │
+│   - Backend thinks: "I'm ready, this should work"       │
+│   - But SDK protocol layer is UNINITIALIZED             │
+│   - SDK rejects: "invalid during session initialization"│
 │                                                          │
-│ Error: "method 'tools/list' is invalid during           │
-│         session initialization"                         │
+│ ❌ Error returned to client                              │
 └─────────────────────────────────────────────────────────┘
 ```
 
-**Why it fails:** Each HTTP request creates a new stdio process with fresh state. The server's stateful architecture requires initialization to happen on the same connection as tool calls. When accessed through the gateway, each HTTP request means a new backend connection, losing the session state.
+**Why it fails:** 
+1. ✅ Backend stdio connection IS reused via SessionConnectionPool
+2. ✅ Same Serena process receives both requests
+3. ❌ SDK's StreamableHTTPHandler creates new protocol session state per HTTP request
+4. ❌ Even though backend is ready, SDK protocol layer expects initialize
+
+**The Real Problem:** The issue is NOT backend connection management (which works correctly). The issue is the SDK's `StreamableHTTPHandler` treating each HTTP request as a new protocol session, creating fresh initialization state that doesn't persist across requests.
 
 ---
 
