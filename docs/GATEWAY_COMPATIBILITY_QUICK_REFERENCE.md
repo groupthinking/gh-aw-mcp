@@ -2,15 +2,17 @@
 
 ## Is My MCP Server Compatible with the HTTP Gateway?
 
-### Check Your Configuration
+**Key Point:** Compatibility depends on **architecture** (stateless vs stateful), not transport (HTTP vs stdio).
 
-Look at the `"type"` field in your MCP server configuration:
+### Check Your Gateway Configuration
+
+Look at the `"type"` field - this tells the gateway HOW to connect to your server:
 
 ```json
 {
   "mcpServers": {
     "my-server": {
-      "type": "???"  ← Check this
+      "type": "???"  ← This is the gateway's connection method
     }
   }
 }
@@ -18,13 +20,15 @@ Look at the `"type"` field in your MCP server configuration:
 
 ### Compatibility Chart
 
-| Server Type | Gateway Compatible? | Direct Connection? | Best Use Case |
-|-------------|--------------------|--------------------|---------------|
-| **`"http"`** | ✅ **YES** | ✅ Yes | Cloud, serverless, scalable apps |
-| **`"stdio"`** | ❌ **NO*** | ✅ Yes | CLI tools, local development |
-| **`"local"`** | ❌ **NO*** | ✅ Yes | Same as stdio |
+| Gateway Config | Server Architecture | Gateway Compatible? | Notes |
+|----------------|--------------------|--------------------|-------|
+| **`"http"`** | Stateless | ✅ **YES** | Server processes each request independently |
+| **`"stdio"`** | Stateless | ✅ **YES** | Would work if accessed directly, but gateway creates new connections |
+| **`"stdio"`** | Stateful | ❌ **NO*** | Requires persistent connection, gateway creates new ones |
 
 \* Without gateway enhancement (connection pooling not yet implemented)
+
+**Important:** `"type": "http"` means the gateway connects via HTTP, but the server may support multiple transports. The real question is whether the server's **architecture** is stateless or stateful.
 
 ---
 
@@ -32,7 +36,7 @@ Look at the `"type"` field in your MCP server configuration:
 
 ### ✅ Works Through Gateway
 
-**GitHub MCP Server** (TypeScript, HTTP-native):
+**GitHub MCP Server** (Stateless, multi-transport):
 ```json
 {
   "github": {
@@ -41,13 +45,15 @@ Look at the `"type"` field in your MCP server configuration:
   }
 }
 ```
-- Stateless architecture
-- Each request independent
-- 100% gateway compatible
+- **Architecture:** Stateless
+- **Supports:** Both stdio AND HTTP transports
+- **Gateway uses:** HTTP transport (`"type": "http"`)
+- **Why it works:** Stateless design - each request is independent
+- **Result:** 100% gateway compatible
 
 ### ❌ Doesn't Work Through Gateway (Yet)
 
-**Serena MCP Server** (Python, stdio-based):
+**Serena MCP Server** (Stateful, stdio-only):
 ```json
 {
   "serena": {
@@ -56,9 +62,11 @@ Look at the `"type"` field in your MCP server configuration:
   }
 }
 ```
-- Stateful architecture
-- Requires persistent connection
-- Use direct stdio connection instead
+- **Architecture:** Stateful
+- **Supports:** Stdio transport only
+- **Gateway uses:** Stdio transport (`"type": "stdio"`)
+- **Why it fails:** Stateful design - requires persistent connection
+- **Workaround:** Use direct stdio connection instead
 
 ---
 

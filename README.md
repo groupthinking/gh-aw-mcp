@@ -498,25 +498,34 @@ See [`docs/DIFC_INTEGRATION_PROPOSAL.md`](docs/DIFC_INTEGRATION_PROPOSAL.md) for
 
 ## MCP Server Compatibility
 
-**Not all MCP servers work the same way through the HTTP gateway.** Understanding your server's architecture is crucial:
+**Not all MCP servers work the same way through the HTTP gateway.** The key difference is **architecture** (stateless vs stateful), not transport (HTTP vs stdio).
 
 ### Quick Compatibility Check
 
-| Server Type | Gateway Compatible? | Direct Connection? |
-|-------------|--------------------|--------------------|
-| **HTTP-native** (`"type": "http"`) | ✅ **YES** | ✅ Yes |
-| **Stdio-based** (`"type": "stdio"`) | ❌ **NO*** | ✅ Yes |
+| Gateway Config | Server Architecture | Gateway Compatible? |
+|----------------|--------------------|--------------------|
+| `"type": "http"` | Stateless | ✅ **YES** |
+| `"type": "stdio"` | Stateful | ❌ **NO*** |
 
 \* Without gateway enhancement (connection pooling)
 
-### Why?
+### Understanding the Difference
 
-- **HTTP-native servers** (e.g., GitHub MCP) are stateless - each request is independent
-- **Stdio-based servers** (e.g., Serena MCP) are stateful - require persistent connections
+**Stateless servers** (like GitHub MCP):
+- Process each request independently
+- No session state between requests
+- Gateway compatible
+- May support both HTTP AND stdio transports
 
-**Examples:**
-- ✅ **GitHub MCP Server**: HTTP-native, works through gateway
-- ❌ **Serena MCP Server**: Stdio-based, use direct connection
+**Stateful servers** (like Serena MCP):
+- Require persistent connection
+- Maintain session state in memory
+- Need direct stdio connection (not gateway)
+
+### Examples
+
+✅ **GitHub MCP Server**: Stateless architecture, works through gateway  
+❌ **Serena MCP Server**: Stateful architecture, use direct connection
 
 📖 **[Detailed Explanation](docs/WHY_GITHUB_WORKS_BUT_SERENA_DOESNT.md)** - Full analysis with code examples  
 📋 **[Quick Reference Guide](docs/GATEWAY_COMPATIBILITY_QUICK_REFERENCE.md)** - Fast compatibility lookup

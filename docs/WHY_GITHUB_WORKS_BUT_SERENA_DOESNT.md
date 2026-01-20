@@ -2,10 +2,32 @@
 
 ## TL;DR
 
-**GitHub MCP Server** works through the HTTP gateway because it's a **stateless HTTP-native server**.  
-**Serena MCP Server** doesn't work through the HTTP gateway because it's a **stateful stdio-based server**.
+**GitHub MCP Server** works through the HTTP gateway because it has a **stateless architecture**.  
+**Serena MCP Server** doesn't work through the HTTP gateway because it has a **stateful architecture**.
 
 This is not a bug - it's an architectural difference between two valid MCP server design patterns.
+
+**Important Clarification:** 
+- **Transport ≠ Architecture**: The issue is NOT about HTTP vs stdio transport
+- **GitHub MCP supports BOTH transports** (stdio AND HTTP)
+- **The key difference is stateless vs stateful design**
+- When configured with `"type": "http"`, the gateway connects to GitHub MCP via HTTP
+- GitHub MCP's stateless architecture makes it work regardless of which transport is used
+
+---
+
+## Understanding Transport vs Architecture
+
+### Transport (How You Connect)
+- **HTTP transport**: Client sends JSON-RPC via HTTP POST requests
+- **Stdio transport**: Client sends JSON-RPC via stdin/stdout pipes
+
+### Architecture (How State Is Managed)
+- **Stateless**: Server doesn't maintain session state between requests
+- **Stateful**: Server requires persistent connection to maintain session state
+
+### The Confusion
+Many people think "HTTP-native" means the server ONLY works with HTTP. **This is incorrect**. GitHub MCP Server supports both transports but uses a **stateless architecture**, which is why it works through the gateway when accessed via HTTP.
 
 ---
 
@@ -13,19 +35,19 @@ This is not a bug - it's an architectural difference between two valid MCP serve
 
 | Aspect | GitHub MCP Server | Serena MCP Server |
 |--------|-------------------|-------------------|
-| **Server Type** | `"http"` | `"stdio"` |
+| **Gateway Config Type** | `"http"` (how gateway connects) | `"stdio"` (how gateway connects) |
+| **Supported Transports** | Both stdio AND HTTP | Stdio only |
 | **Architecture** | Stateless | Stateful |
-| **Connection Model** | Independent HTTP requests | Persistent stdio stream |
 | **Session State** | None (each request is self-contained) | In-memory (tied to connection) |
-| **Gateway Compatible** | ✅ Yes | ❌ No (without enhancement) |
-| **Direct Connection** | ✅ Yes | ✅ Yes |
+| **Gateway Compatible** | ✅ Yes (stateless design) | ❌ No (stateful design) |
+| **Direct Connection** | ✅ Yes (both transports) | ✅ Yes (stdio) |
 | **Best For** | Cloud, serverless, scalable deployments | CLI tools, local development |
 
 ---
 
 ## Configuration Comparison
 
-### GitHub MCP Server Configuration
+### GitHub MCP Server Configuration (via Gateway)
 
 ```json
 {
@@ -41,7 +63,7 @@ This is not a bug - it's an architectural difference between two valid MCP serve
 }
 ```
 
-**Key Point:** `"type": "http"` means it's an HTTP-native server that accepts HTTP requests directly.
+**Key Point:** `"type": "http"` tells the gateway to connect to GitHub MCP Server via HTTP. The server itself supports both HTTP and stdio transports. The stateless architecture makes it work regardless of transport.
 
 ### Serena MCP Server Configuration
 
@@ -63,18 +85,18 @@ This is not a bug - it's an architectural difference between two valid MCP serve
 
 ## How They Work Differently
 
-### GitHub MCP Server: Stateless HTTP
+### GitHub MCP Server: Stateless Architecture
 
 ```
 ┌─────────────────────────────────────────────────────────┐
 │ Request 1: Initialize                                    │
 ├─────────────────────────────────────────────────────────┤
-│ Client → Gateway → GitHub Server (HTTP)                 │
+│ Client → Gateway (HTTP) → GitHub Server                 │
 │                                                          │
 │ POST /mcp/github                                         │
 │ {"method": "initialize", ...}                           │
 │                                                          │
-│ GitHub Server:                                           │
+│ GitHub Server (stateless):                              │
 │   - Processes request immediately                       │
 │   - NO state stored                                     │
 │   - Returns initialization response                     │
@@ -84,12 +106,12 @@ This is not a bug - it's an architectural difference between two valid MCP serve
 ┌─────────────────────────────────────────────────────────┐
 │ Request 2: List Tools (SEPARATE HTTP REQUEST)           │
 ├─────────────────────────────────────────────────────────┤
-│ Client → Gateway → GitHub Server (HTTP)                 │
+│ Client → Gateway (HTTP) → GitHub Server                 │
 │                                                          │
 │ POST /mcp/github                                         │
 │ {"method": "tools/list", ...}                           │
 │                                                          │
-│ GitHub Server:                                           │
+│ GitHub Server (stateless):                              │
 │   - Processes request immediately                       │
 │   - NO initialization check needed                      │
 │   - Returns list of tools                               │
@@ -99,12 +121,12 @@ This is not a bug - it's an architectural difference between two valid MCP serve
 ┌─────────────────────────────────────────────────────────┐
 │ Request 3: Call Tool (SEPARATE HTTP REQUEST)            │
 ├─────────────────────────────────────────────────────────┤
-│ Client → Gateway → GitHub Server (HTTP)                 │
+│ Client → Gateway (HTTP) → GitHub Server                 │
 │                                                          │
 │ POST /mcp/github                                         │
 │ {"method": "tools/call", "params": {...}}              │
 │                                                          │
-│ GitHub Server:                                           │
+│ GitHub Server (stateless):                              │
 │   - Processes request immediately                       │
 │   - Executes tool without session state                 │
 │   - Returns tool result                                 │
@@ -112,20 +134,22 @@ This is not a bug - it's an architectural difference between two valid MCP serve
 └─────────────────────────────────────────────────────────┘
 ```
 
-**Why it works:** Each HTTP request is independent. The server doesn't need or expect session state from previous requests.
+**Why it works:** Each HTTP request is independent. The server's stateless architecture means it doesn't need or expect session state from previous requests.
 
-### Serena MCP Server: Stateful Stdio
+**Note:** GitHub MCP Server supports both HTTP and stdio transports. When configured with `"type": "http"`, the gateway uses HTTP transport. The stateless design works regardless of transport.
+
+### Serena MCP Server: Stateful Architecture
 
 ```
 ┌─────────────────────────────────────────────────────────┐
 │ Request 1: Initialize                                    │
 ├─────────────────────────────────────────────────────────┤
-│ Client → Gateway → NEW Serena Process (stdio)           │
+│ Client → Gateway → NEW Serena Process (via stdio)       │
 │                                                          │
 │ Gateway launches: docker run -i serena-mcp-server       │
 │ Sends to stdin: {"method": "initialize", ...}          │
 │                                                          │
-│ Serena Server:                                           │
+│ Serena Server (stateful):                               │
 │   - Creates session state: "initializing"               │
 │   - Starts language servers                             │
 │   - Returns initialization response                     │
@@ -137,13 +161,13 @@ This is not a bug - it's an architectural difference between two valid MCP serve
 ┌─────────────────────────────────────────────────────────┐
 │ Request 2: List Tools (SEPARATE HTTP REQUEST)           │
 ├─────────────────────────────────────────────────────────┤
-│ Client → Gateway → NEW Serena Process (stdio)           │
+│ Client → Gateway → NEW Serena Process (via stdio)       │
 │                                                          │
 │ Gateway launches: docker run -i serena-mcp-server       │
 │ (This is a FRESH process - no memory of Request 1!)    │
 │ Sends to stdin: {"method": "tools/list", ...}          │
 │                                                          │
-│ Serena Server:                                           │
+│ Serena Server (stateful):                               │
 │   - Session state: "uninitialized" (NEW PROCESS!)       │
 │   - Checks: "Am I initialized?" → NO                    │
 │   - Returns ERROR ❌                                     │
@@ -153,7 +177,7 @@ This is not a bug - it's an architectural difference between two valid MCP serve
 └─────────────────────────────────────────────────────────┘
 ```
 
-**Why it fails:** Each HTTP request creates a new stdio process with fresh state. The server expects initialization to happen on the same connection as tool calls.
+**Why it fails:** Each HTTP request creates a new stdio process with fresh state. The server's stateful architecture requires initialization to happen on the same connection as tool calls. When accessed through the gateway, each HTTP request means a new backend connection, losing the session state.
 
 ---
 
