@@ -225,15 +225,25 @@ validate_log_directory_mount() {
     fi
 }
 
-# Set DOCKER_API_VERSION based on architecture
+# Set DOCKER_API_VERSION based on architecture and Docker daemon requirements
 set_docker_api_version() {
-    local arch=$(uname -m)
-    if [ "$arch" = "arm64" ] || [ "$arch" = "aarch64" ]; then
-        export DOCKER_API_VERSION=1.43
+    # First, check what the Docker daemon requires as minimum API version
+    local min_api=$(docker version --format '{{.Server.MinAPIVersion}}' 2>/dev/null || echo "")
+    
+    if [ -n "$min_api" ]; then
+        # Use the daemon's minimum API version to ensure compatibility
+        export DOCKER_API_VERSION="$min_api"
+        log_info "Set DOCKER_API_VERSION=$DOCKER_API_VERSION (daemon minimum)"
     else
-        export DOCKER_API_VERSION=1.44
+        # Fallback: set based on architecture
+        local arch=$(uname -m)
+        if [ "$arch" = "arm64" ] || [ "$arch" = "aarch64" ]; then
+            export DOCKER_API_VERSION=1.44
+        else
+            export DOCKER_API_VERSION=1.44
+        fi
+        log_info "Set DOCKER_API_VERSION=$DOCKER_API_VERSION for $arch (fallback)"
     fi
-    log_info "Set DOCKER_API_VERSION=$DOCKER_API_VERSION for $arch"
 }
 
 # Detect host IP and configure host.docker.internal DNS mapping
