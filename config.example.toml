@@ -1,0 +1,142 @@
+# MCP Gateway Configuration Example
+# This file demonstrates all available configuration options for the MCP Gateway.
+# Copy this file to config.toml and customize for your needs.
+
+# ============================================================================
+# Gateway Configuration (Optional)
+# ============================================================================
+# Gateway-level settings that apply to the entire server.
+
+[gateway]
+# Port number for the HTTP server (default: 3000)
+# Valid range: 1-65535
+port = 3000
+
+# API key for authentication (optional)
+# When set, clients must provide this key in the Authorization header
+# Format: Authorization: <api_key>
+api_key = ""
+
+# Domain name for the gateway (optional)
+# Used for CORS and other domain-specific features
+domain = ""
+
+# Timeout for backend MCP server startup in seconds (default: 60)
+# How long to wait for an MCP server to start before timing out
+startup_timeout = 60
+
+# Timeout for tool execution in seconds (default: 120)
+# How long to wait for a tool call to complete before timing out
+tool_timeout = 120
+
+# ============================================================================
+# MCP Server Configurations
+# ============================================================================
+# Define one or more MCP servers that the gateway will proxy to.
+# Each server requires a unique name (e.g., [servers.github], [servers.memory])
+
+# Example 1: GitHub MCP Server (stdio via Docker)
+[servers.github]
+# Required: Docker command to run the container
+command = "docker"
+
+# Required: Arguments for the docker command
+# Standard pattern: ["run", "--rm", "-i", <env vars>, <container image>]
+args = [
+    "run",
+    "--rm",                                              # Remove container after exit
+    "-i",                                                # Interactive mode for stdin/stdout
+    "-e", "GITHUB_PERSONAL_ACCESS_TOKEN",                # Pass through env var from host
+    "-e", "NO_COLOR=1",                                  # Disable color output
+    "-e", "TERM=dumb",                                   # Set terminal to dumb mode
+    "ghcr.io/github/github-mcp-server:latest"            # Container image
+]
+
+# Optional: Environment variables for the MCP server
+# Empty string "" means pass through from host environment
+# Non-empty string means set explicit value
+[servers.github.env]
+GITHUB_PERSONAL_ACCESS_TOKEN = ""  # Pass through from host
+# DEBUG = "true"                   # Explicit value example
+
+# Optional: Tool filtering
+# tools = ["*"]                    # Allow all tools (default)
+# tools = ["read_file", "list_files"]  # Allow specific tools only
+
+# Example 2: Memory MCP Server (stdio via Docker)
+[servers.memory]
+command = "docker"
+args = [
+    "run",
+    "--rm",
+    "-i",
+    "-e", "NO_COLOR=1",
+    "-e", "TERM=dumb",
+    "-e", "PYTHONUNBUFFERED=1",                          # Python-specific: disable buffering
+    "mcp/memory"
+]
+
+# Example 3: Custom MCP Server with Volume Mounts
+[servers.custom]
+command = "docker"
+args = [
+    "run",
+    "--rm",
+    "-i",
+    "-v", "${PWD}:/workspace:ro",                        # Mount current directory (read-only)
+    "-e", "NO_COLOR=1",
+    "-e", "TERM=dumb",
+    "custom/mcp-server:latest"
+]
+
+# Example 4: HTTP-based MCP Server (not implemented yet)
+# [servers.http-example]
+# type = "http"
+# url = "https://example.com/mcp"
+# 
+# Optional: HTTP headers for authentication
+# [servers.http-example.headers]
+# Authorization = "Bearer token123"
+# X-API-Key = "api-key-123"
+
+# ============================================================================
+# Advanced Options
+# ============================================================================
+
+# Enable Data Information Flow Control (DIFC) security model (default: false)
+# When true, requires sys___init call before tool access
+# This is an experimental feature - keep disabled for standard MCP compatibility
+# enable_difc = false
+
+# ============================================================================
+# Notes
+# ============================================================================
+#
+# Server Types:
+# - "stdio": Process-based MCP server communicating via stdin/stdout (default)
+# - "http": HTTP-based MCP server (not yet implemented)
+#
+# Docker Best Practices:
+# - Always use --rm to clean up containers after exit
+# - Use -i for interactive mode (required for stdin/stdout communication)
+# - Set NO_COLOR=1 and TERM=dumb for better compatibility
+# - Use ${VAR_NAME} syntax to reference environment variables
+#
+# Environment Variables:
+# - Empty value ("") passes through from host environment
+# - Non-empty value sets explicit value in container
+# - Undefined host variables will cause startup errors
+#
+# Tool Filtering:
+# - ["*"] allows all tools (default behavior)
+# - ["tool1", "tool2"] allows only specified tools
+# - Useful for security and limiting server capabilities
+#
+# Configuration Validation:
+# - Required fields: command, args (for stdio servers)
+# - Unknown keys will generate warnings in logs
+# - Parse errors will show line numbers for easy debugging
+#
+# For more information, see:
+# - MCP Protocol: https://github.com/modelcontextprotocol
+# - Documentation: README.md in this repository

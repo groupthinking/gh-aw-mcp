@@ -16,31 +16,31 @@ var logConfig = logger.New("config:config")
 // Config represents the MCPG configuration
 type Config struct {
 	Servers    map[string]*ServerConfig `toml:"servers"`
-	EnableDIFC bool                     // When true, enables DIFC enforcement and requires sys___init call before tool access. Default is false for standard MCP client compatibility.
-	Gateway    *GatewayConfig           // Gateway configuration (port, API key, etc.)
+	EnableDIFC bool                     `toml:"enable_difc"` // When true, enables DIFC enforcement and requires sys___init call before tool access. Default is false for standard MCP client compatibility.
+	Gateway    *GatewayConfig           `toml:"gateway"`     // Gateway configuration (port, API key, etc.)
 }
 
 // GatewayConfig represents gateway-level configuration
 type GatewayConfig struct {
-	Port           int
-	APIKey         string
-	Domain         string
-	StartupTimeout int // Seconds
-	ToolTimeout    int // Seconds
+	Port           int    `toml:"port"`
+	APIKey         string `toml:"api_key"`
+	Domain         string `toml:"domain"`
+	StartupTimeout int    `toml:"startup_timeout"` // Seconds
+	ToolTimeout    int    `toml:"tool_timeout"`    // Seconds
 }
 
 // ServerConfig represents a single MCP server configuration
 type ServerConfig struct {
-	Type             string            // "stdio" | "http"
+	Type             string            `toml:"type"` // "stdio" | "http"
 	Command          string            `toml:"command"`
 	Args             []string          `toml:"args"`
 	Env              map[string]string `toml:"env"`
 	WorkingDirectory string            `toml:"working_directory"`
 	// HTTP-specific fields
-	URL     string            // HTTP endpoint URL
-	Headers map[string]string // HTTP headers for authentication
+	URL     string            `toml:"url"`     // HTTP endpoint URL
+	Headers map[string]string `toml:"headers"` // HTTP headers for authentication
 	// Tool filtering (applies to both stdio and http servers)
-	Tools []string // Tool filter: ["*"] for all tools, or list of specific tool names
+	Tools []string `toml:"tools"` // Tool filter: ["*"] for all tools, or list of specific tool names
 }
 
 // StdinConfig represents JSON configuration from stdin
@@ -77,9 +77,22 @@ type StdinGatewayConfig struct {
 func LoadFromFile(path string) (*Config, error) {
 	logConfig.Printf("Loading configuration from file: path=%s", path)
 	var cfg Config
-	if _, err := toml.DecodeFile(path, &cfg); err != nil {
+	meta, err := toml.DecodeFile(path, &cfg)
+	if err != nil {
+		// Check if it's a ParseError to provide line numbers
+		if pErr, ok := err.(toml.ParseError); ok {
+			return nil, fmt.Errorf("TOML parse error at line %d: %w", pErr.Line, err)
+		}
 		return nil, fmt.Errorf("failed to decode TOML: %w", err)
 	}
+
+	// Check for unknown/undecoded keys (typo detection)
+	if len(meta.Undecoded()) > 0 {
+		logConfig.Printf("Warning: unknown configuration keys detected: %v", meta.Undecoded())
+		// For now, just warn - we could make this strict with a flag later
+		// return nil, fmt.Errorf("unknown configuration keys: %v", meta.Undecoded())
+	}
+
 	logConfig.Printf("Successfully loaded %d servers from TOML file", len(cfg.Servers))
 	return &cfg, nil
 }
