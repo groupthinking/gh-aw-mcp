@@ -3,14 +3,11 @@ package server
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
 	"io"
 	"log"
 	"net/http"
-	"os"
 	"sync"
-	"time"
 
 	"github.com/githubnext/gh-aw-mcpg/internal/logger"
 	"github.com/githubnext/gh-aw-mcpg/internal/mcp"
@@ -74,11 +71,7 @@ func CreateHTTPServerForRoutedMode(addr string, unifiedServer *UnifiedServer, ap
 	mux := http.NewServeMux()
 
 	// OAuth discovery endpoint - return 404 since we don't use OAuth
-	oauthHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		log.Printf("[%s] %s %s - OAuth discovery (not supported)", r.RemoteAddr, r.Method, r.URL.Path)
-		http.NotFound(w, r)
-	})
-	mux.Handle("/mcp/.well-known/oauth-authorization-server", withResponseLogging(oauthHandler))
+	mux.Handle("/mcp/.well-known/oauth-authorization-server", withResponseLogging(handleOAuthDiscovery()))
 
 	// Create routes for all backends, plus sys only if DIFC is enabled
 	allBackends := unifiedServer.GetServerIDs()
@@ -165,54 +158,8 @@ func CreateHTTPServerForRoutedMode(addr string, unifiedServer *UnifiedServer, ap
 	mux.Handle("/health", withResponseLogging(healthHandler))
 
 	// Close endpoint for graceful shutdown (spec 5.1.3)
-	closeHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		log.Printf("[%s] %s %s", r.RemoteAddr, r.Method, r.URL.Path)
-		logger.LogInfo("shutdown", "Close endpoint called, remote=%s", r.RemoteAddr)
-
-		// Only accept POST requests
-		if r.Method != http.MethodPost {
-			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-			return
-		}
-
-		// Check if already closed (idempotency - spec 5.1.3)
-		if unifiedServer.IsShutdown() {
-			logger.LogWarn("shutdown", "Close endpoint called but gateway already closed, remote=%s", r.RemoteAddr)
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusGone) // 410 Gone
-			json.NewEncoder(w).Encode(map[string]interface{}{
-				"error": "Gateway has already been closed",
-			})
-			return
-		}
-
-		// Initiate shutdown and get server count
-		serversTerminated := unifiedServer.InitiateShutdown()
-
-		// Return success response (spec 5.1.3)
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		response := map[string]interface{}{
-			"status":            "closed",
-			"message":           "Gateway shutdown initiated",
-			"serversTerminated": serversTerminated,
-		}
-		json.NewEncoder(w).Encode(response)
-
-		logger.LogInfo("shutdown", "Close endpoint response sent, servers_terminated=%d", serversTerminated)
-		log.Printf("Gateway shutdown initiated. Terminated %d server(s)", serversTerminated)
-
-		// Exit the process after a brief delay to ensure response is sent
-		// Skip exit in test mode
-		if unifiedServer.ShouldExit() {
-			go func() {
-				time.Sleep(100 * time.Millisecond)
-				logger.LogInfo("shutdown", "Gateway process exiting with status 0")
-				os.Exit(0)
-			}()
-		}
-	})
-
+	closeHandler := handleClose(unifiedServer)
+	
 	// Apply auth middleware if API key is configured (spec 7.1)
 	var finalCloseHandler http.Handler = closeHandler
 	if apiKey != "" {
