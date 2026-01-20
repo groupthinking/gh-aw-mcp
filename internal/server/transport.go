@@ -136,7 +136,7 @@ func CreateHTTPServerForMCP(addr string, unifiedServer *UnifiedServer, apiKey st
 
 	// Close endpoint for graceful shutdown (spec 5.1.3)
 	closeHandler := handleClose(unifiedServer)
-	
+
 	// Apply auth middleware if API key is configured (spec 7.1)
 	var finalCloseHandler http.Handler = closeHandler
 	if apiKey != "" {
