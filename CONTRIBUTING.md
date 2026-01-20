@@ -216,7 +216,6 @@ awmg/
     ├── launcher/              # Backend server management
     ├── mcp/                   # MCP protocol types & connection
     ├── server/                # HTTP server (routed/unified modes)
-    ├── difc/                  # Security labels (not enabled)
     ├── guard/                 # Security guards (NoopGuard active)
     ├── logger/                # Debug logging framework
     ├── timeutil/              # Time formatting utilities
@@ -230,7 +229,6 @@ awmg/
 - **`internal/server/`** - HTTP server with routed and unified modes
 - **`internal/mcp/`** - MCP protocol types and JSON-RPC handling
 - **`internal/launcher/`** - Backend process management (Docker, stdio)
-- **`internal/difc/`** - DIFC security infrastructure (not yet enabled)
 - **`internal/guard/`** - Guard framework for resource labeling
 - **`internal/logger/`** - Micro logger for debug output
 
@@ -480,12 +478,6 @@ When you push a release tag, the automated release workflow:
 - Routed mode: Each backend at `/mcp/{serverID}`
 - Unified mode: All backends at `/mcp`
 - Basic request/response proxying
-
-### DIFC Integration (Not Yet Enabled)
-
-The codebase includes a complete **Decentralized Information Flow Control (DIFC)** implementation that is not yet enabled by default. See [`docs/DIFC_INTEGRATION_PROPOSAL.md`](docs/DIFC_INTEGRATION_PROPOSAL.md) for full design details.
-
-**Current Status**: All DIFC infrastructure is implemented and tested, but only the `NoopGuard` is active (which returns empty labels, effectively disabling enforcement).
 
 ## Questions or Issues?
 
