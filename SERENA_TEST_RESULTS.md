@@ -5,17 +5,27 @@
 
 ## Test Summary
 
-✅ **All Tests Passed:** 68/68 tests (100% success rate)
+✅ **All Tests Passed:** 100% success rate across all test configurations
 
+### Test Configurations
+
+**Direct Connection Tests:**
 ```bash
-# Run comprehensive test suite
 make test-serena
 ```
-
 **Result:** ✅ ALL TESTS PASSED  
 **Tests:** 68 comprehensive tests  
 **Coverage:** All 29 Serena tools tested across 4 programming languages (Go, Java, JavaScript, Python)  
 **Duration:** ~3 minutes
+
+**Gateway Connection Tests:**
+```bash
+make test-serena-gateway
+```
+**Result:** ✅ ALL TESTS PASSED  
+**Tests:** Full gateway integration testing  
+**Coverage:** MCP protocol via HTTP gateway, session management, tool execution  
+**Duration:** ~1 minute
 
 ## Test Coverage
 
@@ -130,15 +140,22 @@ The Serena MCP Server provides comprehensive code analysis and manipulation capa
 
 The Serena MCP Server is **production-ready** with comprehensive test validation:
 
-1. ✅ **100% test success rate** - All 68 tests passed
-2. ✅ **Multi-language support** - Go, Java, JavaScript, Python fully validated
-3. ✅ **Complete tool coverage** - All 29 MCP tools functioning correctly
-4. ✅ **Robust error handling** - Invalid requests handled properly
-5. ✅ **Production deployment** - Docker container stable and performant
+1. ✅ **100% test success rate** - All tests passed (direct and gateway)
+2. ✅ **Gateway compatibility** - Full MCP Gateway integration validated
+3. ✅ **Multi-language support** - Go, Java, JavaScript, Python fully validated
+4. ✅ **Complete tool coverage** - All 29 MCP tools functioning correctly
+5. ✅ **Robust error handling** - Invalid requests handled properly
+6. ✅ **Production deployment** - Docker container stable and performant
 
 **Container Details:**
 - **Image:** `ghcr.io/githubnext/serena-mcp-server:latest`
 - **Size:** 2.5GB
 - **Base:** Python 3.11-slim with multi-language runtime support
+
+**Gateway Integration:**
+- ✅ Tested and validated with MCP Gateway
+- ✅ Session management working correctly
+- ✅ All MCP protocol features supported via gateway
+- ✅ Run `make test-serena-gateway` to verify gateway integration
 
 See [LATEST_RUN_SUMMARY.md](test/serena-mcp-tests/LATEST_RUN_SUMMARY.md) for comprehensive test execution details.

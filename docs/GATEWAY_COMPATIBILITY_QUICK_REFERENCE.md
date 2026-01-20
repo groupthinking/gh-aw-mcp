@@ -6,10 +6,10 @@ The MCP Gateway supports MCP servers via stdio transport using Docker containers
 
 ### Verified Servers
 
-| Server | Transport | Test Results | Configuration |
-|--------|-----------|--------------|---------------|
-| **GitHub MCP** | Stdio (Docker) | ✅ All tests passed | Production ready |
-| **Serena MCP** | Stdio (Docker) | ✅ 68/68 tests passed (100%) | Production ready |
+| Server | Transport | Direct Tests | Gateway Tests | Configuration |
+|--------|-----------|--------------|---------------|---------------|
+| **GitHub MCP** | Stdio (Docker) | ✅ All passed | ✅ All passed | Production ready |
+| **Serena MCP** | Stdio (Docker) | ✅ 68/68 passed | ✅ All passed | Production ready |
 
 ---
 
@@ -93,13 +93,14 @@ Client Request 2 (session abc):
 ## Test Results
 
 ### GitHub MCP Server
-- ✅ Full test suite validation
+- ✅ Full test suite validation (direct and gateway)
 - ✅ Repository operations tested
 - ✅ Issue management validated
 - ✅ Production deployment confirmed
 
 ### Serena MCP Server
-- ✅ 68 comprehensive tests (100% pass rate)
+- ✅ **Direct Connection:** 68 comprehensive tests (100% pass rate)
+- ✅ **Gateway Connection:** All integration tests passed via `make test-serena-gateway`
 - ✅ Multi-language support (Go, Java, JavaScript, Python)
 - ✅ All 29 tools tested and validated
 - ✅ File operations, symbol operations, memory management

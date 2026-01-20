@@ -4,10 +4,10 @@
 
 **Both GitHub MCP and Serena MCP servers work perfectly with the MCP Gateway** when configured correctly via stdio transport.
 
-- **GitHub MCP Server:** ✅ Passes all tests (stateless architecture)
-- **Serena MCP Server:** ✅ Passes all 68 tests - 100% success rate (stateful architecture)
+- **GitHub MCP Server:** ✅ Passes all tests (direct and gateway)
+- **Serena MCP Server:** ✅ Passes all tests - 68/68 direct tests + all gateway tests (100% success rate)
 
-Both servers use stdio transport via Docker containers in production and work correctly with the gateway's session connection pooling.
+Both servers use stdio transport via Docker containers in production and work correctly with the gateway's session connection pooling, including full gateway integration testing.
 
 **Key Points:** 
 - **BOTH servers use stdio transport via Docker containers**
@@ -337,8 +337,8 @@ All 68 tests pass ✅
 
 ### Production Status
 Both MCP servers are production-ready:
-- **GitHub MCP Server:** Validated for production deployment
-- **Serena MCP Server:** Validated with comprehensive test suite (68/68 tests passed)
+- **GitHub MCP Server:** ✅ Validated for production deployment (direct and gateway)
+- **Serena MCP Server:** ✅ Validated with comprehensive test suite (68/68 direct + all gateway tests passed)
 
 ### Architecture Patterns
 This document illustrates two valid MCP server design patterns:

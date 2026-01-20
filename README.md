@@ -453,12 +453,12 @@ This Go port focuses on core MCP proxy functionality with optional security feat
 
 ### Test Results
 
-Both GitHub MCP and Serena MCP servers pass comprehensive test suites:
+Both GitHub MCP and Serena MCP servers pass comprehensive test suites including gateway tests:
 
-| Server | Transport | Test Results | Status |
-|--------|-----------|--------------|--------|
-| **GitHub MCP** | Stdio (Docker) | ✅ All tests passed | Production ready |
-| **Serena MCP** | Stdio (Docker) | ✅ 68/68 tests passed (100%) | Production ready |
+| Server | Transport | Direct Tests | Gateway Tests | Status |
+|--------|-----------|--------------|---------------|--------|
+| **GitHub MCP** | Stdio (Docker) | ✅ All passed | ✅ All passed | Production ready |
+| **Serena MCP** | Stdio (Docker) | ✅ 68/68 passed (100%) | ✅ All passed | Production ready |
 
 **Configuration:**
 ```bash
@@ -496,14 +496,15 @@ Configure MCP servers to connect directly via stdio transport for optimal perfor
 ### Test Coverage
 
 **Serena MCP Server Testing:**
-- ✅ 68 comprehensive tests covering all 29 tools
+- ✅ **Direct Connection Tests:** 68/68 tests passed (100%)
+- ✅ **Gateway Tests:** All tests passed via `make test-serena-gateway`
 - ✅ Multi-language support (Go, Java, JavaScript, Python)
 - ✅ File operations, symbol operations, memory management
 - ✅ Error handling and protocol compliance
 - ✅ See [SERENA_TEST_RESULTS.md](SERENA_TEST_RESULTS.md) for detailed results
 
 **GitHub MCP Server Testing:**
-- ✅ Full test suite validation
+- ✅ Full test suite validation (direct and gateway)
 - ✅ Repository operations, issue management, search functionality
 - ✅ Production deployment validated
 
