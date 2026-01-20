@@ -498,20 +498,24 @@ See [`docs/DIFC_INTEGRATION_PROPOSAL.md`](docs/DIFC_INTEGRATION_PROPOSAL.md) for
 
 ## MCP Server Compatibility
 
-**Not all MCP servers work the same way through the HTTP gateway.** The key difference is **architecture** (stateless vs stateful), not transport (HTTP vs stdio).
+**Not all MCP servers work the same way through the HTTP gateway.** The key difference is **architecture** (stateless vs stateful), not transport.
 
-### Backend Connection Management
+### Critical Fact
 
-**How Gateway Connects to Backends:**
-- **HTTP backends** (`"type": "http"`): ONE persistent connection per backend, shared across ALL frontend requests
-- **Stdio backends** (`"type": "stdio"`): Session connection pool - one per (backend, session) tuple
+**In production, both GitHub and Serena use stdio transport via Docker containers:**
+```bash
+docker run -i ghcr.io/github/github-mcp-server          # stdio
+docker run -i ghcr.io/githubnext/serena-mcp-server     # stdio
+```
+
+Both use the same backend connection management (session connection pool). The difference is purely architectural.
 
 ### Quick Compatibility Check
 
-| Gateway Config | Server Architecture | Backend Connection | Compatible? |
-|----------------|--------------------|--------------------|-------------|
-| `"type": "http"` | Stateless | Single persistent HTTP connection | ✅ **YES** |
-| `"type": "stdio"` | Stateful | Session pool (one per session) | ❌ **NO*** |
+| Server | Architecture | Transport | Backend Connection | Compatible? |
+|--------|--------------|-----------|-------------------|-------------|
+| **GitHub MCP** | Stateless | Stdio (Docker) | Session pool | ✅ **YES** |
+| **Serena MCP** | Stateful | Stdio (Docker) | Session pool | ❌ **NO*** |
 
 \* Backend connection reuse works, but SDK protocol state doesn't persist across HTTP requests
 
@@ -519,22 +523,32 @@ See [`docs/DIFC_INTEGRATION_PROPOSAL.md`](docs/DIFC_INTEGRATION_PROPOSAL.md) for
 
 **Stateless servers** (like GitHub MCP):
 - Process each request independently
-- No session state between requests
-- Single backend connection shared across all frontend requests
-- Gateway compatible
+- No session state required
+- Don't validate initialization state
+- SDK protocol state recreation doesn't matter
 
 **Stateful servers** (like Serena MCP):
-- Require persistent protocol session state
-- Backend connection IS reused via session pool
-- BUT: SDK creates new protocol state per HTTP request
-- Need direct stdio connection (not gateway)
+- Require session state
+- Validate initialization before handling requests
+- SDK protocol state recreation breaks them
+- Need direct stdio connection (bypasses HTTP gateway layer)
+
+### The Real Issue
+
+Both servers use identical infrastructure:
+- ✅ Stdio transport via Docker
+- ✅ Session connection pool
+- ✅ Backend process reuse
+- ✅ Stdio pipe reuse
+
+The problem: SDK's `StreamableHTTPHandler` creates new protocol state per HTTP request. Stateless servers don't care; stateful servers reject requests.
 
 ### Examples
 
-✅ **GitHub MCP Server**: Stateless architecture, single persistent HTTP connection, works through gateway  
-❌ **Serena MCP Server**: Stateful architecture, backend connection reused but SDK limitation prevents it from working
+✅ **GitHub MCP Server**: Stateless - doesn't check protocol state - works through gateway  
+❌ **Serena MCP Server**: Stateful - checks protocol state - use direct stdio connection
 
-📖 **[Detailed Explanation](docs/WHY_GITHUB_WORKS_BUT_SERENA_DOESNT.md)** - Full analysis with code examples  
+📖 **[Detailed Explanation](docs/WHY_GITHUB_WORKS_BUT_SERENA_DOESNT.md)** - Complete technical analysis  
 📋 **[Quick Reference Guide](docs/GATEWAY_COMPATIBILITY_QUICK_REFERENCE.md)** - Fast compatibility lookup
 
 ## Contributing

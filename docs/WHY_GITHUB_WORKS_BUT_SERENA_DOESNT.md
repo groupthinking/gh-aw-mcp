@@ -7,519 +7,355 @@
 
 This is not a bug - it's an architectural difference between two valid MCP server design patterns.
 
-**Important Clarification:** 
-- **Transport ≠ Architecture**: The issue is NOT about HTTP vs stdio transport
-- **GitHub MCP supports BOTH transports** (stdio AND HTTP)
-- **The key difference is stateless vs stateful design**
-- When configured with `"type": "http"`, the gateway connects to GitHub MCP via HTTP
-- GitHub MCP's stateless architecture makes it work regardless of which transport is used
+**Critical Fact:** 
+- **BOTH servers use stdio transport via Docker containers in production**
+- **BOTH use the same backend connection management (session pool)**
+- **The ONLY difference is stateless vs stateful architecture**
+- The transport layer (stdio) is identical for both
 
 ---
 
-## Understanding Transport vs Architecture
+## The Real Story
 
-### Transport (How You Connect)
-- **HTTP transport**: Client sends JSON-RPC via HTTP POST requests
-- **Stdio transport**: Client sends JSON-RPC via stdin/stdout pipes
+### What's Actually Happening
 
-### Architecture (How State Is Managed)
-- **Stateless**: Server doesn't maintain session state between requests
-- **Stateful**: Server requires persistent connection to maintain session state
-
-### The Confusion
-Many people think "HTTP-native" means the server ONLY works with HTTP. **This is incorrect**. GitHub MCP Server supports both transports but uses a **stateless architecture**, which is why it works through the gateway when accessed via HTTP.
-
----
-
-## Quick Comparison
-
-| Aspect | GitHub MCP Server | Serena MCP Server |
-|--------|-------------------|-------------------|
-| **Gateway Config Type** | `"http"` (how gateway connects) | `"stdio"` (how gateway connects) |
-| **Supported Transports** | Both stdio AND HTTP | Stdio only |
-| **Architecture** | Stateless | Stateful |
-| **Session State** | None (each request is self-contained) | In-memory (tied to connection) |
-| **Gateway Compatible** | ✅ Yes (stateless design) | ❌ No (stateful design) |
-| **Direct Connection** | ✅ Yes (both transports) | ✅ Yes (stdio) |
-| **Best For** | Cloud, serverless, scalable deployments | CLI tools, local development |
-
----
-
-## Configuration Comparison
-
-### GitHub MCP Server Configuration (via Gateway)
-
-```json
-{
-  "mcpServers": {
-    "github": {
-      "type": "http",
-      "url": "http://localhost:3000",
-      "env": {
-        "GITHUB_PERSONAL_ACCESS_TOKEN": "..."
-      }
-    }
-  }
-}
+**Production Deployment (Both Servers):**
+```
+Gateway → docker run -i ghcr.io/github/github-mcp-server (stdio)
+Gateway → docker run -i ghcr.io/githubnext/serena-mcp-server (stdio)
 ```
 
-**Key Point:** `"type": "http"` tells the gateway to connect to GitHub MCP Server via HTTP. The server itself supports both HTTP and stdio transports. The stateless architecture makes it work regardless of transport.
+**Both servers:**
+- Run as Docker containers
+- Communicate via stdin/stdout (stdio transport)
+- Use the same session connection pool in the gateway
+- Backend stdio connections are reused for same session
 
-### Serena MCP Server Configuration
+**So why does one work and not the other?**
 
-```json
-{
-  "mcpServers": {
-    "serena": {
-      "type": "stdio",
-      "container": "ghcr.io/githubnext/serena-mcp-server:latest",
-      "mounts": ["${PWD}:/workspace:ro"]
-    }
-  }
-}
+---
+
+## Architecture: Stateless vs Stateful
+
+### GitHub MCP Server: Stateless Architecture
+
+**Each request is independent:**
+```typescript
+// GitHub MCP Server (simplified)
+server.setRequestHandler(ListToolsRequestSchema, async () => {
+  // NO session state needed
+  // Just return the tools list
+  return {
+    tools: [
+      { name: "search_repositories", ... },
+      { name: "create_issue", ... }
+    ]
+  };
+});
+
+server.setRequestHandler(CallToolRequestSchema, async (request) => {
+  // NO session state needed
+  // Just execute the tool with provided parameters
+  const result = await executeTool(request.params.name, request.params.arguments);
+  return { result };
+});
 ```
 
-**Key Point:** `"type": "stdio"` means it's a stdio-based server that communicates via stdin/stdout pipes.
+**Why it works:**
+- Server doesn't care if it was initialized before
+- Each request is processed independently
+- No memory of previous requests needed
+- SDK protocol state recreation doesn't break anything
+
+### Serena MCP Server: Stateful Architecture
+
+**Requires session state:**
+```python
+# Serena MCP Server (simplified)
+class SerenaServer:
+    def __init__(self):
+        self.state = "uninitialized"  # Session state!
+        self.language_servers = {}     # Session state!
+    
+    async def initialize(self, params):
+        self.state = "initializing"
+        # Start language servers
+        self.language_servers = await start_all_language_servers()
+        self.state = "ready"
+    
+    async def list_tools(self):
+        if self.state != "ready":
+            raise Error("invalid during session initialization")
+        return self.tools
+    
+    async def call_tool(self, name, args):
+        if self.state != "ready":
+            raise Error("invalid during session initialization")
+        # Use language servers from session state
+        return await self.language_servers[name].execute(args)
+```
+
+**Why it fails:**
+- Server REQUIRES initialization before tool calls
+- SDK creates new protocol state per HTTP request
+- Backend process is still running (reused correctly)
+- But SDK protocol layer is fresh and uninitialized
+- Server rejects tool calls because SDK says "not initialized"
 
 ---
 
 ## Gateway Backend Connection Management
 
-### How the Gateway Connects to Backends
+### How It Actually Works
 
-**HTTP Backends (like GitHub MCP):**
-```
-Frontend HTTP Request 1 → Gateway → Backend HTTP Connection (persistent)
-Frontend HTTP Request 2 → Gateway → SAME Backend HTTP Connection
-Frontend HTTP Request 3 → Gateway → SAME Backend HTTP Connection
-```
-- **One persistent HTTP connection per backend**, shared across ALL frontend requests
-- All requests to `/mcp/github` use the SAME backend connection
-- Works because GitHub MCP is stateless - doesn't need per-session isolation
-
-**Stdio Backends (like Serena MCP):**
-```
-Frontend HTTP Request 1 → Gateway → Backend Stdio Connection (pooled by session)
-Frontend HTTP Request 2 → Gateway → SAME Backend Stdio Connection (if same session ID)
-Frontend HTTP Request 3 → Gateway → SAME Backend Stdio Connection (if same session ID)
-```
-- **Connection pool keyed by (backend, sessionID)** in `SessionConnectionPool`
-- Requests with same Authorization header should get same backend connection
-- **Problem:** SDK's `StreamableHTTPHandler` creates new protocol state per HTTP request
-- Even though backend connection is reused, protocol initialization state is lost
-
----
-
-## How They Work Differently
-
-### GitHub MCP Server: Stateless Architecture
-
-```
-┌─────────────────────────────────────────────────────────┐
-│ Request 1: Initialize                                    │
-├─────────────────────────────────────────────────────────┤
-│ Client → Gateway (HTTP) → GitHub Server                 │
-│         (reuses SAME backend HTTP connection)           │
-│                                                          │
-│ POST /mcp/github                                         │
-│ {"method": "initialize", ...}                           │
-│                                                          │
-│ GitHub Server (stateless):                              │
-│   - Processes request immediately                       │
-│   - NO state stored                                     │
-│   - Returns initialization response                     │
-│   - Request complete ✅                                  │
-└─────────────────────────────────────────────────────────┘
-
-┌─────────────────────────────────────────────────────────┐
-│ Request 2: List Tools (SEPARATE HTTP REQUEST)           │
-├─────────────────────────────────────────────────────────┤
-│ Client → Gateway (HTTP) → GitHub Server                 │
-│                                                          │
-│ POST /mcp/github                                         │
-│ {"method": "tools/list", ...}                           │
-│                                                          │
-│ GitHub Server (stateless):                              │
-│   - Processes request immediately                       │
-│   - NO initialization check needed                      │
-│   - Returns list of tools                               │
-│   - Request complete ✅                                  │
-└─────────────────────────────────────────────────────────┘
-
-┌─────────────────────────────────────────────────────────┐
-│ Request 3: Call Tool (SEPARATE HTTP REQUEST)            │
-├─────────────────────────────────────────────────────────┤
-│ Client → Gateway (HTTP) → GitHub Server                 │
-│                                                          │
-│ POST /mcp/github                                         │
-│ {"method": "tools/call", "params": {...}}              │
-│                                                          │
-│ GitHub Server (stateless):                              │
-│   - Processes request immediately                       │
-│   - Executes tool without session state                 │
-│   - Returns tool result                                 │
-│   - Request complete ✅                                  │
-└─────────────────────────────────────────────────────────┘
-```
-
-**Why it works:** Each HTTP request is independent. The server's stateless architecture means it doesn't need or expect session state from previous requests.
-
-**Note:** GitHub MCP Server supports both HTTP and stdio transports. When configured with `"type": "http"`, the gateway uses HTTP transport. The stateless design works regardless of transport.
-
-### Serena MCP Server: Stateful Architecture
-
-```
-┌─────────────────────────────────────────────────────────┐
-│ Request 1: Initialize (Session ID: abc123)              │
-├─────────────────────────────────────────────────────────┤
-│ Client → Gateway → Serena Process (via stdio)           │
-│         (Gateway attempts to reuse pooled connection)   │
-│                                                          │
-│ Gateway: GetOrLaunchForSession("serena", "abc123")      │
-│ - Launches: docker run -i serena-mcp-server             │
-│ - Stores in SessionConnectionPool["serena"]["abc123"]   │
-│ - SDK creates Server instance with protocol state       │
-│                                                          │
-│ Sends to stdin: {"method": "initialize", ...}          │
-│                                                          │
-│ Serena Server (stateful):                               │
-│   - Creates session state: "initializing"               │
-│   - Starts language servers                             │
-│   - Returns initialization response                     │
-│   - Session state: "ready"                              │
-│                                                          │
-│ ✅ Backend stdio connection kept alive in pool          │
-│ ❌ SDK creates NEW protocol state for next request      │
-└─────────────────────────────────────────────────────────┘
-
-┌─────────────────────────────────────────────────────────┐
-│ Request 2: List Tools (Session ID: abc123)              │
-├─────────────────────────────────────────────────────────┤
-│ Client → Gateway → Serena Process (via stdio)           │
-│         (Gateway retrieves SAME pooled connection)      │
-│                                                          │
-│ Gateway: GetOrLaunchForSession("serena", "abc123")      │
-│ ✅ Retrieves existing stdio connection from pool        │
-│ ✅ SAME backend process, SAME stdio pipes               │
-│ ❌ SDK StreamableHTTPHandler creates NEW protocol state │
-│                                                          │
-│ Sends to stdin: {"method": "tools/list", ...}          │
-│                                                          │
-│ Serena Server (stateful):                               │
-│   - Receives tools/list on SAME stdio connection        │
-│   - Backend thinks: "I'm ready, this should work"       │
-│   - But SDK protocol layer is UNINITIALIZED             │
-│   - SDK rejects: "invalid during session initialization"│
-│                                                          │
-│ ❌ Error returned to client                              │
-└─────────────────────────────────────────────────────────┘
-```
-
-**Why it fails:** 
-1. ✅ Backend stdio connection IS reused via SessionConnectionPool
-2. ✅ Same Serena process receives both requests
-3. ❌ SDK's StreamableHTTPHandler creates new protocol session state per HTTP request
-4. ❌ Even though backend is ready, SDK protocol layer expects initialize
-
-**The Real Problem:** The issue is NOT backend connection management (which works correctly). The issue is the SDK's `StreamableHTTPHandler` treating each HTTP request as a new protocol session, creating fresh initialization state that doesn't persist across requests.
-
----
-
-## Code Examples
-
-### GitHub MCP Server (TypeScript - Stateless)
-
-```typescript
-import { Server } from '@modelcontextprotocol/sdk/server/index.js';
-
-const server = new Server({
-  name: 'github-mcp-server',
-  version: '1.0.0',
-}, {
-  capabilities: {
-    tools: {},
-  },
-});
-
-// Each request is handled independently - no session state
-server.setRequestHandler('initialize', async (request) => {
-  // No state stored
-  return {
-    protocolVersion: '2024-11-05',
-    capabilities: { tools: {} },
-    serverInfo: { name: 'github-mcp-server', version: '1.0.0' }
-  };
-});
-
-server.setRequestHandler('tools/list', async () => {
-  // No initialization check - just return tools
-  return {
-    tools: [
-      { name: 'list_branches', description: '...' },
-      { name: 'create_issue', description: '...' }
-    ]
-  };
-});
-
-server.setRequestHandler('tools/call', async (request) => {
-  // No session state needed - execute tool immediately
-  const { name, arguments: args } = request.params;
-  return await executeTool(name, args);
-});
-```
-
-**Key:** No session state, no initialization checks, each request is self-contained.
-
-### Serena MCP Server (Python - Stateful)
-
-```python
-class SerenaMCPServer:
-    def __init__(self):
-        self.session_state = "uninitialized"
-        self.language_servers = {}
-        self.workspace_context = None
-    
-    async def handle_message(self, message):
-        method = message.get("method")
-        
-        if method == "initialize":
-            # Create and store session state
-            self.session_state = "initializing"
-            self.workspace_context = message["params"]["workspaceFolder"]
-            self.language_servers = await self.start_language_servers()
-            
-            return {
-                "protocolVersion": "2024-11-05",
-                "capabilities": { "tools": {} },
-                "serverInfo": { "name": "serena-mcp-server", "version": "1.0.0" }
-            }
-        
-        elif method == "notifications/initialized":
-            # Mark session as fully initialized
-            self.session_state = "ready"
-            return None
-        
-        elif method == "tools/list":
-            # CHECK: Are we initialized?
-            if self.session_state != "ready":
-                return {
-                    "error": {
-                        "code": 0,
-                        "message": "method 'tools/list' is invalid during session initialization"
-                    }
-                }
-            
-            return { "tools": self.get_available_tools() }
-        
-        elif method == "tools/call":
-            # CHECK: Are we initialized?
-            if self.session_state != "ready":
-                return {
-                    "error": {
-                        "code": 0,
-                        "message": "method 'tools/call' is invalid during session initialization"
-                    }
-                }
-            
-            # Use session state (language servers, workspace context)
-            return await self.execute_tool(message["params"])
-```
-
-**Key:** Session state is required and checked for every tool operation. State is lost when connection closes.
-
----
-
-## Test Evidence
-
-### GitHub MCP Server Tests (ALL PASS ✅)
-
-From `test/integration/github_test.go`:
-
+**Session Connection Pool (for stdio backends):**
 ```go
-// Request 1: Initialize (separate HTTP request)
-resp1 := sendRequest(t, gatewayURL+"/mcp/github", initializeRequest)
-assert.NoError(t, resp1.Error)
-✅ PASS
-
-// Request 2: Send notification (separate HTTP request)
-resp2 := sendRequest(t, gatewayURL+"/mcp/github", initializedNotification)
-assert.NoError(t, resp2.Error)
-✅ PASS
-
-// Request 3: List tools (separate HTTP request)
-resp3 := sendRequest(t, gatewayURL+"/mcp/github", toolsListRequest)
-assert.NoError(t, resp3.Error)
-assert.NotEmpty(t, resp3.Result.Tools)
-✅ PASS - Returns 23 tools
-
-// Request 4: Call tool (separate HTTP request)
-resp4 := sendRequest(t, gatewayURL+"/mcp/github", toolCallRequest)
-assert.NoError(t, resp4.Error)
-assert.NotEmpty(t, resp4.Result)
-✅ PASS - Tool executes successfully
+// SessionConnectionPool manages connections by (backend, session)
+type SessionConnectionPool struct {
+    connections map[string]map[string]*Connection
+    // Key 1: backendID (e.g., "github", "serena")
+    // Key 2: sessionID (from Authorization header)
+}
 ```
 
-**Result:** 100% success rate through HTTP gateway
+**Connection Reuse:**
+```
+Frontend Request 1 (session abc):
+  → Gateway: GetOrLaunchForSession("github", "abc")
+  → Launches: docker run -i github-mcp-server
+  → Stores connection in pool["github"]["abc"]
+  → Sends initialize via stdio
+  → Response returned
 
-### Serena MCP Server Tests (PARTIAL ⚠️)
-
-From `test/serena-mcp-tests/test_serena_via_gateway.sh`:
-
-```bash
-# Test 6: Initialize (works!)
-curl -X POST http://localhost:18080/mcp/serena \
-  -H "Authorization: test-session-123" \
-  -d '{"method":"initialize",...}'
-✅ PASS
-
-# Test 7: List tools (fails - new connection)
-curl -X POST http://localhost:18080/mcp/serena \
-  -H "Authorization: test-session-123" \
-  -d '{"method":"tools/list",...}'
-❌ FAIL - Error: "method 'tools/list' is invalid during session initialization"
-
-# Test 8: Call tool (fails - new connection)
-curl -X POST http://localhost:18080/mcp/serena \
-  -H "Authorization: test-session-123" \
-  -d '{"method":"tools/call",...}'
-❌ FAIL - Error: "method 'tools/call' is invalid during session initialization"
+Frontend Request 2 (session abc):
+  → Gateway: GetOrLaunchForSession("github", "abc")
+  → Retrieves SAME connection from pool["github"]["abc"]
+  → SAME Docker process, SAME stdio pipes
+  → Sends tools/list via SAME stdio connection
+  → Response returned
 ```
 
-**Result:** 7/23 tests pass (30%) - All tool operations fail
-
-### Serena Direct Connection Tests (ALL PASS ✅)
-
-From `test/serena-mcp-tests/test_serena.sh`:
-
-```bash
-# Single stdio connection - all messages on same stream
-docker run -i serena-mcp-server <<EOF
-{"method":"initialize",...}
-{"method":"notifications/initialized"}
-{"method":"tools/list",...}
-{"method":"tools/call","params":{"name":"analyze_go_symbol",...}}
-EOF
-
-✅ PASS - 68/68 tests pass
-```
-
-**Result:** 100% success rate with direct stdio connection
+**This works correctly for both GitHub and Serena!**
+- ✅ Backend Docker process is reused
+- ✅ Stdio pipes are reused
+- ✅ Same connection for all requests in a session
 
 ---
 
-## Why This Matters
+## The SDK Problem
 
-### For Users
+### What the SDK Does
 
-**If you're using GitHub MCP Server (or similar HTTP-native servers):**
-- ✅ Use the HTTP gateway - it works perfectly
-- ✅ Get all benefits of HTTP: load balancing, scaling, cloud deployment
+**For each incoming HTTP request:**
+```go
+// SDK's StreamableHTTPHandler
+func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+    // Creates NEW protocol session state
+    session := NewProtocolSession()  // Fresh state!
+    session.state = "uninitialized"
+    
+    // Even though we reuse backend connection:
+    backend := getBackendConnection()  // Reused ✅
+    
+    // The protocol layer is fresh
+    jsonrpcRequest := parseRequest(r)
+    
+    if jsonrpcRequest.method != "initialize" && session.state == "uninitialized" {
+        return Error("invalid during session initialization")
+    }
+}
+```
 
-**If you're using Serena MCP Server (or similar stdio servers):**
-- ✅ Use direct stdio connection - full functionality
-- ❌ Don't use HTTP gateway - tool operations will fail
-- ℹ️ This is not a bug - it's an architectural mismatch
+**The layers:**
+```
+HTTP Request
+    ↓
+SDK StreamableHTTPHandler (NEW protocol state) ❌
+    ↓
+Backend Stdio Connection (REUSED) ✅
+    ↓
+MCP Server Process (REUSED, has state) ✅
+```
 
-### For Developers
+### Why GitHub Works Despite This
 
-**Building a new MCP server? Choose your architecture:**
+**GitHub doesn't check protocol state:**
+```
+HTTP Request → tools/list
+    ↓
+SDK: "I'm uninitialized, but I'll pass it through"
+    ↓
+Backend GitHub Server: "I don't care about initialization, here are the tools"
+    ↓
+Success ✅
+```
 
-**Stateless HTTP (like GitHub):**
-- ✅ Works through HTTP gateways
-- ✅ Horizontally scalable
-- ✅ Cloud-native friendly
-- ⚠️ More complex to implement conversational context
-- **Use when:** Building cloud services, APIs, serverless functions
-
-**Stateful stdio (like Serena):**
-- ✅ Simple session management
-- ✅ Natural conversational context
-- ✅ Perfect for CLI tools
-- ⚠️ Single-client, local-only
-- **Use when:** Building CLI tools, desktop integrations, local development tools
+**Serena checks protocol state:**
+```
+HTTP Request → tools/list
+    ↓
+SDK: "I'm uninitialized, reject this"
+    ↓
+Error: "invalid during session initialization" ❌
+(Backend Serena never even receives the request!)
+```
 
 ---
 
-## Solution Paths
+## Configuration Examples
 
-### For Serena Users (Today)
+### GitHub MCP Server (Production)
 
-Use direct stdio connection:
+**config.toml:**
+```toml
+[servers.github]
+command = "docker"
+args = ["run", "--rm", "-i", "ghcr.io/github/github-mcp-server:latest"]
+```
 
+**config.json:**
 ```json
 {
-  "mcpServers": {
-    "serena": {
-      "type": "stdio",
-      "container": "ghcr.io/githubnext/serena-mcp-server:latest",
-      "mounts": ["${PWD}:/workspace:ro"]
-    }
+  "github": {
+    "type": "local",
+    "container": "ghcr.io/github/github-mcp-server:latest"
   }
 }
 ```
 
-Connect directly without HTTP gateway. Full functionality available.
+**Note:** `"type": "local"` is an alias for stdio. Both configs use stdio transport.
 
-### For Gateway Enhancement (Future)
+### Serena MCP Server (Production)
 
-The gateway could be enhanced to support stateful backends:
+**config.toml:**
+```toml
+[servers.serena]
+command = "docker"
+args = ["run", "--rm", "-i", "ghcr.io/githubnext/serena-mcp-server:latest"]
+```
 
-1. **Connection Pooling:** Maintain persistent stdio connections to backends
-2. **Session Mapping:** Map HTTP Authorization headers to persistent backend connections
-3. **State Preservation:** Keep backend connections alive between HTTP requests
-
-This would allow stateful servers like Serena to work through the HTTP gateway.
-
-**Status:** Not yet implemented (see connection pooling work in progress)
-
----
-
-## How to Identify Your Server Type
-
-Check your MCP server configuration:
-
+**config.json:**
 ```json
 {
-  "mcpServers": {
-    "my-server": {
-      "type": "???"  // ← Look here
-    }
+  "serena": {
+    "type": "stdio",
+    "container": "ghcr.io/githubnext/serena-mcp-server:latest"
   }
 }
 ```
 
-| Type | Architecture | Gateway Compatible |
-|------|--------------|-------------------|
-| `"http"` | Stateless HTTP-native | ✅ Yes |
-| `"stdio"` | Stateful stdio-based | ❌ No (without enhancement) |
-| `"local"` | Alias for stdio | ❌ No (without enhancement) |
-
-Or check the server documentation for:
-- "Requires persistent connection" → Stateful
-- "Stateless operation" → Stateless
-- "HTTP-native" → Stateless
-- "stdio transport" → Stateful
+**SAME transport as GitHub!**
 
 ---
 
-## Conclusion
+## Comparison Table
 
-The gateway session persistence issue affects **Serena** but not **GitHub MCP** because:
-
-1. **GitHub MCP is stateless** - each request is independent, no session state needed
-2. **Serena is stateful** - requires persistent connection with session state
-
-This is **not a bug** - both are valid MCP server architectures:
-- GitHub's approach is optimal for cloud/serverless deployments
-- Serena's approach is optimal for CLI/local tool integrations
-
-Choose the right architecture for your use case, or design hybrid servers that support both modes.
+| Aspect | GitHub MCP | Serena MCP |
+|--------|------------|------------|
+| **Production Transport** | Stdio (Docker) | Stdio (Docker) |
+| **Backend Connection** | Session pool | Session pool |
+| **Connection Reuse** | ✅ Yes | ✅ Yes |
+| **Architecture** | Stateless | Stateful |
+| **Checks Initialization** | ❌ No | ✅ Yes |
+| **SDK Protocol State Issue** | Doesn't matter | Breaks it |
+| **Gateway Compatible** | ✅ Yes | ❌ No |
+| **Direct Connection** | ✅ Yes | ✅ Yes |
 
 ---
 
-## References
+## Test Results
 
-- [MCP Server Architecture Analysis](../test/serena-mcp-tests/MCP_SERVER_ARCHITECTURE_ANALYSIS.md) - Comprehensive analysis
-- [Gateway Test Findings](../test/serena-mcp-tests/GATEWAY_TEST_FINDINGS.md) - Detailed test results
-- [Serena Test Results](../SERENA_TEST_RESULTS.md) - Test summary
-- [GitHub MCP Server Integration Tests](../test/integration/github_test.go) - Working examples
+### GitHub MCP Through Gateway: 100% Pass ✅
+
+```
+Request 1 (initialize):
+  → SDK creates protocol state (uninitialized)
+  → Backend process launched
+  → Initialize sent
+  → SDK state: initialized
+  → Success ✅
+
+Request 2 (tools/list):
+  → SDK creates NEW protocol state (uninitialized) ❌
+  → Backend process REUSED ✅
+  → GitHub doesn't care about SDK state ✅
+  → Returns tools list
+  → Success ✅
+
+Request 3 (tools/call):
+  → SDK creates NEW protocol state (uninitialized) ❌
+  → Backend process REUSED ✅
+  → GitHub doesn't care about SDK state ✅
+  → Executes tool
+  → Success ✅
+```
+
+### Serena MCP Through Gateway: 30% Pass ⚠️
+
+```
+Request 1 (initialize):
+  → SDK creates protocol state (uninitialized)
+  → Backend process launched
+  → Initialize sent
+  → Serena starts language servers
+  → SDK state: initialized
+  → Success ✅
+
+Request 2 (tools/list):
+  → SDK creates NEW protocol state (uninitialized) ❌
+  → Backend process REUSED ✅
+  → Backend Serena state: ready ✅
+  → BUT: SDK rejects before sending to backend ❌
+  → Error: "invalid during session initialization"
+  → Failure ❌
+```
+
+### Serena MCP Direct: 100% Pass ✅
+
+```
+Single persistent stdio connection (no SDK HTTP layer):
+  → Send initialize → Success
+  → Send tools/list → Success (same connection)
+  → Send tools/call → Success (same connection)
+All 68 tests pass ✅
+```
+
+---
+
+## Summary
+
+### What Works
+- ✅ Backend connection management (both servers)
+- ✅ Session connection pooling (both servers)
+- ✅ Docker container reuse (both servers)
+- ✅ Stdio pipe reuse (both servers)
+- ✅ GitHub MCP stateless architecture
+- ✅ Serena MCP with direct stdio connection
+
+### What Doesn't Work
+- ❌ SDK StreamableHTTPHandler protocol state persistence
+- ❌ Stateful servers through HTTP gateway
+
+### The Root Cause
+The SDK's `StreamableHTTPHandler` creates fresh protocol session state for each HTTP request, treating each request as a new session. This is fine for stateless servers (GitHub) but breaks stateful servers (Serena) because the SDK rejects tool calls before they reach the backend.
+
+### The Fix Needed
+Either:
+1. Modify SDK to support protocol state persistence across HTTP requests
+2. Bypass SDK's StreamableHTTPHandler for stateful servers
+3. Accept this as a known limitation and use direct connections for stateful servers
+
+---
+
+## For Users
+
+**If your MCP server is:**
+- **Stateless** (like GitHub MCP): Use gateway ✅
+- **Stateful** (like Serena MCP): Use direct stdio connection ✅
+
+**How to tell:**
+- Does your server validate initialization state before handling requests?
+- Does your server maintain in-memory state between requests?
+- If yes to either: You have a stateful server
+
+Both patterns are valid and serve different use cases. The gateway is optimized for stateless servers, while stateful servers work best with direct connections.
