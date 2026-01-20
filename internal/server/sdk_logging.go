@@ -62,7 +62,7 @@ func WithSDKLogging(handler http.Handler, mode string) http.Handler {
 
 		// Extract session info for logging context
 		authHeader := r.Header.Get("Authorization")
-		sessionID := extractSessionID(authHeader)
+		sessionID := extractSessionFromAuth(authHeader)
 		mcpSessionID := r.Header.Get("Mcp-Session-Id")
 
 		// Log incoming request
@@ -159,14 +159,6 @@ func WithSDKLogging(handler http.Handler, mode string) http.Handler {
 				mode, lw.statusCode, duration)
 		}
 	})
-}
-
-// extractSessionID extracts session ID from Authorization header
-func extractSessionID(authHeader string) string {
-	if strings.HasPrefix(authHeader, "Bearer ") {
-		return strings.TrimSpace(strings.TrimPrefix(authHeader, "Bearer "))
-	}
-	return authHeader
 }
 
 // truncateSession returns a truncated session ID for logging (first 8 chars)
