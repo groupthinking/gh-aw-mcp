@@ -138,7 +138,7 @@ func CreateHTTPServerForMCP(addr string, unifiedServer *UnifiedServer, apiKey st
 	closeHandler := handleClose(unifiedServer)
 
 	// Apply auth middleware if API key is configured (spec 7.1)
-	var finalCloseHandler http.Handler = closeHandler
+	finalCloseHandler := closeHandler
 	if apiKey != "" {
 		finalCloseHandler = authMiddleware(apiKey, closeHandler.ServeHTTP)
 	}
