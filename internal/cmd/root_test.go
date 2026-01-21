@@ -79,7 +79,7 @@ func TestRunRequiresConfigSource(t *testing.T) {
 	t.Run("no config source provided", func(t *testing.T) {
 		configFile = ""
 		configStdin = false
-		err := run(nil, nil)
+		err := preRun(nil, nil)
 		require.Error(t, err, "Expected error when neither --config nor --config-stdin is provided")
 		assert.Contains(t, err.Error(), "configuration source required", "Error should mention configuration source required")
 	})
@@ -87,37 +87,145 @@ func TestRunRequiresConfigSource(t *testing.T) {
 	t.Run("config file provided", func(t *testing.T) {
 		configFile = "test.toml"
 		configStdin = false
-		err := run(nil, nil)
-		// Should not be the "configuration source required" error
-		// (will fail later due to missing file, but should pass validation)
-		if err != nil {
-			assert.NotContains(t, err.Error(), "configuration source required",
-				"Should not require config source when --config is provided")
-		}
+		err := preRun(nil, nil)
+		// Should pass validation when --config is provided
+		assert.NoError(t, err, "Should not error when --config is provided")
 	})
 
 	t.Run("config stdin provided", func(t *testing.T) {
 		configFile = ""
 		configStdin = true
-		err := run(nil, nil)
-		// Should not be the "configuration source required" error
-		// (will fail later due to stdin not being readable, but should pass validation)
-		if err != nil {
-			assert.NotContains(t, err.Error(), "configuration source required",
-				"Should not require config source when --config-stdin is provided")
-		}
+		err := preRun(nil, nil)
+		// Should pass validation when --config-stdin is provided
+		assert.NoError(t, err, "Should not error when --config-stdin is provided")
 	})
 
 	t.Run("both config file and stdin provided", func(t *testing.T) {
 		configFile = "test.toml"
 		configStdin = true
-		err := run(nil, nil)
-		// When both are provided, stdin takes precedence per flag description
-		// Should not be the "configuration source required" error
-		if err != nil {
-			assert.NotContains(t, err.Error(), "configuration source required",
-				"Should not require config source when both are provided")
-		}
+		err := preRun(nil, nil)
+		// When both are provided, should pass validation
+		assert.NoError(t, err, "Should not error when both are provided")
+	})
+}
+
+// TestPreRunValidation tests the preRun validation function
+func TestPreRunValidation(t *testing.T) {
+	// Save original values
+	origConfigFile := configFile
+	origConfigStdin := configStdin
+	origVerbosity := verbosity
+	t.Cleanup(func() {
+		configFile = origConfigFile
+		configStdin = origConfigStdin
+		verbosity = origVerbosity
+	})
+
+	t.Run("validation passes with config file", func(t *testing.T) {
+		configFile = "test.toml"
+		configStdin = false
+		verbosity = 0
+		err := preRun(nil, nil)
+		assert.NoError(t, err)
+	})
+
+	t.Run("validation passes with config stdin", func(t *testing.T) {
+		configFile = ""
+		configStdin = true
+		verbosity = 0
+		err := preRun(nil, nil)
+		assert.NoError(t, err)
+	})
+
+	t.Run("validation fails without config source", func(t *testing.T) {
+		configFile = ""
+		configStdin = false
+		verbosity = 0
+		err := preRun(nil, nil)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "configuration source required")
+	})
+
+	t.Run("verbosity level 1 does not set DEBUG", func(t *testing.T) {
+		// Save and clear DEBUG env var
+		origDebug, wasSet := os.LookupEnv("DEBUG")
+		t.Cleanup(func() {
+			if wasSet {
+				os.Setenv("DEBUG", origDebug)
+			} else {
+				os.Unsetenv("DEBUG")
+			}
+		})
+		os.Unsetenv("DEBUG")
+
+		configFile = "test.toml"
+		configStdin = false
+		verbosity = 1
+		err := preRun(nil, nil)
+		assert.NoError(t, err)
+		// Level 1 doesn't set DEBUG env var
+		assert.Empty(t, os.Getenv("DEBUG"))
+	})
+
+	t.Run("verbosity level 2 sets DEBUG for main packages", func(t *testing.T) {
+		// Save and clear DEBUG env var
+		origDebug, wasSet := os.LookupEnv("DEBUG")
+		t.Cleanup(func() {
+			if wasSet {
+				os.Setenv("DEBUG", origDebug)
+			} else {
+				os.Unsetenv("DEBUG")
+			}
+		})
+		os.Unsetenv("DEBUG")
+
+		configFile = "test.toml"
+		configStdin = false
+		verbosity = 2
+		err := preRun(nil, nil)
+		assert.NoError(t, err)
+		assert.Equal(t, "cmd:*,server:*,launcher:*", os.Getenv("DEBUG"))
+	})
+
+	t.Run("verbosity level 3 sets DEBUG to all", func(t *testing.T) {
+		// Save and clear DEBUG env var
+		origDebug, wasSet := os.LookupEnv("DEBUG")
+		t.Cleanup(func() {
+			if wasSet {
+				os.Setenv("DEBUG", origDebug)
+			} else {
+				os.Unsetenv("DEBUG")
+			}
+		})
+		os.Unsetenv("DEBUG")
+
+		configFile = "test.toml"
+		configStdin = false
+		verbosity = 3
+		err := preRun(nil, nil)
+		assert.NoError(t, err)
+		assert.Equal(t, "*", os.Getenv("DEBUG"))
+	})
+
+	t.Run("does not override existing DEBUG env var", func(t *testing.T) {
+		// Save DEBUG env var
+		origDebug, wasSet := os.LookupEnv("DEBUG")
+		t.Cleanup(func() {
+			if wasSet {
+				os.Setenv("DEBUG", origDebug)
+			} else {
+				os.Unsetenv("DEBUG")
+			}
+		})
+		os.Setenv("DEBUG", "custom:*")
+
+		configFile = "test.toml"
+		configStdin = false
+		verbosity = 2
+		err := preRun(nil, nil)
+		assert.NoError(t, err)
+		// Should not override existing DEBUG
+		assert.Equal(t, "custom:*", os.Getenv("DEBUG"))
 	})
 }
 
