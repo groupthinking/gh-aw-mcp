@@ -285,11 +285,11 @@ func TestAgentLabels_ConcurrentAccess(t *testing.T) {
 // TestAgentRegistry_GetOrCreate tests the core registry functionality
 func TestAgentRegistry_GetOrCreate(t *testing.T) {
 	tests := []struct {
-		name            string
-		agentID         string
-		defaultSecrecy  []Tag
+		name             string
+		agentID          string
+		defaultSecrecy   []Tag
 		defaultIntegrity []Tag
-		assertResult    func(*testing.T, *AgentRegistry, *AgentLabels)
+		assertResult     func(*testing.T, *AgentRegistry, *AgentLabels)
 	}{
 		{
 			name:    "create new agent with no defaults",
@@ -452,11 +452,11 @@ func TestAgentRegistry_Get(t *testing.T) {
 // TestAgentRegistry_Register tests explicit agent registration
 func TestAgentRegistry_Register(t *testing.T) {
 	tests := []struct {
-		name           string
-		agentID        string
-		secrecyTags    []Tag
-		integrityTags  []Tag
-		assertAgent    func(*testing.T, *AgentLabels)
+		name          string
+		agentID       string
+		secrecyTags   []Tag
+		integrityTags []Tag
+		assertAgent   func(*testing.T, *AgentLabels)
 	}{
 		{
 			name:          "register with empty tags",
@@ -541,11 +541,11 @@ func TestAgentRegistry_Register_Overwrites(t *testing.T) {
 // TestAgentRegistry_Remove tests agent removal from registry
 func TestAgentRegistry_Remove(t *testing.T) {
 	tests := []struct {
-		name           string
-		setup          func(*AgentRegistry) []string
-		removeID       string
-		expectedCount  int
-		assertRemoved  func(*testing.T, *AgentRegistry)
+		name          string
+		setup         func(*AgentRegistry) []string
+		removeID      string
+		expectedCount int
+		assertRemoved func(*testing.T, *AgentRegistry)
 	}{
 		{
 			name: "remove existing agent",
