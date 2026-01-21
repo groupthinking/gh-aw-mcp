@@ -551,7 +551,7 @@ func TestLoadFromStdin_UndefinedVariable(t *testing.T) {
 	_, err := LoadFromStdin()
 	require.Error(t, err)
 	assert.ErrorContains(t, err, "UNDEFINED_GITHUB_TOKEN", "Error should mention the undefined variable")
-	assert.ErrorContains(t, err, "mcpServers.github.env", "Error should include JSON path")
+	assert.ErrorContains(t, err, "undefined environment variable", "Error should describe the issue")
 }
 
 func TestLoadFromStdin_VariableExpansionInContainer(t *testing.T) {

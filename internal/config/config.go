@@ -115,6 +115,13 @@ func LoadFromStdin() (*Config, error) {
 		return nil, fmt.Errorf("failed to normalize configuration: %w", err)
 	}
 
+	// Pre-process: expand ${VAR} expressions before schema validation
+	// This ensures the schema validates expanded values, not variable syntax
+	data, err = ExpandRawJSONVariables(data)
+	if err != nil {
+		return nil, err
+	}
+
 	// Validate against JSON schema first (fail-fast, spec-compliant)
 	if err := validateJSONSchema(data); err != nil {
 		return nil, err
