@@ -47,6 +47,37 @@ func expandVariables(value, jsonPath string) (string, error) {
 	return result, nil
 }
 
+// ExpandRawJSONVariables expands all ${VAR} expressions in JSON data before schema validation.
+// This ensures the schema validates the expanded values, not the variable syntax.
+// It collects all undefined variables and reports them in a single error.
+func ExpandRawJSONVariables(data []byte) ([]byte, error) {
+	logValidation.Print("Expanding variables in raw JSON data")
+	var undefinedVars []string
+
+	result := varExprPattern.ReplaceAllFunc(data, func(match []byte) []byte {
+		// Extract variable name (remove ${ and })
+		varName := string(match[2 : len(match)-1])
+
+		if envValue, exists := os.LookupEnv(varName); exists {
+			logValidation.Printf("Expanded variable in JSON: %s", varName)
+			return []byte(envValue)
+		}
+
+		// Track undefined variable
+		undefinedVars = append(undefinedVars, varName)
+		logValidation.Printf("Undefined variable in JSON: %s", varName)
+		return match // Keep original if undefined
+	})
+
+	if len(undefinedVars) > 0 {
+		logValidation.Printf("Variable expansion failed: undefined variables=%v", undefinedVars)
+		return nil, rules.UndefinedVariable(undefinedVars[0], "configuration")
+	}
+
+	logValidation.Print("Raw JSON variable expansion completed")
+	return result, nil
+}
+
 // expandEnvVariables expands all variable expressions in an env map
 func expandEnvVariables(env map[string]string, serverName string) (map[string]string, error) {
 	logValidation.Printf("Expanding env variables for server: %s, count=%d", serverName, len(env))
