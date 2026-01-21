@@ -279,4 +279,3 @@ func TestTCFG013_SchemaURLFetchAndCache(t *testing.T) {
 		assert.NoError(t, err2)
 	})
 }
-
