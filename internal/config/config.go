@@ -45,8 +45,9 @@ type ServerConfig struct {
 
 // StdinConfig represents JSON configuration from stdin
 type StdinConfig struct {
-	MCPServers map[string]*StdinServerConfig `json:"mcpServers"`
-	Gateway    *StdinGatewayConfig           `json:"gateway,omitempty"`
+	MCPServers    map[string]*StdinServerConfig `json:"mcpServers"`
+	Gateway       *StdinGatewayConfig           `json:"gateway,omitempty"`
+	CustomSchemas map[string]string             `json:"customSchemas,omitempty"` // Map of custom server type names to JSON Schema URLs
 }
 
 // StdinServerConfig represents a single server from stdin JSON
@@ -131,6 +132,11 @@ func LoadFromStdin() (*Config, error) {
 		return nil, err
 	}
 
+	// Validate customSchemas field (reserved type names check)
+	if err := validateCustomSchemas(stdinCfg.CustomSchemas); err != nil {
+		return nil, err
+	}
+
 	// Validate gateway configuration (additional checks)
 	if err := validateGatewayConfig(stdinCfg.Gateway); err != nil {
 		return nil, err
@@ -162,8 +168,8 @@ func LoadFromStdin() (*Config, error) {
 	}
 
 	for name, server := range stdinCfg.MCPServers {
-		// Validate server configuration (fail-fast)
-		if err := validateServerConfig(name, server); err != nil {
+		// Validate server configuration (fail-fast) with custom schemas support
+		if err := validateServerConfigWithCustomSchemas(name, server, stdinCfg.CustomSchemas); err != nil {
 			return nil, err
 		}
 

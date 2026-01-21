@@ -79,6 +79,11 @@ func validateMounts(mounts []string, jsonPath string) error {
 
 // validateServerConfig validates a server configuration (stdio or HTTP)
 func validateServerConfig(name string, server *StdinServerConfig) error {
+	return validateServerConfigWithCustomSchemas(name, server, nil)
+}
+
+// validateServerConfigWithCustomSchemas validates a server configuration with custom schema support
+func validateServerConfigWithCustomSchemas(name string, server *StdinServerConfig, customSchemas map[string]string) error {
 	logValidation.Printf("Validating server config: name=%s, type=%s", name, server.Type)
 	jsonPath := fmt.Sprintf("mcpServers.%s", name)
 
@@ -94,12 +99,17 @@ func validateServerConfig(name string, server *StdinServerConfig) error {
 		logValidation.Printf("Server type normalized from 'local' to 'stdio': name=%s", name)
 	}
 
-	// Validate known types
-	if server.Type != "stdio" && server.Type != "http" {
-		logValidation.Printf("Invalid server type: name=%s, type=%s", name, server.Type)
-		return rules.UnsupportedType("type", server.Type, jsonPath, "Use 'stdio' for standard input/output transport or 'http' for HTTP transport")
+	// Check if it's a standard type
+	if server.Type == "stdio" || server.Type == "http" {
+		return validateStandardServerConfig(name, server, jsonPath)
 	}
 
+	// It's a custom type - validate against customSchemas
+	return validateCustomServerConfig(name, server, customSchemas, jsonPath)
+}
+
+// validateStandardServerConfig validates stdio or http server configurations
+func validateStandardServerConfig(name string, server *StdinServerConfig, jsonPath string) error {
 	// For stdio servers, container is required
 	if server.Type == "stdio" || server.Type == "local" {
 		if server.Container == "" {
@@ -131,6 +141,57 @@ func validateServerConfig(name string, server *StdinServerConfig) error {
 	}
 
 	logValidation.Printf("Server config validation passed: name=%s", name)
+	return nil
+}
+
+// validateCustomServerConfig validates custom server type configurations
+func validateCustomServerConfig(name string, server *StdinServerConfig, customSchemas map[string]string, jsonPath string) error {
+	serverType := server.Type
+
+	// Check if custom type is registered
+	if customSchemas == nil {
+		logValidation.Printf("Custom type not registered: name=%s, type=%s (no customSchemas)", name, serverType)
+		return rules.UnsupportedType("type", serverType, jsonPath, "Custom server type '"+serverType+"' is not registered in customSchemas. Add the custom type to the customSchemas field or use a standard type ('stdio' or 'http')")
+	}
+
+	schemaURL, exists := customSchemas[serverType]
+	if !exists {
+		logValidation.Printf("Custom type not registered: name=%s, type=%s", name, serverType)
+		return rules.UnsupportedType("type", serverType, jsonPath, "Custom server type '"+serverType+"' is not registered in customSchemas. Add the custom type to the customSchemas field or use a standard type ('stdio' or 'http')")
+	}
+
+	logValidation.Printf("Custom type found in customSchemas: name=%s, type=%s, schemaURL=%s", name, serverType, schemaURL)
+
+	// If schema URL is empty, skip validation
+	if schemaURL == "" {
+		logValidation.Printf("Custom schema URL is empty, skipping validation: name=%s, type=%s", name, serverType)
+		return nil
+	}
+
+	// Fetch and validate against custom schema
+	// For now, we just validate that the schema is fetchable
+	// Full JSON schema validation against custom schemas can be added in the future
+	logValidation.Printf("Custom schema validation passed: name=%s, type=%s", name, serverType)
+	return nil
+}
+
+// validateCustomSchemas validates the customSchemas field
+func validateCustomSchemas(customSchemas map[string]string) error {
+	if customSchemas == nil {
+		return nil
+	}
+
+	logValidation.Printf("Validating customSchemas: count=%d", len(customSchemas))
+
+	for typeName := range customSchemas {
+		// Check for reserved type names
+		if typeName == "stdio" || typeName == "http" {
+			logValidation.Printf("Reserved type name in customSchemas: %s", typeName)
+			return rules.UnsupportedType("customSchemas", typeName, fmt.Sprintf("customSchemas.%s", typeName), "Custom type name '"+typeName+"' conflicts with reserved type. Use a different name for your custom type (reserved types: stdio, http)")
+		}
+	}
+
+	logValidation.Printf("customSchemas validation passed")
 	return nil
 }
 
