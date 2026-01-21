@@ -19,6 +19,10 @@ func main() {
 	cmd.Execute()
 }
 
+const (
+	shortHashLength = 7 // Length for short git commit hash
+)
+
 // buildVersionString constructs a detailed version string with build metadata
 func buildVersionString() string {
 	var parts []string
@@ -38,8 +42,8 @@ func buildVersionString() string {
 		for _, setting := range buildInfo.Settings {
 			if setting.Key == "vcs.revision" {
 				commitHash := setting.Value
-				if len(commitHash) > 7 {
-					commitHash = commitHash[:7] // Short hash
+				if len(commitHash) > shortHashLength {
+					commitHash = commitHash[:shortHashLength] // Short hash
 				}
 				parts = append(parts, fmt.Sprintf("commit: %s", commitHash))
 				break

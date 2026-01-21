@@ -96,6 +96,12 @@ func getDefaultLogDir() string {
 	return defaultLogDir
 }
 
+const (
+	// Debug log patterns for different verbosity levels
+	debugMainPackages = "cmd:*,server:*,launcher:*"
+	debugAllPackages  = "*"
+)
+
 // registerFlagCompletions registers custom completion functions for flags
 func registerFlagCompletions(cmd *cobra.Command) {
 	// Custom completion for --config flag (complete with .toml files)
@@ -134,12 +140,12 @@ func preRun(cmd *cobra.Command, args []string) error {
 			debugLog.Printf("Verbosity level: info")
 		case 2:
 			// Debug level - enable debug logs for main packages
-			os.Setenv("DEBUG", "cmd:*,server:*,launcher:*")
-			debugLog.Printf("Verbosity level: debug (DEBUG=cmd:*,server:*,launcher:*)")
+			os.Setenv("DEBUG", debugMainPackages)
+			debugLog.Printf("Verbosity level: debug (DEBUG=%s)", debugMainPackages)
 		default:
 			// Trace level (3+) - enable all debug logs
-			os.Setenv("DEBUG", "*")
-			debugLog.Printf("Verbosity level: trace (DEBUG=*)")
+			os.Setenv("DEBUG", debugAllPackages)
+			debugLog.Printf("Verbosity level: trace (DEBUG=%s)", debugAllPackages)
 		}
 	}
 
