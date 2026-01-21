@@ -79,7 +79,7 @@ func TestRunRequiresConfigSource(t *testing.T) {
 	t.Run("no config source provided", func(t *testing.T) {
 		configFile = ""
 		configStdin = false
-		err := run(nil, nil)
+		err := preRun(nil, nil)
 		require.Error(t, err, "Expected error when neither --config nor --config-stdin is provided")
 		assert.Contains(t, err.Error(), "configuration source required", "Error should mention configuration source required")
 	})
@@ -87,37 +87,25 @@ func TestRunRequiresConfigSource(t *testing.T) {
 	t.Run("config file provided", func(t *testing.T) {
 		configFile = "test.toml"
 		configStdin = false
-		err := run(nil, nil)
-		// Should not be the "configuration source required" error
-		// (will fail later due to missing file, but should pass validation)
-		if err != nil {
-			assert.NotContains(t, err.Error(), "configuration source required",
-				"Should not require config source when --config is provided")
-		}
+		err := preRun(nil, nil)
+		// Should pass validation when --config is provided
+		assert.NoError(t, err, "Should not error when --config is provided")
 	})
 
 	t.Run("config stdin provided", func(t *testing.T) {
 		configFile = ""
 		configStdin = true
-		err := run(nil, nil)
-		// Should not be the "configuration source required" error
-		// (will fail later due to stdin not being readable, but should pass validation)
-		if err != nil {
-			assert.NotContains(t, err.Error(), "configuration source required",
-				"Should not require config source when --config-stdin is provided")
-		}
+		err := preRun(nil, nil)
+		// Should pass validation when --config-stdin is provided
+		assert.NoError(t, err, "Should not error when --config-stdin is provided")
 	})
 
 	t.Run("both config file and stdin provided", func(t *testing.T) {
 		configFile = "test.toml"
 		configStdin = true
-		err := run(nil, nil)
-		// When both are provided, stdin takes precedence per flag description
-		// Should not be the "configuration source required" error
-		if err != nil {
-			assert.NotContains(t, err.Error(), "configuration source required",
-				"Should not require config source when both are provided")
-		}
+		err := preRun(nil, nil)
+		// When both are provided, should pass validation
+		assert.NoError(t, err, "Should not error when both are provided")
 	})
 }
 

@@ -46,6 +46,7 @@ var (
 	enableDIFC  bool
 	logDir      string
 	validateEnv bool
+	verbosity   int // Verbosity level: 0 (default), 1 (-v info), 2 (-vv debug), 3 (-vvv trace)
 	debugLog    = logger.New("cmd:root")
 	version     = "dev" // Default version, overridden by SetVersion
 )
@@ -56,11 +57,15 @@ var rootCmd = &cobra.Command{
 	Version: version,
 	Long: `MCPG is a proxy server for Model Context Protocol (MCP) servers.
 It provides routing, aggregation, and management of multiple MCP backend servers.`,
-	SilenceUsage: true, // Don't show help on runtime errors
-	RunE:         run,
+	SilenceUsage:      true, // Don't show help on runtime errors
+	PersistentPreRunE: preRun,
+	RunE:              run,
 }
 
 func init() {
+	// Set custom error prefix for better branding
+	rootCmd.SetErrPrefix("MCPG Error:")
+
 	rootCmd.Flags().StringVarP(&configFile, "config", "c", defaultConfigFile, "Path to config file")
 	rootCmd.Flags().BoolVar(&configStdin, "config-stdin", defaultConfigStdin, "Read MCP server configuration from stdin (JSON format). When enabled, overrides --config")
 	rootCmd.Flags().StringVarP(&listenAddr, "listen", "l", defaultListenAddr, "HTTP server listen address")
@@ -70,9 +75,13 @@ func init() {
 	rootCmd.Flags().BoolVar(&enableDIFC, "enable-difc", defaultEnableDIFC, "Enable DIFC enforcement and session requirement (requires sys___init call before tool access)")
 	rootCmd.Flags().StringVar(&logDir, "log-dir", getDefaultLogDir(), "Directory for log files (falls back to stdout if directory cannot be created)")
 	rootCmd.Flags().BoolVar(&validateEnv, "validate-env", false, "Validate execution environment (Docker, env vars) before starting")
+	rootCmd.Flags().CountVarP(&verbosity, "verbose", "v", "Increase verbosity level (use -v for info, -vv for debug, -vvv for trace)")
 
 	// Mark mutually exclusive flags
 	rootCmd.MarkFlagsMutuallyExclusive("routed", "unified")
+
+	// Register custom flag completions
+	registerFlagCompletions(rootCmd)
 
 	// Add completion command
 	rootCmd.AddCommand(newCompletionCmd())
@@ -87,14 +96,59 @@ func getDefaultLogDir() string {
 	return defaultLogDir
 }
 
-func run(cmd *cobra.Command, args []string) error {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+// registerFlagCompletions registers custom completion functions for flags
+func registerFlagCompletions(cmd *cobra.Command) {
+	// Custom completion for --config flag (complete with .toml files)
+	cmd.RegisterFlagCompletionFunc("config", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+		return []string{"toml"}, cobra.ShellCompDirectiveFilterFileExt
+	})
 
+	// Custom completion for --log-dir flag (complete with directories)
+	cmd.RegisterFlagCompletionFunc("log-dir", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+		return nil, cobra.ShellCompDirectiveFilterDirs
+	})
+
+	// Custom completion for --env flag (complete with .env files)
+	cmd.RegisterFlagCompletionFunc("env", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+		return []string{"env"}, cobra.ShellCompDirectiveFilterFileExt
+	})
+}
+
+// preRun performs validation before command execution
+func preRun(cmd *cobra.Command, args []string) error {
 	// Validate that either --config or --config-stdin is provided
 	if !configStdin && configFile == "" {
 		return fmt.Errorf("configuration source required: specify either --config <file> or --config-stdin")
 	}
+
+	// Apply verbosity level to logging (if DEBUG is not already set)
+	// -v (1): info level, -vv (2): debug level, -vvv (3): trace level
+	if verbosity > 0 && os.Getenv("DEBUG") == "" {
+		// Set DEBUG env var based on verbosity level
+		// Level 1: basic info (no special DEBUG setting needed, handled by logger)
+		// Level 2: enable debug logs for cmd and server packages
+		// Level 3: enable all debug logs
+		switch verbosity {
+		case 1:
+			// Info level - no special DEBUG setting (standard log output)
+			debugLog.Printf("Verbosity level: info")
+		case 2:
+			// Debug level - enable debug logs for main packages
+			os.Setenv("DEBUG", "cmd:*,server:*,launcher:*")
+			debugLog.Printf("Verbosity level: debug (DEBUG=cmd:*,server:*,launcher:*)")
+		default:
+			// Trace level (3+) - enable all debug logs
+			os.Setenv("DEBUG", "*")
+			debugLog.Printf("Verbosity level: trace (DEBUG=*)")
+		}
+	}
+
+	return nil
+}
+
+func run(cmd *cobra.Command, args []string) error {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 
 	// Initialize file logger early
 	if err := logger.InitFileLogger(logDir, "mcp-gateway.log"); err != nil {

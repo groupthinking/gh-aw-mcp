@@ -9,7 +9,7 @@ import (
 
 // newCompletionCmd creates a completion command for generating shell completion scripts
 func newCompletionCmd() *cobra.Command {
-	return &cobra.Command{
+	cmd := &cobra.Command{
 		Use:   "completion [bash|zsh|fish|powershell]",
 		Short: "Generate completion script",
 		Long: `To load completions:
@@ -66,4 +66,11 @@ PowerShell:
 			}
 		},
 	}
+
+	// Override the parent's PersistentPreRunE to skip validation for completion command
+	cmd.PersistentPreRunE = func(cmd *cobra.Command, args []string) error {
+		return nil
+	}
+
+	return cmd
 }
