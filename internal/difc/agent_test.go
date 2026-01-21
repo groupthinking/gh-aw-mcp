@@ -1,0 +1,821 @@
+package difc
+
+import (
+	"sync"
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+)
+
+// TestAgentLabels_Clone tests the Clone method for deep copying agent labels
+func TestAgentLabels_Clone(t *testing.T) {
+	tests := []struct {
+		name           string
+		setupAgent     func() *AgentLabels
+		modifyOriginal func(*AgentLabels)
+		assertClone    func(*testing.T, *AgentLabels, *AgentLabels)
+	}{
+		{
+			name: "clone empty agent labels",
+			setupAgent: func() *AgentLabels {
+				return NewAgentLabels("test-agent")
+			},
+			modifyOriginal: func(a *AgentLabels) {
+				a.AddSecrecyTag("modified")
+			},
+			assertClone: func(t *testing.T, original, clone *AgentLabels) {
+				assert.Equal(t, "test-agent", clone.AgentID)
+				assert.Empty(t, clone.GetSecrecyTags(), "Clone should not reflect modifications to original")
+				assert.NotEmpty(t, original.GetSecrecyTags(), "Original should be modified")
+			},
+		},
+		{
+			name: "clone agent with secrecy tags",
+			setupAgent: func() *AgentLabels {
+				agent := NewAgentLabels("secure-agent")
+				agent.AddSecrecyTag("secret")
+				agent.AddSecrecyTag("confidential")
+				return agent
+			},
+			modifyOriginal: func(a *AgentLabels) {
+				a.AddSecrecyTag("top-secret")
+			},
+			assertClone: func(t *testing.T, original, clone *AgentLabels) {
+				assert.Equal(t, "secure-agent", clone.AgentID)
+				cloneTags := clone.GetSecrecyTags()
+				assert.Len(t, cloneTags, 2, "Clone should have original 2 tags")
+				assert.Contains(t, cloneTags, Tag("secret"))
+				assert.Contains(t, cloneTags, Tag("confidential"))
+				assert.NotContains(t, cloneTags, Tag("top-secret"))
+			},
+		},
+		{
+			name: "clone agent with integrity tags",
+			setupAgent: func() *AgentLabels {
+				agent := NewAgentLabels("trusted-agent")
+				agent.AddIntegrityTag("verified")
+				agent.AddIntegrityTag("production")
+				return agent
+			},
+			modifyOriginal: func(a *AgentLabels) {
+				a.DropIntegrityTag("production")
+			},
+			assertClone: func(t *testing.T, original, clone *AgentLabels) {
+				assert.Equal(t, "trusted-agent", clone.AgentID)
+				cloneTags := clone.GetIntegrityTags()
+				assert.Len(t, cloneTags, 2, "Clone should have original 2 tags")
+				assert.Contains(t, cloneTags, Tag("verified"))
+				assert.Contains(t, cloneTags, Tag("production"))
+			},
+		},
+		{
+			name: "clone agent with both secrecy and integrity tags",
+			setupAgent: func() *AgentLabels {
+				agent := NewAgentLabelsWithTags(
+					"complex-agent",
+					[]Tag{"private", "internal"},
+					[]Tag{"trusted", "validated"},
+				)
+				return agent
+			},
+			modifyOriginal: func(a *AgentLabels) {
+				a.AddSecrecyTag("extra-secret")
+				a.AddIntegrityTag("extra-trust")
+			},
+			assertClone: func(t *testing.T, original, clone *AgentLabels) {
+				assert.Equal(t, "complex-agent", clone.AgentID)
+				secrecyTags := clone.GetSecrecyTags()
+				integrityTags := clone.GetIntegrityTags()
+				assert.Len(t, secrecyTags, 2)
+				assert.Len(t, integrityTags, 2)
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			original := tt.setupAgent()
+			clone := original.Clone()
+
+			// Modify original after cloning
+			tt.modifyOriginal(original)
+
+			// Assert clone is independent
+			tt.assertClone(t, original, clone)
+		})
+	}
+}
+
+// TestAgentLabels_GetSecrecyTags tests thread-safe retrieval of secrecy tags
+func TestAgentLabels_GetSecrecyTags(t *testing.T) {
+	tests := []struct {
+		name     string
+		tags     []Tag
+		expected []Tag
+	}{
+		{
+			name:     "empty secrecy tags",
+			tags:     []Tag{},
+			expected: []Tag{},
+		},
+		{
+			name:     "single secrecy tag",
+			tags:     []Tag{"confidential"},
+			expected: []Tag{"confidential"},
+		},
+		{
+			name:     "multiple secrecy tags",
+			tags:     []Tag{"private", "secret", "confidential"},
+			expected: []Tag{"private", "secret", "confidential"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			agent := NewAgentLabels("test-agent")
+			for _, tag := range tt.tags {
+				agent.AddSecrecyTag(tag)
+			}
+
+			result := agent.GetSecrecyTags()
+			assert.ElementsMatch(t, tt.expected, result)
+		})
+	}
+}
+
+// TestAgentLabels_GetIntegrityTags tests thread-safe retrieval of integrity tags
+func TestAgentLabels_GetIntegrityTags(t *testing.T) {
+	tests := []struct {
+		name     string
+		tags     []Tag
+		expected []Tag
+	}{
+		{
+			name:     "empty integrity tags",
+			tags:     []Tag{},
+			expected: []Tag{},
+		},
+		{
+			name:     "single integrity tag",
+			tags:     []Tag{"trusted"},
+			expected: []Tag{"trusted"},
+		},
+		{
+			name:     "multiple integrity tags",
+			tags:     []Tag{"verified", "production", "high-trust"},
+			expected: []Tag{"verified", "production", "high-trust"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			agent := NewAgentLabels("test-agent")
+			for _, tag := range tt.tags {
+				agent.AddIntegrityTag(tag)
+			}
+
+			result := agent.GetIntegrityTags()
+			assert.ElementsMatch(t, tt.expected, result)
+		})
+	}
+}
+
+// TestAgentLabels_DropIntegrityTag tests removal of integrity tags
+func TestAgentLabels_DropIntegrityTag(t *testing.T) {
+	tests := []struct {
+		name     string
+		initial  []Tag
+		drop     Tag
+		expected []Tag
+	}{
+		{
+			name:     "drop from empty set",
+			initial:  []Tag{},
+			drop:     "nonexistent",
+			expected: []Tag{},
+		},
+		{
+			name:     "drop existing tag",
+			initial:  []Tag{"trusted", "verified", "production"},
+			drop:     "verified",
+			expected: []Tag{"trusted", "production"},
+		},
+		{
+			name:     "drop nonexistent tag",
+			initial:  []Tag{"trusted", "verified"},
+			drop:     "nonexistent",
+			expected: []Tag{"trusted", "verified"},
+		},
+		{
+			name:     "drop last tag",
+			initial:  []Tag{"only-tag"},
+			drop:     "only-tag",
+			expected: []Tag{},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			agent := NewAgentLabels("test-agent")
+			for _, tag := range tt.initial {
+				agent.AddIntegrityTag(tag)
+			}
+
+			agent.DropIntegrityTag(tt.drop)
+			result := agent.GetIntegrityTags()
+			assert.ElementsMatch(t, tt.expected, result)
+		})
+	}
+}
+
+// TestAgentLabels_ConcurrentAccess tests thread safety of agent label operations
+func TestAgentLabels_ConcurrentAccess(t *testing.T) {
+	agent := NewAgentLabels("concurrent-agent")
+	var wg sync.WaitGroup
+	iterations := 100
+
+	// Concurrent writes
+	wg.Add(3)
+	go func() {
+		defer wg.Done()
+		for i := 0; i < iterations; i++ {
+			agent.AddSecrecyTag(Tag("secret"))
+		}
+	}()
+	go func() {
+		defer wg.Done()
+		for i := 0; i < iterations; i++ {
+			agent.AddIntegrityTag(Tag("trusted"))
+		}
+	}()
+	go func() {
+		defer wg.Done()
+		for i := 0; i < iterations; i++ {
+			agent.DropIntegrityTag(Tag("trusted"))
+		}
+	}()
+
+	// Concurrent reads
+	wg.Add(3)
+	go func() {
+		defer wg.Done()
+		for i := 0; i < iterations; i++ {
+			_ = agent.GetSecrecyTags()
+		}
+	}()
+	go func() {
+		defer wg.Done()
+		for i := 0; i < iterations; i++ {
+			_ = agent.GetIntegrityTags()
+		}
+	}()
+	go func() {
+		defer wg.Done()
+		for i := 0; i < iterations; i++ {
+			_ = agent.Clone()
+		}
+	}()
+
+	wg.Wait()
+	// If we get here without deadlock or race, test passes
+	assert.NotNil(t, agent)
+}
+
+// TestAgentRegistry_GetOrCreate tests the core registry functionality
+func TestAgentRegistry_GetOrCreate(t *testing.T) {
+	tests := []struct {
+		name            string
+		agentID         string
+		defaultSecrecy  []Tag
+		defaultIntegrity []Tag
+		assertResult    func(*testing.T, *AgentRegistry, *AgentLabels)
+	}{
+		{
+			name:    "create new agent with no defaults",
+			agentID: "new-agent-1",
+			assertResult: func(t *testing.T, registry *AgentRegistry, agent *AgentLabels) {
+				assert.Equal(t, "new-agent-1", agent.AgentID)
+				assert.Empty(t, agent.GetSecrecyTags())
+				assert.Empty(t, agent.GetIntegrityTags())
+				assert.Equal(t, 1, registry.Count())
+			},
+		},
+		{
+			name:             "create new agent with default secrecy",
+			agentID:          "new-agent-2",
+			defaultSecrecy:   []Tag{"default-secret"},
+			defaultIntegrity: []Tag{},
+			assertResult: func(t *testing.T, registry *AgentRegistry, agent *AgentLabels) {
+				assert.Equal(t, "new-agent-2", agent.AgentID)
+				assert.ElementsMatch(t, []Tag{"default-secret"}, agent.GetSecrecyTags())
+				assert.Empty(t, agent.GetIntegrityTags())
+			},
+		},
+		{
+			name:             "create new agent with default integrity",
+			agentID:          "new-agent-3",
+			defaultSecrecy:   []Tag{},
+			defaultIntegrity: []Tag{"default-trust"},
+			assertResult: func(t *testing.T, registry *AgentRegistry, agent *AgentLabels) {
+				assert.Equal(t, "new-agent-3", agent.AgentID)
+				assert.Empty(t, agent.GetSecrecyTags())
+				assert.ElementsMatch(t, []Tag{"default-trust"}, agent.GetIntegrityTags())
+			},
+		},
+		{
+			name:             "create new agent with both defaults",
+			agentID:          "new-agent-4",
+			defaultSecrecy:   []Tag{"default-secret", "default-private"},
+			defaultIntegrity: []Tag{"default-trust", "default-verified"},
+			assertResult: func(t *testing.T, registry *AgentRegistry, agent *AgentLabels) {
+				assert.Equal(t, "new-agent-4", agent.AgentID)
+				assert.ElementsMatch(t, []Tag{"default-secret", "default-private"}, agent.GetSecrecyTags())
+				assert.ElementsMatch(t, []Tag{"default-trust", "default-verified"}, agent.GetIntegrityTags())
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			registry := NewAgentRegistryWithDefaults(tt.defaultSecrecy, tt.defaultIntegrity)
+			agent := registry.GetOrCreate(tt.agentID)
+			tt.assertResult(t, registry, agent)
+		})
+	}
+}
+
+// TestAgentRegistry_GetOrCreate_ReturnsExisting tests that existing agents are returned
+func TestAgentRegistry_GetOrCreate_ReturnsExisting(t *testing.T) {
+	registry := NewAgentRegistry()
+
+	// Create agent
+	agent1 := registry.GetOrCreate("existing-agent")
+	agent1.AddSecrecyTag("secret")
+	agent1.AddIntegrityTag("trusted")
+
+	// Get same agent again
+	agent2 := registry.GetOrCreate("existing-agent")
+
+	// Should be the exact same instance
+	assert.Equal(t, agent1, agent2)
+	assert.Equal(t, "existing-agent", agent2.AgentID)
+	assert.ElementsMatch(t, []Tag{"secret"}, agent2.GetSecrecyTags())
+	assert.ElementsMatch(t, []Tag{"trusted"}, agent2.GetIntegrityTags())
+	assert.Equal(t, 1, registry.Count(), "Should still have only 1 agent")
+}
+
+// TestAgentRegistry_GetOrCreate_Concurrent tests thread safety of GetOrCreate
+func TestAgentRegistry_GetOrCreate_Concurrent(t *testing.T) {
+	registry := NewAgentRegistryWithDefaults(
+		[]Tag{"default-secret"},
+		[]Tag{"default-trust"},
+	)
+
+	var wg sync.WaitGroup
+	goroutines := 100
+	agentID := "concurrent-agent"
+
+	// Multiple goroutines trying to create the same agent
+	wg.Add(goroutines)
+	for i := 0; i < goroutines; i++ {
+		go func() {
+			defer wg.Done()
+			agent := registry.GetOrCreate(agentID)
+			assert.NotNil(t, agent)
+			assert.Equal(t, agentID, agent.AgentID)
+		}()
+	}
+
+	wg.Wait()
+
+	// Should have created exactly one agent despite concurrent access
+	assert.Equal(t, 1, registry.Count())
+	agent, ok := registry.Get(agentID)
+	require.True(t, ok)
+	assert.Equal(t, agentID, agent.AgentID)
+}
+
+// TestAgentRegistry_Get tests retrieving agents from registry
+func TestAgentRegistry_Get(t *testing.T) {
+	tests := []struct {
+		name      string
+		setup     func(*AgentRegistry) string
+		agentID   string
+		wantFound bool
+	}{
+		{
+			name: "get existing agent",
+			setup: func(r *AgentRegistry) string {
+				agent := r.GetOrCreate("existing-agent")
+				return agent.AgentID
+			},
+			agentID:   "existing-agent",
+			wantFound: true,
+		},
+		{
+			name: "get nonexistent agent",
+			setup: func(r *AgentRegistry) string {
+				return "nonexistent"
+			},
+			agentID:   "nonexistent",
+			wantFound: false,
+		},
+		{
+			name: "get agent after registration",
+			setup: func(r *AgentRegistry) string {
+				r.Register("registered-agent", []Tag{"secret"}, []Tag{"trust"})
+				return "registered-agent"
+			},
+			agentID:   "registered-agent",
+			wantFound: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			registry := NewAgentRegistry()
+			tt.setup(registry)
+
+			agent, found := registry.Get(tt.agentID)
+			assert.Equal(t, tt.wantFound, found)
+			if tt.wantFound {
+				require.NotNil(t, agent)
+				assert.Equal(t, tt.agentID, agent.AgentID)
+			} else {
+				assert.Nil(t, agent)
+			}
+		})
+	}
+}
+
+// TestAgentRegistry_Register tests explicit agent registration
+func TestAgentRegistry_Register(t *testing.T) {
+	tests := []struct {
+		name           string
+		agentID        string
+		secrecyTags    []Tag
+		integrityTags  []Tag
+		assertAgent    func(*testing.T, *AgentLabels)
+	}{
+		{
+			name:          "register with empty tags",
+			agentID:       "agent-1",
+			secrecyTags:   []Tag{},
+			integrityTags: []Tag{},
+			assertAgent: func(t *testing.T, agent *AgentLabels) {
+				assert.Empty(t, agent.GetSecrecyTags())
+				assert.Empty(t, agent.GetIntegrityTags())
+			},
+		},
+		{
+			name:          "register with secrecy tags only",
+			agentID:       "agent-2",
+			secrecyTags:   []Tag{"private", "confidential"},
+			integrityTags: []Tag{},
+			assertAgent: func(t *testing.T, agent *AgentLabels) {
+				assert.ElementsMatch(t, []Tag{"private", "confidential"}, agent.GetSecrecyTags())
+				assert.Empty(t, agent.GetIntegrityTags())
+			},
+		},
+		{
+			name:          "register with integrity tags only",
+			agentID:       "agent-3",
+			secrecyTags:   []Tag{},
+			integrityTags: []Tag{"trusted", "verified"},
+			assertAgent: func(t *testing.T, agent *AgentLabels) {
+				assert.Empty(t, agent.GetSecrecyTags())
+				assert.ElementsMatch(t, []Tag{"trusted", "verified"}, agent.GetIntegrityTags())
+			},
+		},
+		{
+			name:          "register with both tag types",
+			agentID:       "agent-4",
+			secrecyTags:   []Tag{"secret"},
+			integrityTags: []Tag{"production"},
+			assertAgent: func(t *testing.T, agent *AgentLabels) {
+				assert.ElementsMatch(t, []Tag{"secret"}, agent.GetSecrecyTags())
+				assert.ElementsMatch(t, []Tag{"production"}, agent.GetIntegrityTags())
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			registry := NewAgentRegistry()
+			agent := registry.Register(tt.agentID, tt.secrecyTags, tt.integrityTags)
+
+			assert.Equal(t, tt.agentID, agent.AgentID)
+			tt.assertAgent(t, agent)
+
+			// Verify agent is in registry
+			retrievedAgent, found := registry.Get(tt.agentID)
+			require.True(t, found)
+			assert.Equal(t, agent, retrievedAgent)
+		})
+	}
+}
+
+// TestAgentRegistry_Register_Overwrites tests that Register replaces existing agents
+func TestAgentRegistry_Register_Overwrites(t *testing.T) {
+	registry := NewAgentRegistry()
+
+	// Create initial agent
+	agent1 := registry.Register("agent", []Tag{"initial-secret"}, []Tag{"initial-trust"})
+	assert.ElementsMatch(t, []Tag{"initial-secret"}, agent1.GetSecrecyTags())
+
+	// Register again with different tags
+	agent2 := registry.Register("agent", []Tag{"new-secret"}, []Tag{"new-trust"})
+	assert.ElementsMatch(t, []Tag{"new-secret"}, agent2.GetSecrecyTags())
+
+	// Should have replaced the agent
+	assert.NotEqual(t, agent1, agent2)
+	assert.Equal(t, 1, registry.Count())
+
+	// Retrieved agent should be the new one
+	retrieved, found := registry.Get("agent")
+	require.True(t, found)
+	assert.Equal(t, agent2, retrieved)
+}
+
+// TestAgentRegistry_Remove tests agent removal from registry
+func TestAgentRegistry_Remove(t *testing.T) {
+	tests := []struct {
+		name           string
+		setup          func(*AgentRegistry) []string
+		removeID       string
+		expectedCount  int
+		assertRemoved  func(*testing.T, *AgentRegistry)
+	}{
+		{
+			name: "remove existing agent",
+			setup: func(r *AgentRegistry) []string {
+				r.GetOrCreate("agent-1")
+				r.GetOrCreate("agent-2")
+				return []string{"agent-1", "agent-2"}
+			},
+			removeID:      "agent-1",
+			expectedCount: 1,
+			assertRemoved: func(t *testing.T, r *AgentRegistry) {
+				_, found := r.Get("agent-1")
+				assert.False(t, found)
+				_, found = r.Get("agent-2")
+				assert.True(t, found)
+			},
+		},
+		{
+			name: "remove nonexistent agent",
+			setup: func(r *AgentRegistry) []string {
+				r.GetOrCreate("agent-1")
+				return []string{"agent-1"}
+			},
+			removeID:      "nonexistent",
+			expectedCount: 1,
+			assertRemoved: func(t *testing.T, r *AgentRegistry) {
+				_, found := r.Get("agent-1")
+				assert.True(t, found)
+			},
+		},
+		{
+			name: "remove from empty registry",
+			setup: func(r *AgentRegistry) []string {
+				return []string{}
+			},
+			removeID:      "any-agent",
+			expectedCount: 0,
+			assertRemoved: func(t *testing.T, r *AgentRegistry) {
+				_, found := r.Get("any-agent")
+				assert.False(t, found)
+			},
+		},
+		{
+			name: "remove last agent",
+			setup: func(r *AgentRegistry) []string {
+				r.GetOrCreate("only-agent")
+				return []string{"only-agent"}
+			},
+			removeID:      "only-agent",
+			expectedCount: 0,
+			assertRemoved: func(t *testing.T, r *AgentRegistry) {
+				_, found := r.Get("only-agent")
+				assert.False(t, found)
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			registry := NewAgentRegistry()
+			tt.setup(registry)
+
+			registry.Remove(tt.removeID)
+
+			assert.Equal(t, tt.expectedCount, registry.Count())
+			tt.assertRemoved(t, registry)
+		})
+	}
+}
+
+// TestAgentRegistry_Count tests counting registered agents
+func TestAgentRegistry_Count(t *testing.T) {
+	tests := []struct {
+		name          string
+		setup         func(*AgentRegistry)
+		expectedCount int
+	}{
+		{
+			name:          "empty registry",
+			setup:         func(r *AgentRegistry) {},
+			expectedCount: 0,
+		},
+		{
+			name: "single agent",
+			setup: func(r *AgentRegistry) {
+				r.GetOrCreate("agent-1")
+			},
+			expectedCount: 1,
+		},
+		{
+			name: "multiple agents",
+			setup: func(r *AgentRegistry) {
+				r.GetOrCreate("agent-1")
+				r.GetOrCreate("agent-2")
+				r.GetOrCreate("agent-3")
+			},
+			expectedCount: 3,
+		},
+		{
+			name: "after removal",
+			setup: func(r *AgentRegistry) {
+				r.GetOrCreate("agent-1")
+				r.GetOrCreate("agent-2")
+				r.Remove("agent-1")
+			},
+			expectedCount: 1,
+		},
+		{
+			name: "duplicate GetOrCreate",
+			setup: func(r *AgentRegistry) {
+				r.GetOrCreate("agent-1")
+				r.GetOrCreate("agent-1")
+				r.GetOrCreate("agent-1")
+			},
+			expectedCount: 1,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			registry := NewAgentRegistry()
+			tt.setup(registry)
+			assert.Equal(t, tt.expectedCount, registry.Count())
+		})
+	}
+}
+
+// TestAgentRegistry_GetAllAgentIDs tests retrieving all agent IDs
+func TestAgentRegistry_GetAllAgentIDs(t *testing.T) {
+	tests := []struct {
+		name        string
+		setup       func(*AgentRegistry)
+		expectedIDs []string
+	}{
+		{
+			name:        "empty registry",
+			setup:       func(r *AgentRegistry) {},
+			expectedIDs: []string{},
+		},
+		{
+			name: "single agent",
+			setup: func(r *AgentRegistry) {
+				r.GetOrCreate("agent-1")
+			},
+			expectedIDs: []string{"agent-1"},
+		},
+		{
+			name: "multiple agents",
+			setup: func(r *AgentRegistry) {
+				r.GetOrCreate("agent-1")
+				r.GetOrCreate("agent-2")
+				r.GetOrCreate("agent-3")
+			},
+			expectedIDs: []string{"agent-1", "agent-2", "agent-3"},
+		},
+		{
+			name: "after mixed operations",
+			setup: func(r *AgentRegistry) {
+				r.GetOrCreate("agent-1")
+				r.Register("agent-2", []Tag{"secret"}, []Tag{"trust"})
+				r.GetOrCreate("agent-3")
+				r.Remove("agent-2")
+			},
+			expectedIDs: []string{"agent-1", "agent-3"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			registry := NewAgentRegistry()
+			tt.setup(registry)
+			ids := registry.GetAllAgentIDs()
+			assert.ElementsMatch(t, tt.expectedIDs, ids)
+		})
+	}
+}
+
+// TestAgentRegistry_SetDefaultLabels tests updating default labels
+func TestAgentRegistry_SetDefaultLabels(t *testing.T) {
+	tests := []struct {
+		name             string
+		initialSecrecy   []Tag
+		initialIntegrity []Tag
+		newSecrecy       []Tag
+		newIntegrity     []Tag
+		assertDefaults   func(*testing.T, *AgentRegistry)
+	}{
+		{
+			name:             "set defaults on empty registry",
+			initialSecrecy:   []Tag{},
+			initialIntegrity: []Tag{},
+			newSecrecy:       []Tag{"new-secret"},
+			newIntegrity:     []Tag{"new-trust"},
+			assertDefaults: func(t *testing.T, r *AgentRegistry) {
+				// Create new agent to verify defaults applied
+				agent := r.GetOrCreate("test-agent")
+				assert.ElementsMatch(t, []Tag{"new-secret"}, agent.GetSecrecyTags())
+				assert.ElementsMatch(t, []Tag{"new-trust"}, agent.GetIntegrityTags())
+			},
+		},
+		{
+			name:             "update existing defaults",
+			initialSecrecy:   []Tag{"old-secret"},
+			initialIntegrity: []Tag{"old-trust"},
+			newSecrecy:       []Tag{"updated-secret"},
+			newIntegrity:     []Tag{"updated-trust"},
+			assertDefaults: func(t *testing.T, r *AgentRegistry) {
+				// Create new agent to verify new defaults applied
+				agent := r.GetOrCreate("test-agent")
+				assert.ElementsMatch(t, []Tag{"updated-secret"}, agent.GetSecrecyTags())
+				assert.ElementsMatch(t, []Tag{"updated-trust"}, agent.GetIntegrityTags())
+			},
+		},
+		{
+			name:             "clear defaults",
+			initialSecrecy:   []Tag{"secret"},
+			initialIntegrity: []Tag{"trust"},
+			newSecrecy:       []Tag{},
+			newIntegrity:     []Tag{},
+			assertDefaults: func(t *testing.T, r *AgentRegistry) {
+				agent := r.GetOrCreate("test-agent")
+				assert.Empty(t, agent.GetSecrecyTags())
+				assert.Empty(t, agent.GetIntegrityTags())
+			},
+		},
+		{
+			name:             "set multiple default tags",
+			initialSecrecy:   []Tag{},
+			initialIntegrity: []Tag{},
+			newSecrecy:       []Tag{"secret-1", "secret-2", "secret-3"},
+			newIntegrity:     []Tag{"trust-1", "trust-2"},
+			assertDefaults: func(t *testing.T, r *AgentRegistry) {
+				agent := r.GetOrCreate("test-agent")
+				assert.ElementsMatch(t, []Tag{"secret-1", "secret-2", "secret-3"}, agent.GetSecrecyTags())
+				assert.ElementsMatch(t, []Tag{"trust-1", "trust-2"}, agent.GetIntegrityTags())
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			registry := NewAgentRegistryWithDefaults(tt.initialSecrecy, tt.initialIntegrity)
+			registry.SetDefaultLabels(tt.newSecrecy, tt.newIntegrity)
+			tt.assertDefaults(t, registry)
+		})
+	}
+}
+
+// TestAgentRegistry_SetDefaultLabels_DoesNotAffectExisting tests that changing
+// defaults doesn't affect already registered agents
+func TestAgentRegistry_SetDefaultLabels_DoesNotAffectExisting(t *testing.T) {
+	registry := NewAgentRegistryWithDefaults(
+		[]Tag{"initial-secret"},
+		[]Tag{"initial-trust"},
+	)
+
+	// Create an agent with initial defaults
+	existingAgent := registry.GetOrCreate("existing-agent")
+	assert.ElementsMatch(t, []Tag{"initial-secret"}, existingAgent.GetSecrecyTags())
+	assert.ElementsMatch(t, []Tag{"initial-trust"}, existingAgent.GetIntegrityTags())
+
+	// Change defaults
+	registry.SetDefaultLabels([]Tag{"new-secret"}, []Tag{"new-trust"})
+
+	// Existing agent should not be affected
+	assert.ElementsMatch(t, []Tag{"initial-secret"}, existingAgent.GetSecrecyTags())
+	assert.ElementsMatch(t, []Tag{"initial-trust"}, existingAgent.GetIntegrityTags())
+
+	// But new agents should get new defaults
+	newAgent := registry.GetOrCreate("new-agent")
+	assert.ElementsMatch(t, []Tag{"new-secret"}, newAgent.GetSecrecyTags())
+	assert.ElementsMatch(t, []Tag{"new-trust"}, newAgent.GetIntegrityTags())
+}
