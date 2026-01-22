@@ -1,20 +1,18 @@
 // Package guard provides security context management and guard registry for the MCP Gateway.
 //
 // This package is responsible for managing security labels (DIFC - Decentralized Information
-// Flow Control) and extracting agent identifiers from request contexts.
+// Flow Control) and storing/retrieving agent identifiers in request contexts.
 //
 // Relationship with internal/auth:
 //
 // - internal/auth: Primary authentication logic (header parsing, validation)
 // - internal/guard: Security context management (agent ID tracking, guard registry)
 //
-// For new code, prefer using internal/auth for authentication-related operations.
-// The guard package's ExtractAgentIDFromAuthHeader() is deprecated and delegates
-// to auth.ExtractAgentID() for centralized authentication logic.
+// For authentication-related operations, always use the internal/auth package directly.
 //
 // Example:
 //
-//	// Store agent ID in context (use auth.ExtractAgentID for parsing)
+//	// Extract agent ID from auth header and store in context
 //	agentID := auth.ExtractAgentID(authHeader)
 //	ctx = guard.SetAgentIDInContext(ctx, agentID)
 //
@@ -25,7 +23,6 @@ package guard
 import (
 	"context"
 
-	"github.com/githubnext/gh-aw-mcpg/internal/auth"
 	"github.com/githubnext/gh-aw-mcpg/internal/logger"
 )
 
@@ -57,19 +54,6 @@ func GetAgentIDFromContext(ctx context.Context) string {
 func SetAgentIDInContext(ctx context.Context, agentID string) context.Context {
 	log.Printf("Setting agent ID in context: %s", agentID)
 	return context.WithValue(ctx, AgentIDContextKey, agentID)
-}
-
-// ExtractAgentIDFromAuthHeader extracts agent ID from Authorization header.
-//
-// Deprecated: Use auth.ExtractAgentID() instead for centralized authentication parsing.
-// This function is maintained for backward compatibility but delegates to the auth package.
-//
-// For MCP spec 7.1 compliant parsing with full error handling, use auth.ParseAuthHeader().
-func ExtractAgentIDFromAuthHeader(authHeader string) string {
-	log.Print("Extracting agent ID from auth header (deprecated path)")
-	agentID := auth.ExtractAgentID(authHeader)
-	log.Printf("Extracted agent ID: %s", agentID)
-	return agentID
 }
 
 // GetRequestStateFromContext retrieves guard request state from context
