@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/githubnext/gh-aw-mcpg/internal/logger"
+	"github.com/githubnext/gh-aw-mcpg/internal/logger/sanitize"
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -153,8 +154,8 @@ func setupHTTPRequest(ctx context.Context, url string, requestBody []byte, heade
 
 // NewConnection creates a new MCP connection using the official SDK
 func NewConnection(ctx context.Context, command string, args []string, env map[string]string) (*Connection, error) {
-	logger.LogInfo("backend", "Creating new MCP backend connection, command=%s, args=%v", command, args)
-	logConn.Printf("Creating new MCP connection: command=%s, args=%v", command, args)
+	logger.LogInfo("backend", "Creating new MCP backend connection, command=%s, args=%v", command, sanitize.SanitizeArgs(args))
+	logConn.Printf("Creating new MCP connection: command=%s, args=%v", command, sanitize.SanitizeArgs(args))
 	ctx, cancel := context.WithCancel(ctx)
 
 	// Create MCP client
@@ -178,8 +179,8 @@ func NewConnection(ctx context.Context, command string, args []string, env map[s
 		}
 	}
 
-	logger.LogInfo("backend", "Starting MCP backend server, command=%s, args=%v", command, expandedArgs)
-	log.Printf("Starting MCP server command: %s %v", command, expandedArgs)
+	logger.LogInfo("backend", "Starting MCP backend server, command=%s, args=%v", command, sanitize.SanitizeArgs(expandedArgs))
+	log.Printf("Starting MCP server command: %s %v", command, sanitize.SanitizeArgs(expandedArgs))
 	transport := &sdk.CommandTransport{Command: cmd}
 
 	// Connect to the server (this handles the initialization handshake automatically)
@@ -190,10 +191,10 @@ func NewConnection(ctx context.Context, command string, args []string, env map[s
 		cancel()
 
 		// Enhanced error context for debugging
-		logger.LogErrorMd("backend", "MCP backend connection failed, command=%s, args=%v, error=%v", command, expandedArgs, err)
+		logger.LogErrorMd("backend", "MCP backend connection failed, command=%s, args=%v, error=%v", command, sanitize.SanitizeArgs(expandedArgs), err)
 		log.Printf("❌ MCP Connection Failed:")
 		log.Printf("   Command: %s", command)
-		log.Printf("   Args: %v", expandedArgs)
+		log.Printf("   Args: %v", sanitize.SanitizeArgs(expandedArgs))
 		log.Printf("   Error: %v", err)
 
 		// Check if it's a command not found error
