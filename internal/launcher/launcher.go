@@ -113,10 +113,10 @@ func GetOrLaunch(l *Launcher, serverID string) (*mcp.Connection, error) {
 	}
 
 	// Log the command being executed
-	logger.LogInfo("backend", "Launching MCP backend server: %s, command=%s, args=%v", serverID, serverCfg.Command, serverCfg.Args)
+	logger.LogInfo("backend", "Launching MCP backend server: %s, command=%s, args=%v", serverID, serverCfg.Command, sanitize.SanitizeArgs(serverCfg.Args))
 	log.Printf("[LAUNCHER] Starting MCP server: %s", serverID)
 	log.Printf("[LAUNCHER] Command: %s", serverCfg.Command)
-	log.Printf("[LAUNCHER] Args: %v", serverCfg.Args)
+	log.Printf("[LAUNCHER] Args: %v", sanitize.SanitizeArgs(serverCfg.Args))
 	logLauncher.Printf("Launching new server: serverID=%s, command=%s, inContainer=%v, isDirectCommand=%v",
 		serverID, serverCfg.Command, l.runningInContainer, isDirectCommand)
 
@@ -237,10 +237,10 @@ func GetOrLaunchForSession(l *Launcher, serverID, sessionID string) (*mcp.Connec
 	}
 
 	// Log the command being executed
-	logger.LogInfo("backend", "Launching MCP backend server for session: server=%s, session=%s, command=%s, args=%v", serverID, sessionID, serverCfg.Command, serverCfg.Args)
+	logger.LogInfo("backend", "Launching MCP backend server for session: server=%s, session=%s, command=%s, args=%v", serverID, sessionID, serverCfg.Command, sanitize.SanitizeArgs(serverCfg.Args))
 	log.Printf("[LAUNCHER] Starting MCP server for session: %s (session: %s)", serverID, sessionID)
 	log.Printf("[LAUNCHER] Command: %s", serverCfg.Command)
-	log.Printf("[LAUNCHER] Args: %v", serverCfg.Args)
+	log.Printf("[LAUNCHER] Args: %v", sanitize.SanitizeArgs(serverCfg.Args))
 	logLauncher.Printf("Launching new session server: serverID=%s, sessionID=%s, command=%s", serverID, sessionID, serverCfg.Command)
 
 	// Check for environment variable passthrough

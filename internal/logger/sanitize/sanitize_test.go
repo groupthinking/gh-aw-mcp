@@ -495,3 +495,156 @@ func TestTruncateSecretMap(t *testing.T) {
 		})
 	}
 }
+
+func TestSanitizeArgs(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    []string
+		expected []string
+	}{
+		{
+			name:     "nil args",
+			input:    nil,
+			expected: nil,
+		},
+		{
+			name:     "empty args",
+			input:    []string{},
+			expected: []string{},
+		},
+		{
+			name:     "args without env vars",
+			input:    []string{"run", "--rm", "-i", "image:latest"},
+			expected: []string{"run", "--rm", "-i", "image:latest"},
+		},
+		{
+			name:     "single env var with long token",
+			input:    []string{"run", "-e", "GITHUB_PERSONAL_ACCESS_TOKEN=ghp_1234567890123456789012345678901234567890"},
+			expected: []string{"run", "-e", "GITHUB_PERSONAL_ACCESS_TOKEN=ghp_..."},
+		},
+		{
+			name: "multiple env vars with different lengths",
+			input: []string{
+				"run",
+				"-e", "GITHUB_PERSONAL_ACCESS_TOKEN=ghp_1234567890123456789012345678901234567890",
+				"-e", "API_KEY=sk_test_1234567890",
+				"-e", "SHORT=abc",
+				"--rm",
+				"-i",
+				"image:latest",
+			},
+			expected: []string{
+				"run",
+				"-e", "GITHUB_PERSONAL_ACCESS_TOKEN=ghp_...",
+				"-e", "API_KEY=sk_t...",
+				"-e", "SHORT=...",
+				"--rm",
+				"-i",
+				"image:latest",
+			},
+		},
+		{
+			name: "realistic docker command with secrets",
+			input: []string{
+				"run",
+				"--rm",
+				"-i",
+				"-e", "NO_COLOR=1",
+				"-e", "TERM=dumb",
+				"-e", "PYTHONUNBUFFERED=1",
+				"-e", "GITHUB_PERSONAL_ACCESS_TOKEN=ghp_abcdefghijklmnopqrstuvwxyz1234567890",
+				"-e", "GITHUB_READ_ONLY=1",
+				"ghcr.io/github/github-mcp-server:v0.29.0",
+			},
+			expected: []string{
+				"run",
+				"--rm",
+				"-i",
+				"-e", "NO_COLOR=...",
+				"-e", "TERM=...",
+				"-e", "PYTHONUNBUFFERED=...",
+				"-e", "GITHUB_PERSONAL_ACCESS_TOKEN=ghp_...",
+				"-e", "GITHUB_READ_ONLY=...",
+				"ghcr.io/github/github-mcp-server:v0.29.0",
+			},
+		},
+		{
+			name:     "env var without equals sign",
+			input:    []string{"run", "-e", "MYVAR", "image:latest"},
+			expected: []string{"run", "-e", "MYVAR", "image:latest"},
+		},
+		{
+			name:     "env var with empty value",
+			input:    []string{"run", "-e", "EMPTY=", "image:latest"},
+			expected: []string{"run", "-e", "EMPTY=", "image:latest"},
+		},
+		{
+			name: "env var with equals in value",
+			input: []string{
+				"run",
+				"-e", "CONFIG=key=value=extra",
+			},
+			expected: []string{
+				"run",
+				"-e", "CONFIG=key=...",
+			},
+		},
+		{
+			name:     "-e flag at end without value",
+			input:    []string{"run", "--rm", "-e"},
+			expected: []string{"run", "--rm", "-e"},
+		},
+		{
+			name: "mixed flags and env vars",
+			input: []string{
+				"run",
+				"--name", "test-container",
+				"-e", "API_KEY=secret123456",
+				"--network", "host",
+				"-e", "TOKEN=mytoken",
+				"image:latest",
+			},
+			expected: []string{
+				"run",
+				"--name", "test-container",
+				"-e", "API_KEY=secr...",
+				"--network", "host",
+				"-e", "TOKEN=myto...",
+				"image:latest",
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := SanitizeArgs(tt.input)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
+
+func TestSanitizeArgsDoesNotLeakSecrets(t *testing.T) {
+	// Test that actual secrets are not present in sanitized output
+	secretToken := "ghp_verysecrettokenthatshouldbehidden1234567890"
+	secretApiKey := "test_secret_key_1234567890abcdefghijklmnop"
+
+	input := []string{
+		"run",
+		"-e", fmt.Sprintf("GITHUB_TOKEN=%s", secretToken),
+		"-e", fmt.Sprintf("API_KEY=%s", secretApiKey),
+		"image:latest",
+	}
+
+	result := SanitizeArgs(input)
+
+	// Convert result to string for easy checking
+	resultStr := fmt.Sprintf("%v", result)
+
+	// Verify secrets are NOT in the output
+	assert.NotContains(t, resultStr, secretToken, "Secret token should not be present in sanitized output")
+	assert.NotContains(t, resultStr, secretApiKey, "Secret API key should not be present in sanitized output")
+
+	// Verify truncated versions ARE present
+	assert.Contains(t, resultStr, "GITHUB_TOKEN=ghp_...", "Truncated token should be present")
+	assert.Contains(t, resultStr, "API_KEY=test...", "Truncated API key should be present")
+}

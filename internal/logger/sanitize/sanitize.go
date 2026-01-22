@@ -127,3 +127,35 @@ func SanitizeJSON(payloadBytes []byte) json.RawMessage {
 	compactBytes, _ := json.Marshal(tmp)
 	return json.RawMessage(compactBytes)
 }
+
+// SanitizeArgs returns a sanitized version of command arguments for safe logging.
+// It specifically handles Docker-style environment variable arguments (-e VAR=VALUE)
+// by truncating the values to prevent exposing sensitive data like API tokens.
+// Other arguments are passed through unchanged.
+func SanitizeArgs(args []string) []string {
+	if len(args) == 0 {
+		return args
+	}
+
+	sanitized := make([]string, len(args))
+	for i := 0; i < len(args); i++ {
+		arg := args[i]
+
+		// Check if this is an environment variable value after a -e flag
+		// Format: -e VAR=VALUE
+		if i > 0 && args[i-1] == "-e" && strings.Contains(arg, "=") {
+			// Split on first = to get VAR and VALUE
+			parts := strings.SplitN(arg, "=", 2)
+			if len(parts) == 2 {
+				// Truncate the value part
+				sanitized[i] = parts[0] + "=" + TruncateSecret(parts[1])
+			} else {
+				sanitized[i] = arg
+			}
+		} else {
+			// Pass through unchanged
+			sanitized[i] = arg
+		}
+	}
+	return sanitized
+}
