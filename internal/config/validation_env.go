@@ -23,7 +23,25 @@ var RequiredEnvVars = []string{
 // Container IDs are 64 character hex strings, but short form (12 chars) is also valid
 var containerIDPattern = regexp.MustCompile(`^[a-f0-9]{12,64}$`)
 
-// EnvValidationResult holds the result of environment validation
+// EnvValidationResult holds the result of environment validation.
+// It captures various aspects of the execution environment including
+// containerization status, Docker accessibility, and validation errors/warnings.
+//
+// This type implements the error interface through its Error() method,
+// which returns a formatted error message containing all validation failures.
+// Use IsValid() to check if all critical validations passed before attempting
+// to start the gateway.
+//
+// Fields:
+//   - IsContainerized: Whether the gateway is running inside a Docker container
+//   - ContainerID: The Docker container ID if containerized
+//   - DockerAccessible: Whether the Docker daemon is accessible
+//   - MissingEnvVars: List of required environment variables that are not set
+//   - PortMapped: Whether the gateway port is mapped to the host (containerized mode)
+//   - StdinInteractive: Whether stdin is interactive (containerized mode)
+//   - LogDirMounted: Whether the log directory is mounted (containerized mode)
+//   - ValidationErrors: Critical errors that prevent the gateway from starting
+//   - ValidationWarnings: Non-critical issues that should be addressed
 type EnvValidationResult struct {
 	IsContainerized    bool
 	ContainerID        string

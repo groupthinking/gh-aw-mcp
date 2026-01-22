@@ -7,6 +7,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/githubnext/gh-aw-mcpg/internal/auth"
 	"github.com/githubnext/gh-aw-mcpg/internal/difc"
 )
 
@@ -128,18 +129,18 @@ func TestContextHelpers(t *testing.T) {
 		assert.Equal(t, "test-agent", agentID)
 	})
 
-	t.Run("ExtractAgentIDFromAuthHeader Bearer", func(t *testing.T) {
-		agentID := ExtractAgentIDFromAuthHeader("Bearer test-token-123")
+	t.Run("auth.ExtractAgentID Bearer", func(t *testing.T) {
+		agentID := auth.ExtractAgentID("Bearer test-token-123")
 		assert.Equal(t, "test-token-123", agentID)
 	})
 
-	t.Run("ExtractAgentIDFromAuthHeader Agent", func(t *testing.T) {
-		agentID := ExtractAgentIDFromAuthHeader("Agent my-agent-id")
+	t.Run("auth.ExtractAgentID Agent", func(t *testing.T) {
+		agentID := auth.ExtractAgentID("Agent my-agent-id")
 		assert.Equal(t, "my-agent-id", agentID)
 	})
 
-	t.Run("ExtractAgentIDFromAuthHeader empty", func(t *testing.T) {
-		agentID := ExtractAgentIDFromAuthHeader("")
+	t.Run("auth.ExtractAgentID empty", func(t *testing.T) {
+		agentID := auth.ExtractAgentID("")
 		assert.Equal(t, "default", agentID)
 	})
 }

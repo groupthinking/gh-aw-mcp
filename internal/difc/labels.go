@@ -255,7 +255,23 @@ const (
 	IntegrityViolation ViolationType = "integrity"
 )
 
-// ViolationError provides detailed information about a DIFC violation
+// ViolationError provides detailed information about a DIFC (Decentralized Information Flow Control) violation.
+// It describes what kind of violation occurred, which resource was involved, and what needs to be
+// done to resolve the violation.
+//
+// This error type implements the error interface and provides human-readable error messages
+// that explain the violation and suggest remediation steps. DIFC violations occur when:
+//   - Secrecy: An agent tries to access a resource but has secrecy tags that would leak sensitive information
+//   - Integrity: An agent tries to write to a resource but lacks the required integrity tags to ensure trustworthiness
+//
+// Fields:
+//   - Type: The kind of violation (SecrecyViolation or IntegrityViolation)
+//   - Resource: Human-readable description of the resource being accessed
+//   - IsWrite: true for write operations, false for read operations
+//   - MissingTags: Tags the agent needs but doesn't have (for integrity violations)
+//   - ExtraTags: Tags the agent has but shouldn't (for secrecy violations)
+//   - AgentTags: Complete set of the agent's tags (for context)
+//   - ResourceTags: Complete set of the resource's tags (for context)
 type ViolationError struct {
 	Type         ViolationType
 	Resource     string // Resource description

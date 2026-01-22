@@ -24,8 +24,8 @@ var (
 	gatewayVersion = "dev"
 )
 
-// SetVersion sets the gateway version for error reporting
-func SetVersion(version string) {
+// SetGatewayVersion sets the gateway version for error reporting
+func SetGatewayVersion(version string) {
 	if version != "" {
 		gatewayVersion = version
 	}

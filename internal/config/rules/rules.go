@@ -11,7 +11,14 @@ const (
 	SchemaURL     = "https://raw.githubusercontent.com/githubnext/gh-aw/main/docs/public/schemas/mcp-gateway-config.schema.json"
 )
 
-// ValidationError represents a configuration validation error with context
+// ValidationError represents a configuration validation error with context.
+// It provides detailed information about what went wrong during configuration
+// validation, including the field that failed, a human-readable message,
+// the JSON path to the error location, and a suggestion for how to fix it.
+//
+// This error type implements the error interface and formats itself with
+// helpful context when Error() is called, including the JSON path and
+// suggestion if available.
 type ValidationError struct {
 	Field      string
 	Message    string
