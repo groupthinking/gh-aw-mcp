@@ -528,7 +528,7 @@ func TestValidateStringPatterns(t *testing.T) {
 // TestEnhancedErrorMessages verifies that validation errors include version and detailed context
 func TestEnhancedErrorMessages(t *testing.T) {
 	// Set a test version
-	SetVersion("v1.2.3-test")
+	SetGatewayVersion("v1.2.3-test")
 
 	tests := []struct {
 		name          string
